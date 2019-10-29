@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "es2017",
+    "module": "commonjs",
+    "lib": [
+      "dom",
+      "es2017"
+    ],
+    "baseUrl": "packages",
+    "declaration": true,
+    "composite": true,
+    // "isolatedModules": true,
+    "strict": true,
+    /* Additional Checks */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    /* Module Resolution Options */
+    "moduleResolution": "node",
+    "esModuleInterop": false,
+    "resolveJsonModule": true,
+    "paths": {
+      "ts-plus": [
+        "ts-plus/src"
+      ],
+      "@ts-plus/transformer-helpers": [
+        "transformer-helpers/src"
+      ],
+    }
+  },
+  "exclude": [
+    ".yarn/releases/*",
+    "**/__tests__/**/*",
+    "**/build/**/*",
+    "**/build-es5/**/*"
+  ]
+}

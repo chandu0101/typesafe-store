@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "name": "typesafe-store",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "lerna": "^3.18.3",
+    "typescript": "3.7.1-rc"
+  }
+}

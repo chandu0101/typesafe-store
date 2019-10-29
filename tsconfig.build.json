@@ -1,0 +1,12 @@
+{
+    "files": [],
+    "compilerOptions": {},
+    "references": [
+        {
+            "path": "packages/reducer"
+        },
+        {
+            "path": "packages/reducer-transformer"
+        },
+    ]
+}
