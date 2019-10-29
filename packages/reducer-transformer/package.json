@@ -23,7 +23,12 @@
     "main": "build/index.js",
     "types": "build/index.d.ts"
   },
+  "scripts": {
+    "test": "jest --watch",
+    "build": "ttsc -p tsconfig.json",
+    "build2": "tsc -p tsconfig.json"
+  },
   "dependencies": {
-    "@typesafe-store/transformer-helpers": "0.1.0"
+    "@typesafe-store/reducer": "0.1.0"
   }
 }

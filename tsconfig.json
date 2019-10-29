@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "es2017",
+    "target": "es2018",
     "module": "commonjs",
     "lib": [
       "dom",
@@ -12,22 +12,22 @@
     // "isolatedModules": true,
     "strict": true,
     /* Additional Checks */
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
+    // "noUnusedLocals": true,
+    // "noUnusedParameters": true,
+    // "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     /* Module Resolution Options */
     "moduleResolution": "node",
     "esModuleInterop": false,
     "resolveJsonModule": true,
     "paths": {
-      "ts-plus": [
-        "ts-plus/src"
+      "@ts-plus/reducer": [
+        "reducer/src"
       ],
-      "@ts-plus/transformer-helpers": [
-        "transformer-helpers/src"
+      "@ts-plus/reducer-transformer": [
+        "reducer-transformer/src"
       ],
-    }
+    },
   },
   "exclude": [
     ".yarn/releases/*",
