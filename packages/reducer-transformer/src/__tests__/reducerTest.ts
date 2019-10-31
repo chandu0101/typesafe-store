@@ -1,9 +1,12 @@
 import { getReducer } from "../index"
+import { GetActionTypes, NonFunctionProperties } from "@typesafe-store/reducer";
 
 class Sample {
     name = "First"
     count = 0;
     person = { name: "P1", age: 10 }
+
+    books: { name: string, year: number }[] = []
 
     changeName(name: string) {
         this.name = name
@@ -18,7 +21,11 @@ class Sample {
     changePersonAge(age: number) {
         this.person.age = age
     }
+    addBook(book: Sample["books"][0]) {
+        this.books.push(book)
+    }
 }
+
 
 const shallowCompareExcept = (obj1: any, obj2: any, exceptFields: string[]): boolean => {
     if (obj1 === obj2) {
@@ -71,15 +78,13 @@ describe("Reducer ", () => {
     })
     let state = reducer(undefined, {} as any)
     test('should return default state', () => {
-        expect(state).toStrictEqual({
-            name: "First", count: 0,
-            person: { name: "P1", age: 10 }
-        })
+        expect(state).toEqual(new Sample)
     })
 
-    const NEW_NAME = "New Name"
 
     test('should change name', () => {
+        const NEW_NAME = "New Name"
+
         const prevState = state
         state = reducer(state, {
             name: "changeName",
@@ -102,17 +107,26 @@ describe("Reducer ", () => {
     })
 
     test('should modify person', () => {
-        const prevState = state
+        let prevState = state
         state = reducer(state, { name: "chnagePersonName", group: "Sample", payload: "P1C" })
         expect(shallowCompareExcept(prevState, state, ["person"])).toBeTruthy()
         expect(state.person.name).toBe("P1C")
+        prevState = state
         state = reducer(state, { name: "changePersonAge", group: "Sample", payload: 20 })
         expect(shallowCompareExcept(prevState, state, ["person"])).toBeTruthy()
         expect(state.person.name).toBe("P1C")
         expect(state.person.age).toBe(20)
     })
 
-
+    test("should push to array", () => {
+        let prevState = state
+        state = reducer(state, {
+            name: "addBook", group: "Sample",
+            payload: { name: "", year: 3 }
+        })
+        console.log("Books", state.books);
+        expect(shallowCompareExcept(prevState, state, ["books"])).toBeTruthy()
+    })
 
 
 })

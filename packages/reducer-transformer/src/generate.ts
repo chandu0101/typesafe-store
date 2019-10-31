@@ -1,15 +1,31 @@
 import * as ts from 'typescript';
-import { getMembersofTypeNode, getMethodsFromTypeMembers, getPropDeclsFromTypeMembers, getTypeName, getNameofPropertyName, groupByValue, replaceThisIdentifier, } from './helpers';
+import { getMembersofTypeNode, getMethodsFromTypeMembers, getPropDeclsFromTypeMembers, getTypeName, getNameofPropertyName, groupByValue, replaceThisIdentifier, isPushStatement, getMembers, } from './helpers';
 import { stringify } from 'querystring';
 
 
+export let typeChecker: ts.TypeChecker = null as any
 
+export let typeNode: ts.TypeNode = null as any
+
+
+export function setTypeCheckerAndNode(tc: ts.TypeChecker, tn: ts.TypeNode) {
+    typeChecker = tc;
+}
+export function getTypeChecker() {
+    return typeChecker;
+}
+
+export function getTypeNode() {
+    return typeNode;
+}
 
 export const createReducerFunction = ({ type, typeChecker }: { type: ts.TypeNode; typeChecker: ts.TypeChecker; }) => {
 
-    const members = getMembersofTypeNode(type, typeChecker)
+    setTypeCheckerAndNode(typeChecker, type);
 
-    const typeName = getTypeName(type, typeChecker)
+    const members = getMembers()
+
+    const typeName = getTypeName()
 
     const propDecls = getPropDeclsFromTypeMembers(members)
 
@@ -114,6 +130,19 @@ const getSwitchClauses = ({ members, typeChecker, typeName }: { members: ts.Symb
                                 )
                                 )
                             )
+                        }
+
+                        if (ts.isCallExpression(s.expression) && isPushStatement(s)) {
+
+                            addOrUpdateParentGroup(s.expression.expression.getText(), true)
+                            generalStatements.push(
+                                ts.createExpressionStatement(
+                                    ts.createCall(replaceThisIdentifier(s.expression.expression as any, PREFIX),
+                                        undefined,
+                                        s.expression.arguments)
+                                )
+                            )
+
                         }
 
                     }

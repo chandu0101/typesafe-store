@@ -24,7 +24,8 @@
     "types": "build/index.d.ts"
   },
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "build": "tsc -p tsconfig.json"
   },
   "dependencies": {},
   "devDependencies": {
