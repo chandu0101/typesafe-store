@@ -1,23 +1,9 @@
 import * as ts from 'typescript';
-import { getMembersofTypeNode, getMethodsFromTypeMembers, getPropDeclsFromTypeMembers, getTypeName, getNameofPropertyName, groupByValue, replaceThisIdentifier, isPushStatement, getMembers, } from './helpers';
+import { getMembersofTypeNode, getMethodsFromTypeMembers, getPropDeclsFromTypeMembers, getTypeName, getNameofPropertyName, groupByValue, replaceThisIdentifier, isPushStatement, getMembers, setTypeCheckerAndNode, cleanUpGloabals, } from './helpers';
 import { stringify } from 'querystring';
 
 
-export let typeChecker: ts.TypeChecker = null as any
 
-export let typeNode: ts.TypeNode = null as any
-
-
-export function setTypeCheckerAndNode(tc: ts.TypeChecker, tn: ts.TypeNode) {
-    typeChecker = tc;
-}
-export function getTypeChecker() {
-    return typeChecker;
-}
-
-export function getTypeNode() {
-    return typeNode;
-}
 
 export const createReducerFunction = ({ type, typeChecker }: { type: ts.TypeNode; typeChecker: ts.TypeChecker; }) => {
 
@@ -33,7 +19,7 @@ export const createReducerFunction = ({ type, typeChecker }: { type: ts.TypeNode
 
     const clauses = getSwitchClauses({ members, typeChecker, typeName })
 
-
+    cleanUpGloabals()
     return buildFunction({ caseClauses: clauses, defaultState })
 }
 

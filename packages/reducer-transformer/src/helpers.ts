@@ -1,7 +1,37 @@
 import * as ts from "typescript";
-import { getTypeChecker, getTypeNode } from "./generate";
 
 
+let typeChecker: ts.TypeChecker = null as any
+
+let typeNode: ts.TypeNode = null as any
+
+let members: ts.Symbol[] = null as any
+
+let memebrTypes: { name: string, type: ts.Type }[] = null as any
+
+
+export function setTypeCheckerAndNode(tc: ts.TypeChecker, tn: ts.TypeNode) {
+    typeChecker = tc;
+    typeNode = tn;
+    members = getMembers()
+    memebrTypes = members.map(s => {
+        return { type: typeChecker.getTypeOfSymbolAtLocation(s, typeNode), name: s.escapedName.toString() }
+    })
+}
+export function getTypeChecker() {
+    return typeChecker;
+}
+
+export function getTypeNode() {
+    return typeNode;
+}
+
+export function cleanUpGloabals() {
+    typeChecker = null as any
+    typeNode = null as any
+    members = null as any
+    memebrTypes = null as any
+}
 
 export function isMethod(input: ts.Symbol) {
     return ts.isMethodDeclaration(input.declarations[0])
@@ -14,19 +44,19 @@ export function getMembersofTypeNode(type: ts.TypeNode, typeChecker: ts.TypeChec
 
 
 export function getMembers() {
-    return getMembersofTypeNode(getTypeNode(), getTypeChecker())
+    return getMembersofTypeNode(typeNode, typeChecker)
 }
 
 export function getTypeName() {
-    const tc = getTypeChecker()
-    return tc.typeToString(tc.getTypeFromTypeNode(getTypeNode()))
+
+    return typeChecker.typeToString(typeChecker.getTypeFromTypeNode(typeNode))
 }
 
 export const isPropertyDecl = (input: ts.Symbol) => {
     return ts.isPropertyDeclaration(input.declarations[0])
 }
 
-export const getPropDeclsFromTypeMembers = (members: ts.Symbol[]) => {
+export const getPropDeclsFromTypeMembers = () => {
     return members.filter(isPropertyDecl).map(m => m.declarations[0] as ts.PropertyDeclaration)
 }
 
@@ -88,24 +118,55 @@ export function replaceThisIdentifier(input: ts.PropertyAccessExpression | ts.El
 }
 
 
-export function processThisStatement(input: ts.PropertyAccessExpression | ts.ElementAccessExpression, result: any): any {
+export function getTypeForPropertyAccess(input: string) {
+
+    const a = input.split(".")
+    if (a.length == 1) {
+        return memebrTypes.find(mt => mt.name === a[0])!.type
+    }
+    const x = input.split(".")[0]
+
+
+}
+
+export function processThisStatement(input: ts.PropertyAccessExpression | ts.ElementAccessExpression, text: string, result:
+    { name: string, meta: { isOptional?: boolean, isArray?: boolean, identifier?: ts.Expression } }[] = []): any {
     if (ts.isPropertyAccessExpression(input)) {
         if (input.expression.kind === ts.SyntaxKind.ThisKeyword) {
-            return ts.createPropertyAccess(ts.createIdentifier("state"), input.name)
+            result.forEach(v => {
+                v.name = `${input.name.getText()}.${v.name}`
+            })
+            result.push({ name: input.name.getText(), meta: {} })
+            return result
         }
-        return ts.createPropertyAccess(processThisStatement(input.expression as any, prefix), input.name)
+        result.forEach(v => {
+            v.name = `${input.name.getText()}.${v.name}`
+        })
+        result.push({ name: input.name.getText(), meta: {} })
+        return processThisStatement(input.expression as any, text, result)
     } else if (ts.isPropertyAccessChain(input)) {
-        return ts.createPropertyAccessChain(processThisStatement(input.expression as any, prefix), input.questionDotToken, input.name.getText())
+        result.forEach(v => {
+            v.name = `${input.name.getText()}.${v.name}`
+        })
+        result.push({ name: input.name.getText(), meta: { isOptional: !!input.questionDotToken } })
+        return processThisStatement(input.expression as any, text, result)
     } else if (ts.isNonNullExpression(input)) {
-        return ts.createNonNullExpression(processThisStatement(input.expression as any, prefix))
+        return processThisStatement(input.expression as any, text, result)
     }
     else {
         if (ts.isElementAccessChain(input)) {
-            return ts.createElementAccessChain(processThisStatement(input.expression as any, prefix), input.questionDotToken, input.argumentExpression)
-        }
-        return ts.createElementAccess(processThisStatement(input.expression as any, prefix), input.argumentExpression)
-    }
 
+            const last = result[result.length - 1]
+            if (input.questionDotToken) {
+                last.meta.isOptional = true
+            }
+            last.meta.identifier = input.argumentExpression
+            return processThisStatement(input.expression as any, text, result)
+        }
+        const last = result[result.length - 1]
+        last.meta.identifier = input.argumentExpression
+        return processThisStatement(input.expression as any, text, result)
+    }
 
 }
 
