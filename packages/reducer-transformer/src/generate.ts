@@ -9,15 +9,10 @@ export const createReducerFunction = ({ type, typeChecker }: { type: ts.TypeNode
 
     setTypeCheckerAndNode(typeChecker, type);
 
-    const members = getMembers()
-
-    const typeName = getTypeName()
-
-    const propDecls = getPropDeclsFromTypeMembers(members)
-
+    const propDecls = getPropDeclsFromTypeMembers()
     const defaultState = getDefaultState(propDecls)
 
-    const clauses = getSwitchClauses({ members, typeChecker, typeName })
+    const clauses = getSwitchClauses()
 
     cleanUpGloabals()
     return buildFunction({ caseClauses: clauses, defaultState })
@@ -25,10 +20,12 @@ export const createReducerFunction = ({ type, typeChecker }: { type: ts.TypeNode
 
 
 
-const getSwitchClauses = ({ members, typeChecker, typeName }: { members: ts.Symbol[]; typeChecker: ts.TypeChecker; typeName: string; }) => {
+const getSwitchClauses = () => {
 
-    const methods = getMethodsFromTypeMembers(members)
-    const propDecls = getPropDeclsFromTypeMembers(members)
+    const typeName = getTypeName()
+
+    const methods = getMethodsFromTypeMembers()
+    const propDecls = getPropDeclsFromTypeMembers()
 
 
     return methods.filter(m => m.body && m.body.statements.length > 0)

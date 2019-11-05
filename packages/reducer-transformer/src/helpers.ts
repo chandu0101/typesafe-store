@@ -7,30 +7,23 @@ let typeNode: ts.TypeNode = null as any
 
 let members: ts.Symbol[] = null as any
 
-let memebrTypes: { name: string, type: ts.Type }[] = null as any
+let memberTypes: { name: string, type: ts.Type }[] = null as any
 
 
 export function setTypeCheckerAndNode(tc: ts.TypeChecker, tn: ts.TypeNode) {
     typeChecker = tc;
     typeNode = tn;
-    members = getMembers()
-    memebrTypes = members.map(s => {
+    members = getMembersofTypeNode(typeNode, typeChecker)
+    memberTypes = members.map(s => {
         return { type: typeChecker.getTypeOfSymbolAtLocation(s, typeNode), name: s.escapedName.toString() }
     })
-}
-export function getTypeChecker() {
-    return typeChecker;
-}
-
-export function getTypeNode() {
-    return typeNode;
 }
 
 export function cleanUpGloabals() {
     typeChecker = null as any
     typeNode = null as any
     members = null as any
-    memebrTypes = null as any
+    memberTypes = null as any
 }
 
 export function isMethod(input: ts.Symbol) {
@@ -43,8 +36,12 @@ export function getMembersofTypeNode(type: ts.TypeNode, typeChecker: ts.TypeChec
 }
 
 
-export function getMembers() {
-    return getMembersofTypeNode(typeNode, typeChecker)
+export function getMembersOfType(type: ts.Type) {
+    return typeChecker.getPropertiesOfType(type).map(
+        s => {
+            return { type: typeChecker.getDeclaredTypeOfSymbol(s), name: s.escapedName.toString() }
+        }
+    )
 }
 
 export function getTypeName() {
@@ -60,8 +57,8 @@ export const getPropDeclsFromTypeMembers = () => {
     return members.filter(isPropertyDecl).map(m => m.declarations[0] as ts.PropertyDeclaration)
 }
 
-export const getMethodsFromTypeMembers = (props: ts.Symbol[]) => {
-    return props.filter(isMethod).map(p => p.declarations[0] as ts.MethodDeclaration)
+export const getMethodsFromTypeMembers = () => {
+    return members.filter(isMethod).map(p => p.declarations[0] as ts.MethodDeclaration)
 }
 
 
@@ -118,25 +115,32 @@ export function replaceThisIdentifier(input: ts.PropertyAccessExpression | ts.El
 }
 
 
-export function getTypeForPropertyAccess(input: string) {
+export function getTypeForPropertyAccess(input: string[], mTypes: { name: string, type: ts.Type }[] = memberTypes): ts.Type {
 
-    const a = input.split(".")
-    if (a.length == 1) {
-        return memebrTypes.find(mt => mt.name === a[0])!.type
+    const t = memberTypes.find(mt => mt.name === input[0])!.type
+    if (input.length == 1) {
+        return t
+    } else {
+        return getTypeForPropertyAccess(input.slice(1), getMembersOfType(t))
     }
-    const x = input.split(".")[0]
-
-
 }
 
+export function isArrayType(input: ts.Type) {
+    const s = input.symbol.valueDeclaration
+    return ts.isArrayTypeNode(s)
+}
+
+type Result = { name: string, meta: { isOptional?: boolean, isArray?: boolean, numberAcess?: number, stringAccess?: string, identifier?: ts.Expression } }
 export function processThisStatement(input: ts.PropertyAccessExpression | ts.ElementAccessExpression, text: string, result:
-    { name: string, meta: { isOptional?: boolean, isArray?: boolean, identifier?: ts.Expression } }[] = []): any {
+    Result[] = []): Result[] {
     if (ts.isPropertyAccessExpression(input)) {
         if (input.expression.kind === ts.SyntaxKind.ThisKeyword) {
+            const parent = input.name.getText()
             result.forEach(v => {
-                v.name = `${input.name.getText()}.${v.name}`
+                v.name = `${parent}.${v.name}`
+                v.meta.isArray = isArrayType(getTypeForPropertyAccess(v.name.split(".")))
             })
-            result.push({ name: input.name.getText(), meta: {} })
+            result.push({ name: parent, meta: { isArray: isArrayType(getTypeForPropertyAccess([parent])) } })
             return result
         }
         result.forEach(v => {
@@ -145,30 +149,39 @@ export function processThisStatement(input: ts.PropertyAccessExpression | ts.Ele
         result.push({ name: input.name.getText(), meta: {} })
         return processThisStatement(input.expression as any, text, result)
     } else if (ts.isPropertyAccessChain(input)) {
+        const parent = input.name.getText()
         result.forEach(v => {
-            v.name = `${input.name.getText()}.${v.name}`
+            v.name = `${parent}.${v.name}`
         })
-        result.push({ name: input.name.getText(), meta: { isOptional: !!input.questionDotToken } })
+        result.push({ name: parent, meta: { isOptional: !!input.questionDotToken } })
         return processThisStatement(input.expression as any, text, result)
     } else if (ts.isNonNullExpression(input)) {
         return processThisStatement(input.expression as any, text, result)
     }
     else {
+        const last = result[result.length - 1]
+        if (ts.isNumericLiteral(input.argumentExpression)) {
+            last.meta.numberAcess = parseInt(input.argumentExpression.getText(), 10)
+        } else if (ts.isStringLiteral(input.argumentExpression)) {
+            last.meta.stringAccess = input.argumentExpression.getText()
+        } else {
+            last.meta.identifier = input.argumentExpression
+        }
         if (ts.isElementAccessChain(input)) {
-
-            const last = result[result.length - 1]
             if (input.questionDotToken) {
                 last.meta.isOptional = true
             }
-            last.meta.identifier = input.argumentExpression
             return processThisStatement(input.expression as any, text, result)
         }
-        const last = result[result.length - 1]
-        last.meta.identifier = input.argumentExpression
+        if (input.questionDotToken) {
+            last.meta.isOptional = true
+        }
+
         return processThisStatement(input.expression as any, text, result)
     }
 
 }
+
 
 
 export function groupBy<T, K extends keyof T,>(objectArray: T[], property: K, value: K | undefined) {
