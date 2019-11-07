@@ -1,5 +1,5 @@
 import * as ts from 'typescript';
-import { getMembersofTypeNode, getMethodsFromTypeMembers, getPropDeclsFromTypeMembers, getTypeName, getNameofPropertyName, groupByValue, replaceThisIdentifier, isPushStatement, getMembers, setTypeCheckerAndNode, cleanUpGloabals, } from './helpers';
+import { getMembersofTypeNode, getMethodsFromTypeMembers, getPropDeclsFromTypeMembers, getTypeName, getNameofPropertyName, groupByValue, replaceThisIdentifier, isPushStatement, getMembers, setTypeCheckerAndNode, cleanUpGloabals, ProcessThisResult, processThisStatement, } from './helpers';
 import { stringify } from 'querystring';
 
 
@@ -35,23 +35,19 @@ const getSwitchClauses = () => {
 
             const reservedStatements: ts.Statement[] = [];
             const generalStatements: ts.Statement[] = [];
-            const parentGroups: Record<string, Set<string>> = {};
+            const parentGroups: Record<string, Map<string, ProcessThisResult["values"]>> = {};
             const PREFIX = "_tr_";
             const properyAssigments: ts.PropertyAssignment[] = []
 
-            const addOrUpdateParentGroup = (input: string, isArrayPush: boolean = false) => {
-                let inputProcessed = input.trim().replace("this.", "")
-                const a = inputProcessed.split(".")
-                const s = a[0];
-                if (isArrayPush) {
-                    inputProcessed += "[]"
-                }
-                const oldValue = parentGroups[s]
+            const addOrUpdateParentGroup = ({ g, v, values }: ProcessThisResult) => {
+
+                const oldValue = parentGroups[g]
                 if (!oldValue) {
-                    parentGroups[s] = new Set([inputProcessed])
+                    const map = new Map()
+                    parentGroups[g] = map.set(v, values)
 
                 } else {
-                    parentGroups[s] = oldValue.add(inputProcessed)
+                    parentGroups[g] = oldValue.set(v, values)
                 }
             }
 
@@ -79,52 +75,68 @@ const getSwitchClauses = () => {
                 if (ts.isExpressionStatement(s)) {
                     if (text.startsWith("this.")) {
                         if (ts.isPostfixUnaryExpression(s.expression)) {
-                            if (s.expression.operator === ts.SyntaxKind.PlusPlusToken) {
-                                const textWithoutplus = text.replace("++", "")
-                                addOrUpdateParentGroup(textWithoutplus)
-                                generalStatements.push(
-                                    ts.createExpressionStatement(ts.createBinary(
-                                        replaceThisIdentifier(s.expression.operand as any, PREFIX),
-                                        ts.createToken(ts.SyntaxKind.PlusEqualsToken),
-                                        ts.createNumericLiteral("1")
-                                    ))
-                                )
+                            const operand = s.expression.operand;
+                            const result = processThisStatement(operand as any)
+                            if (result.dynamicIdentifier) { //TODO
+
                             } else {
-                                const textWithoutMinus = text.replace("--", "")
-                                addOrUpdateParentGroup(textWithoutMinus)
+                                addOrUpdateParentGroup(result)
+                                if (s.expression.operator === ts.SyntaxKind.PlusPlusToken) {
+                                    generalStatements.push(
+                                        ts.createExpressionStatement(ts.createBinary(
+                                            replaceThisIdentifier(s.expression.operand as any, PREFIX),
+                                            ts.createToken(ts.SyntaxKind.PlusEqualsToken),
+                                            ts.createNumericLiteral("1")
+                                        ))
+                                    )
+                                } else {
+                                    generalStatements.push(
+                                        ts.createExpressionStatement(ts.createBinary(
+                                            replaceThisIdentifier(operand as any, PREFIX),
+                                            ts.createToken(ts.SyntaxKind.MinusEqualsToken),
+                                            ts.createNumericLiteral("1")
+                                        ))
+                                    )
+                                }
+                            }
+
+
+                        }
+                        if (ts.isBinaryExpression(s.expression)) {
+                            const left = s.expression.left
+                            const result = processThisStatement(left as any)
+                            if (result.dynamicIdentifier) { //TODO
+
+                            } else {
+                                addOrUpdateParentGroup(result)
                                 generalStatements.push(
                                     ts.createExpressionStatement(ts.createBinary(
-                                        replaceThisIdentifier(s.expression.operand as any, PREFIX),
-                                        ts.createToken(ts.SyntaxKind.MinusEqualsToken),
-                                        ts.createNumericLiteral("1")
-                                    ))
+                                        replaceThisIdentifier(left as any, PREFIX),
+                                        s.expression.operatorToken,
+                                        s.expression.right
+                                    )
+                                    )
                                 )
                             }
 
                         }
-                        if (ts.isBinaryExpression(s.expression)) {
-                            const leftText = s.expression.left.getText()
-                            addOrUpdateParentGroup(leftText)
-                            generalStatements.push(
-                                ts.createExpressionStatement(ts.createBinary(
-                                    replaceThisIdentifier(s.expression.left as any, PREFIX),
-                                    s.expression.operatorToken,
-                                    s.expression.right
-                                )
-                                )
-                            )
-                        }
 
                         if (ts.isCallExpression(s.expression) && isPushStatement(s)) {
+                            const exp = s.expression.expression;
+                            const result = processThisStatement(exp as any, true)
+                            if (result.dynamicIdentifier) {//TODO 
 
-                            addOrUpdateParentGroup(s.expression.expression.getText(), true)
-                            generalStatements.push(
-                                ts.createExpressionStatement(
-                                    ts.createCall(replaceThisIdentifier(s.expression.expression as any, PREFIX),
-                                        undefined,
-                                        s.expression.arguments)
+                            } else {
+                                addOrUpdateParentGroup(result)
+                                generalStatements.push(
+                                    ts.createExpressionStatement(
+                                        ts.createCall(replaceThisIdentifier(exp as any, PREFIX),
+                                            undefined,
+                                            s.expression.arguments)
+                                    )
                                 )
-                            )
+                            }
+
 
                         }
 
@@ -140,9 +152,10 @@ const getSwitchClauses = () => {
 
             // 
             Object.entries(parentGroups).forEach(([key, value], index) => {
-                const a = Array.from(value).filter(v => v.trim().length > 1)
-                if (a.length === 1 && a[0].split(".").length === 1) {
-                    const a1 = a[0][0]
+
+                const keys = Array.from(value.keys())
+                if (value.size === 1 && keys[0].split(".").length === 1) {
+                    const a1 = value.get(keys[0])![0]
                     reservedStatements.push(
                         ts.createVariableStatement(
                             undefined,
@@ -150,7 +163,7 @@ const getSwitchClauses = () => {
                                 [ts.createVariableDeclaration(
                                     ts.createIdentifier(`${PREFIX}${key}`),
                                     undefined,
-                                    a1.endsWith("[]") ? ts.createArrayLiteral([
+                                    a1.meta.isArray ? ts.createArrayLiteral([
                                         ts.createSpread(ts.createPropertyAccess(
                                             ts.createIdentifier("state"),
                                             ts.createIdentifier(key)
@@ -165,13 +178,13 @@ const getSwitchClauses = () => {
                         )
                     )
                 } else {
-                    const input = Array.from(new Set(a.map(s => {
-                        const sa = s.split(".")
-                        if (sa.length > 1 && !sa[sa.length - 1].endsWith("]")) {
-                            sa.pop()
-                        }
-                        return sa.join(".")
-                    })))
+                    // const input = Array.from(new Set(a.map(s => {
+                    //     const sa = s.split(".")
+                    //     if (sa.length > 1 && !sa[sa.length - 1].endsWith("]")) {
+                    //         sa.pop()
+                    //     }
+                    //     return sa.join(".")
+                    // })))
                     reservedStatements.push(
                         ts.createVariableStatement(
                             undefined,
@@ -179,8 +192,8 @@ const getSwitchClauses = () => {
                                 [ts.createVariableDeclaration(
                                     ts.createIdentifier(`${PREFIX}${key}`),
                                     undefined,
-                                    invalidateObjectWithList({
-                                        input
+                                    invalidateObjectWithList2({
+                                        input: value
                                     })
                                 )],
                                 ts.NodeFlags.Let
@@ -268,6 +281,109 @@ const invalidateObjectWithList = ({ input, traversed = [], parent = "state" }: {
     }
 }
 
+
+const invalidateObjectWithList2 = ({ input, traversed = [], parent = "state" }:
+    { input: Map<string, ProcessThisResult["values"]>; traversed?: string[]; parent?: string }): ts.ObjectLiteralExpression | ts.ArrayLiteralExpression => {
+
+    if (input.size === 1) {
+        const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}` : `${parent}`
+        return invalidateObject2({ input: input[0].split("."), parent: v })
+    } else {
+        const v1 = input[0].split(".")[0]
+        const props = groupByValue(input.filter(s => s.split(".").length > 1).map(s => {
+            const a = s.split(".")
+            return { key: a[1], value: a.slice(1).join(".") }
+        }), "key")
+        const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}.${v1}` : `${parent}.${v1}`
+        return ts.createObjectLiteral([
+            ts.createSpreadAssignment(ts.createIdentifier(v)),
+            ...Object.keys(props).map(k =>
+                ts.createPropertyAssignment(
+                    ts.createIdentifier(k),
+                    invalidateObjectWithList({ input: props[k], traversed: traversed.concat([v1]) })
+                ))
+        ])
+    }
+}
+
+
+const invalidateObject2 = ({ map: { input, values }, traversed = [], parent = "state" }: { map: { input: string[], values: ProcessThisResult["values"] }; traversed?: string[]; parent?: string }): ts.ObjectLiteralExpression | ts.ArrayLiteralExpression => {
+    const v1 = input[0]
+    const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}.${v1}` : `${parent}.${v1}`
+    const vt = values.find(v1 => v1.name === v)!
+    if (input.length === 1) {
+        if (vt.meta.isArray) {
+            if (vt.meta.numberAcess) {
+                return ts.createArrayLiteral(
+                    [ts.createSpread(ts.createCall(
+                        ts.createPropertyAccess(
+                            ts.createIdentifier(v),
+                            ts.createIdentifier("map")
+                        ),
+                        undefined,
+                        [ts.createArrowFunction(
+                            undefined,
+                            undefined,
+                            [
+                                ts.createParameter(
+                                    undefined,
+                                    undefined,
+                                    undefined,
+                                    ts.createIdentifier("v"),
+                                    undefined,
+                                    undefined,
+                                    undefined
+                                ),
+                                ts.createParameter(
+                                    undefined,
+                                    undefined,
+                                    undefined,
+                                    ts.createIdentifier("index"),
+                                    undefined,
+                                    undefined,
+                                    undefined
+                                )
+                            ],
+                            undefined,
+                            ts.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+                            ts.createConditional(
+                                ts.createBinary(
+                                    vt.meta.numberAcess,
+                                    ts.createToken(ts.SyntaxKind.EqualsEqualsEqualsToken),
+                                    ts.createIdentifier("index")
+                                ),
+                                ts.createObjectLiteral(
+                                    [ts.createSpreadAssignment(ts.createIdentifier("v"))],
+                                    false
+                                ),
+                                ts.createIdentifier("v")
+                            )
+                        )]
+                    ))],
+                    false
+                )
+            }
+            return ts.createArrayLiteral([
+                ts.createSpread(ts.createIdentifier(v))
+            ])
+        }
+        else {
+            return ts.createObjectLiteral([
+                ts.createSpreadAssignment(ts.createIdentifier(v))
+            ])
+        }
+    } else {
+        const v2 = input[1]
+        const v2t = values.find(v => v.name === `${v}.${v2}`)!
+        return ts.createObjectLiteral([
+            ts.createSpreadAssignment(ts.createIdentifier(v)),
+            ts.createPropertyAssignment(
+                ts.createIdentifier(v2),
+                invalidateObject2({ map: { input: input.slice(1), values }, traversed: traversed.concat([v1]) })
+            ),
+        ])
+    }
+}
 
 
 

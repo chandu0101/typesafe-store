@@ -125,61 +125,94 @@ export function getTypeForPropertyAccess(input: string[], mTypes: { name: string
     }
 }
 
+
 export function isArrayType(input: ts.Type) {
     const s = input.symbol.valueDeclaration
     return ts.isArrayTypeNode(s)
 }
 
-type Result = { name: string, meta: { isOptional?: boolean, isArray?: boolean, numberAcess?: number, stringAccess?: string, identifier?: ts.Expression } }
-export function processThisStatement(input: ts.PropertyAccessExpression | ts.ElementAccessExpression, text: string, result:
-    Result[] = []): Result[] {
-    if (ts.isPropertyAccessExpression(input)) {
-        if (input.expression.kind === ts.SyntaxKind.ThisKeyword) {
-            const parent = input.name.getText()
-            result.forEach(v => {
-                v.name = `${parent}.${v.name}`
-                v.meta.isArray = isArrayType(getTypeForPropertyAccess(v.name.split(".")))
+
+export function isArrayPropAccess(input: string) {
+    return isArrayType(getTypeForPropertyAccess(input.split(".")))
+}
+
+type Meta = { isOptional?: boolean, isArray?: boolean, numberAcess?: ts.Expression, stringAccess?: ts.Expression, identifier?: ts.Expression }
+type MetaValue = { name: string, meta: Meta }
+export type ProcessThisResult = { g: string, v: string, values: MetaValue[], dynamicIdentifier?: MetaValue }
+
+export function processThisStatement(exp: ts.PropertyAccessExpression | ts.ElementAccessExpression, arrayMut?: boolean): ProcessThisResult {
+    const values: MetaValue[] = [];
+    let propIdentifier: Meta | undefined = undefined
+    const processInner = (input: ts.PropertyAccessExpression | ts.ElementAccessExpression = exp): ProcessThisResult => {
+        if (ts.isPropertyAccessExpression(input)) {
+            if (input.expression.kind === ts.SyntaxKind.ThisKeyword) {
+                const parent = input.name.getText()
+                let v = parent
+                if (values.length > 1) {
+                    if (!arrayMut) values.splice(0)
+                    if (values.length > 1) {
+                        values.forEach(v => {
+                            v.name = `${parent}.${v.name}`
+                            v.meta.isArray = isArrayPropAccess(v.name)
+                        })
+                        v = values[0].name
+                    }
+                }
+                values.push({ name: parent, meta: { ...propIdentifier, isArray: isArrayPropAccess(parent) } })
+                const d = values.find((v, index) => v.meta.identifier)
+                return { g: parent, v, values, dynamicIdentifier: d }
+            }
+            values.forEach(v => {
+                v.name = `${input.name.getText()}.${v.name}`
             })
-            result.push({ name: parent, meta: { isArray: isArrayType(getTypeForPropertyAccess([parent])) } })
-            return result
+            values.push({ name: input.name.getText(), meta: {} })
+            return processInner(input.expression as any)
+        } else if (ts.isPropertyAccessChain(input)) {
+            const parent = input.name.getText()
+            values.forEach(v => {
+                v.name = `${parent}.${v.name}`
+            })
+            values.push({ name: parent, meta: { isOptional: !!input.questionDotToken } })
+            return processInner(input.expression as any)
+        } else if (ts.isNonNullExpression(input)) {//TODO throw error!
+            return processInner(input.expression as any)
         }
-        result.forEach(v => {
-            v.name = `${input.name.getText()}.${v.name}`
-        })
-        result.push({ name: input.name.getText(), meta: {} })
-        return processThisStatement(input.expression as any, text, result)
-    } else if (ts.isPropertyAccessChain(input)) {
-        const parent = input.name.getText()
-        result.forEach(v => {
-            v.name = `${parent}.${v.name}`
-        })
-        result.push({ name: parent, meta: { isOptional: !!input.questionDotToken } })
-        return processThisStatement(input.expression as any, text, result)
-    } else if (ts.isNonNullExpression(input)) {
-        return processThisStatement(input.expression as any, text, result)
-    }
-    else {
-        const last = result[result.length - 1]
-        if (ts.isNumericLiteral(input.argumentExpression)) {
-            last.meta.numberAcess = parseInt(input.argumentExpression.getText(), 10)
-        } else if (ts.isStringLiteral(input.argumentExpression)) {
-            last.meta.stringAccess = input.argumentExpression.getText()
+        else if (ts.isPropertyAccessExpression(input.expression)
+            && input.expression.expression.kind === ts.SyntaxKind.ThisKeyword
+            && (ts.isElementAccessChain(input) || ts.isElementAccessExpression(input))) { //TODO this.prop[_] 
+            propIdentifier = {}
+            if (ts.isNumericLiteral(input.argumentExpression)) {
+                propIdentifier.numberAcess = input.expression
+            } else if (ts.isStringLiteral(input.argumentExpression)) {
+                propIdentifier.stringAccess = input.argumentExpression
+            } else {
+                propIdentifier.identifier = input.argumentExpression
+            }
+            propIdentifier.isOptional = !!input.questionDotToken
+            return processInner(input.expression as any)
         } else {
-            last.meta.identifier = input.argumentExpression
-        }
-        if (ts.isElementAccessChain(input)) {
+            const last = values[values.length - 1]
+            if (ts.isNumericLiteral(input.argumentExpression)) {
+                last.meta.numberAcess = input.argumentExpression
+            } else if (ts.isStringLiteral(input.argumentExpression)) {
+                last.meta.stringAccess = input.argumentExpression
+            } else {
+                last.meta.identifier = input.argumentExpression
+            }
+            if (ts.isElementAccessChain(input)) {
+                if (input.questionDotToken) {
+                    last.meta.isOptional = true
+                }
+                return processInner(input.expression as any)
+            }
             if (input.questionDotToken) {
                 last.meta.isOptional = true
             }
-            return processThisStatement(input.expression as any, text, result)
-        }
-        if (input.questionDotToken) {
-            last.meta.isOptional = true
-        }
 
-        return processThisStatement(input.expression as any, text, result)
+            return processInner(input.expression as any)
+        }
     }
-
+    return processInner(exp)
 }
 
 
