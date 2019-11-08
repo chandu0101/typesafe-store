@@ -6,5 +6,4 @@ export declare function getReducer<T, G extends string>(typeName?: string): (sta
     actions: GetActionTypes<T, G>) => NonFunctionProperties<T>
 
 
-
 export default transformer;

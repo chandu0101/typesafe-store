@@ -1,5 +1,7 @@
 import { getReducer } from "../index"
 import { GetActionTypes, NonFunctionProperties } from "@typesafe-store/reducer";
+import { processThisStatement } from "../helpers";
+import * as ts from "typescript";
 
 class Sample {
     name = "First"
@@ -21,21 +23,25 @@ class Sample {
     changePersonAge(age: number) {
         this.person.age = age
     }
-    addBook(book: Sample["books"][0]) {
-        this.books.push(book)
-    }
+    //     addBook(book: Sample["books"][0]) {
+    //         this.books.push(book)
+    //     }
+
 }
 
 
 const shallowCompareExcept = (obj1: any, obj2: any, exceptFields: string[]): boolean => {
     if (obj1 === obj2) {
+        console.log("Shallow COmapre objst");
         return false;
     }
     for (const key in obj1) {
         const excluded = exceptFields.includes(key)
         if (!excluded && obj1[key] !== obj2[key]) {
+            console.log("Shallow COmapre failing on : ", excluded, obj1[key], obj2[key]);
             return false;
         } else if (excluded && obj1[key] === obj2[key]) {
+            console.log("Shallow COmapre failing on : ", excluded, obj1[key], obj2[key]);
             return false
         }
     }
@@ -106,9 +112,12 @@ describe("Reducer ", () => {
 
     })
 
-    test('should modify person', () => {
+    test.only('should modify person', () => {
         let prevState = state
-        state = reducer(state, { name: "chnagePersonName", group: "Sample", payload: "P1C" })
+        console.log("Prev state2 : ", prevState);
+
+        state = reducer(state, { name: "chnagePersonName", group: "Sample", payload: "P12C" })
+        console.log("State: ", state);
         expect(shallowCompareExcept(prevState, state, ["person"])).toBeTruthy()
         expect(state.person.name).toBe("P1C")
         prevState = state
@@ -118,16 +127,56 @@ describe("Reducer ", () => {
         expect(state.person.age).toBe(20)
     })
 
-    test("should push to array", () => {
-        let prevState = state
-        state = reducer(state, {
-            name: "addBook", group: "Sample",
-            payload: { name: "", year: 3 }
-        })
-        console.log("Books", state.books);
-        expect(shallowCompareExcept(prevState, state, ["books"])).toBeTruthy()
-    })
+    // test("should push to array", () => {
+    //     let prevState = state
+    //     state = reducer(state, {
+    //         name: "addBook", group: "Sample",
+    //         payload: { name: "", year: 3 }
+    //     })
+    //     console.log("Books", state.books);
+    //     expect(shallowCompareExcept(prevState, state, ["books"])).toBeTruthy()
+    // })
 
 
 })
 
+
+describe("play", () => {
+
+
+    test('should Generate Prop Access', () => {
+        const s = processThisStatement(ts.createPropertyAccessChain(
+            ts.createPropertyAccessChain(
+                ts.createPropertyAccessChain(
+                    ts.createPropertyAccess(
+                        ts.createThis(),
+                        ts.createIdentifier("x")
+                    ),
+                    ts.createToken(ts.SyntaxKind.QuestionDotToken),
+                    ts.createIdentifier("b")
+                ),
+                undefined,
+                ts.createIdentifier("c")
+            ),
+            undefined,
+            ts.createIdentifier("d")
+        ))
+        // const s = processThisStatement(ts.createPropertyAccess(
+        //     ts.createPropertyAccess(
+        //         ts.createPropertyAccess(
+        //             ts.createPropertyAccess(
+        //                 ts.createThis(),
+        //                 ts.createIdentifier("x")
+        //             ),
+        //             ts.createIdentifier("b")
+        //         ),
+        //         ts.createIdentifier("c")
+        //     ),
+        //     ts.createIdentifier("d")
+        // ))
+        console.log("s : ", s);
+        // expect(JSON.stringify(s)).toBe("")
+
+    })
+
+})

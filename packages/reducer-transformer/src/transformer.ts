@@ -1,5 +1,5 @@
 import * as ts from "typescript";
-import { createReducerFunction, setTypeCheckerAndNode } from "./generate";
+import { createReducerFunction } from "./generate";
 export interface TranformerOptions {
 
 }

@@ -116,8 +116,7 @@ export function replaceThisIdentifier(input: ts.PropertyAccessExpression | ts.El
 
 
 export function getTypeForPropertyAccess(input: string[], mTypes: { name: string, type: ts.Type }[] = memberTypes): ts.Type {
-
-    const t = memberTypes.find(mt => mt.name === input[0])!.type
+    const t = mTypes.find(mt => mt.name === input[0])!.type
     if (input.length == 1) {
         return t
     } else {
@@ -127,8 +126,9 @@ export function getTypeForPropertyAccess(input: string[], mTypes: { name: string
 
 
 export function isArrayType(input: ts.Type) {
-    const s = input.symbol.valueDeclaration
-    return ts.isArrayTypeNode(s)
+    console.log("Checking array for type : ", input.flags, "toString : ", typeChecker.typeToString(input));
+    // const s = input.symbol.valueDeclaration
+    return ts.isArrayTypeNode(typeChecker.typeToTypeNode(input)!)
 }
 
 
@@ -136,21 +136,29 @@ export function isArrayPropAccess(input: string) {
     return isArrayType(getTypeForPropertyAccess(input.split(".")))
 }
 
-type Meta = { isOptional?: boolean, isArray?: boolean, numberAcess?: ts.Expression, stringAccess?: ts.Expression, identifier?: ts.Expression }
+type Meta = {
+    isOptional?: boolean, isArray?: boolean,
+    isObject?: boolean,
+    numberAcess?: ts.Expression, stringAccess?: ts.Expression, identifier?: ts.Expression
+}
 type MetaValue = { name: string, meta: Meta }
 export type ProcessThisResult = { g: string, v: string, values: MetaValue[], dynamicIdentifier?: MetaValue }
 
 export function processThisStatement(exp: ts.PropertyAccessExpression | ts.ElementAccessExpression, arrayMut?: boolean): ProcessThisResult {
+    console.log("processTHis Statemenut input : ", exp.getText(), "arrayArg", arrayMut);
     const values: MetaValue[] = [];
     let propIdentifier: Meta | undefined = undefined
     const processInner = (input: ts.PropertyAccessExpression | ts.ElementAccessExpression = exp): ProcessThisResult => {
         if (ts.isPropertyAccessExpression(input)) {
+            const parent = getNameofPropertyName(input.name)
             if (input.expression.kind === ts.SyntaxKind.ThisKeyword) {
-                const parent = input.name.getText()
                 let v = parent
-                if (values.length > 1) {
-                    if (!arrayMut) values.splice(0)
-                    if (values.length > 1) {
+                console.log("Parent2 : ", v, "values: ", values);
+                if (values.length > 0) {
+                    console.log("before splice : ", arrayMut, values);
+                    if (!arrayMut) values.splice(0, 1)
+                    console.log("after  splice : ", arrayMut, values);
+                    if (values.length > 0) {
                         values.forEach(v => {
                             v.name = `${parent}.${v.name}`
                             v.meta.isArray = isArrayPropAccess(v.name)
@@ -160,15 +168,11 @@ export function processThisStatement(exp: ts.PropertyAccessExpression | ts.Eleme
                 }
                 values.push({ name: parent, meta: { ...propIdentifier, isArray: isArrayPropAccess(parent) } })
                 const d = values.find((v, index) => v.meta.identifier)
-                return { g: parent, v, values, dynamicIdentifier: d }
+                const result = { g: parent, v, values, dynamicIdentifier: d }
+                console.log("processThisStatement Result :", result);
+                return result
             }
-            values.forEach(v => {
-                v.name = `${input.name.getText()}.${v.name}`
-            })
-            values.push({ name: input.name.getText(), meta: {} })
-            return processInner(input.expression as any)
-        } else if (ts.isPropertyAccessChain(input)) {
-            const parent = input.name.getText()
+            console.log("Processing parent : ", parent);
             values.forEach(v => {
                 v.name = `${parent}.${v.name}`
             })

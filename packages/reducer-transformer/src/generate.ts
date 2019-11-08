@@ -1,5 +1,8 @@
 import * as ts from 'typescript';
-import { getMembersofTypeNode, getMethodsFromTypeMembers, getPropDeclsFromTypeMembers, getTypeName, getNameofPropertyName, groupByValue, replaceThisIdentifier, isPushStatement, getMembers, setTypeCheckerAndNode, cleanUpGloabals, ProcessThisResult, processThisStatement, } from './helpers';
+import {
+    getMembersofTypeNode, getMethodsFromTypeMembers, getPropDeclsFromTypeMembers, getTypeName, getNameofPropertyName, groupByValue, replaceThisIdentifier, isPushStatement
+    , setTypeCheckerAndNode, cleanUpGloabals, ProcessThisResult, processThisStatement,
+} from './helpers';
 import { stringify } from 'querystring';
 
 
@@ -104,7 +107,13 @@ const getSwitchClauses = () => {
                         }
                         if (ts.isBinaryExpression(s.expression)) {
                             const left = s.expression.left
+                            if (name === "chnagePersonName") {
+
+                            }
                             const result = processThisStatement(left as any)
+                            if (name === "chnagePersonName") {
+                                console.log("Result for chnagePersonName: ", result.g, result.v, result.values, " Text:", text);
+                            }
                             if (result.dynamicIdentifier) { //TODO
 
                             } else {
@@ -121,8 +130,9 @@ const getSwitchClauses = () => {
 
                         }
 
-                        if (ts.isCallExpression(s.expression) && isPushStatement(s)) {
-                            const exp = s.expression.expression;
+                        if (ts.isCallExpression(s.expression) && ts.isPropertyAccessExpression(s.expression.expression) &&
+                            isPushStatement(s)) {
+                            const exp = s.expression.expression.expression;
                             const result = processThisStatement(exp as any, true)
                             if (result.dynamicIdentifier) {//TODO 
 
@@ -152,7 +162,7 @@ const getSwitchClauses = () => {
 
             // 
             Object.entries(parentGroups).forEach(([key, value], index) => {
-
+                console.log("parent Group Entries : ", key, "Values : ", value);
                 const keys = Array.from(value.keys())
                 if (value.size === 1 && keys[0].split(".").length === 1) {
                     const a1 = value.get(keys[0])![0]
@@ -283,111 +293,198 @@ const invalidateObjectWithList = ({ input, traversed = [], parent = "state" }: {
 
 
 const invalidateObjectWithList2 = ({ input, traversed = [], parent = "state" }:
-    { input: Map<string, ProcessThisResult["values"]>; traversed?: string[]; parent?: string }): ts.ObjectLiteralExpression | ts.ArrayLiteralExpression => {
-
+    { input: Map<string, ProcessThisResult["values"]>; traversed?: string[]; parent?: string })
+    : ts.ObjectLiteralExpression | ts.ArrayLiteralExpression | ts.ConditionalExpression => {
+    const entries = Array.from(input.entries())
     if (input.size === 1) {
+        const [key, values] = entries[0]
         const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}` : `${parent}`
-        return invalidateObject2({ input: input[0].split("."), parent: v })
+        return invalidateObject2({ map: { input: key.split("."), values }, parent: v })
     } else {
-        const v1 = input[0].split(".")[0]
-        const props = groupByValue(input.filter(s => s.split(".").length > 1).map(s => {
-            const a = s.split(".")
-            return { key: a[1], value: a.slice(1).join(".") }
-        }), "key")
-        const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}.${v1}` : `${parent}.${v1}`
-        return ts.createObjectLiteral([
-            ts.createSpreadAssignment(ts.createIdentifier(v)),
-            ...Object.keys(props).map(k =>
-                ts.createPropertyAssignment(
-                    ts.createIdentifier(k),
-                    invalidateObjectWithList({ input: props[k], traversed: traversed.concat([v1]) })
-                ))
-        ])
+        return null as any
+        // const v1 = entries[0][0].split(".")[0]
+        // const props = groupByValue(input.filter(s => s.split(".").length > 1).map(s => {
+        //     const a = s.split(".")
+        //     return { key: a[1], value: a.slice(1).join(".") }
+        // }), "key")
+        // const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}.${v1}` : `${parent}.${v1}`
+        // return ts.createObjectLiteral([
+        //     ts.createSpreadAssignment(ts.createIdentifier(v)),
+        //     ...Object.keys(props).map(k =>
+        //         ts.createPropertyAssignment(
+        //             ts.createIdentifier(k),
+        //             invalidateObjectWithList({ input: props[k], traversed: traversed.concat([v1]) })
+        //         ))
+        // ])
     }
 }
 
 
-const invalidateObject2 = ({ map: { input, values }, traversed = [], parent = "state" }: { map: { input: string[], values: ProcessThisResult["values"] }; traversed?: string[]; parent?: string }): ts.ObjectLiteralExpression | ts.ArrayLiteralExpression => {
-    const v1 = input[0]
-    const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}.${v1}` : `${parent}.${v1}`
-    const vt = values.find(v1 => v1.name === v)!
-    if (input.length === 1) {
-        if (vt.meta.isArray) {
-            if (vt.meta.numberAcess) {
-                return ts.createArrayLiteral(
-                    [ts.createSpread(ts.createCall(
-                        ts.createPropertyAccess(
-                            ts.createIdentifier(v),
-                            ts.createIdentifier("map")
-                        ),
+
+const convertToLietalExpand = (v: string, vt: ProcessThisResult["values"][0]) => {
+    if (vt.meta.isArray) {
+        if (vt.meta.numberAcess) {
+            return ts.createArrayLiteral(
+                [ts.createSpread(ts.createCall(
+                    ts.createPropertyAccess(
+                        ts.createIdentifier(v),
+                        ts.createIdentifier("map")
+                    ),
+                    undefined,
+                    [ts.createArrowFunction(
                         undefined,
-                        [ts.createArrowFunction(
-                            undefined,
-                            undefined,
-                            [
-                                ts.createParameter(
-                                    undefined,
-                                    undefined,
-                                    undefined,
-                                    ts.createIdentifier("v"),
-                                    undefined,
-                                    undefined,
-                                    undefined
-                                ),
-                                ts.createParameter(
-                                    undefined,
-                                    undefined,
-                                    undefined,
-                                    ts.createIdentifier("index"),
-                                    undefined,
-                                    undefined,
-                                    undefined
-                                )
-                            ],
-                            undefined,
-                            ts.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-                            ts.createConditional(
-                                ts.createBinary(
-                                    vt.meta.numberAcess,
-                                    ts.createToken(ts.SyntaxKind.EqualsEqualsEqualsToken),
-                                    ts.createIdentifier("index")
-                                ),
-                                ts.createObjectLiteral(
-                                    [ts.createSpreadAssignment(ts.createIdentifier("v"))],
-                                    false
-                                ),
-                                ts.createIdentifier("v")
+                        undefined,
+                        [
+                            ts.createParameter(
+                                undefined,
+                                undefined,
+                                undefined,
+                                ts.createIdentifier("v"),
+                                undefined,
+                                undefined,
+                                undefined
+                            ),
+                            ts.createParameter(
+                                undefined,
+                                undefined,
+                                undefined,
+                                ts.createIdentifier("index"),
+                                undefined,
+                                undefined,
+                                undefined
                             )
-                        )]
-                    ))],
-                    false
-                )
-            }
-            return ts.createArrayLiteral([
-                ts.createSpread(ts.createIdentifier(v))
-            ])
+                        ],
+                        undefined,
+                        ts.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+                        ts.createConditional(
+                            ts.createBinary(
+                                vt.meta.numberAcess,
+                                ts.createToken(ts.SyntaxKind.EqualsEqualsEqualsToken),
+                                ts.createIdentifier("index")
+                            ),
+                            ts.createObjectLiteral(
+                                [ts.createSpreadAssignment(ts.createIdentifier("v"))],
+                                false
+                            ),
+                            ts.createIdentifier("v")
+                        )
+                    )]
+                ))],
+                false
+            )
         }
-        else {
-            return ts.createObjectLiteral([
-                ts.createSpreadAssignment(ts.createIdentifier(v))
-            ])
-        }
+        return ts.createArrayLiteral([
+            ts.createSpread(ts.createIdentifier(v))
+        ])
+    }
+    else {
+        return ts.createObjectLiteral([
+            ts.createSpreadAssignment(ts.createIdentifier(v))
+        ])
+    }
+}
+
+const invalidateObject2 = ({ map: { input, values }, traversed = [], parent = "state" }: { map: { input: string[], values: ProcessThisResult["values"] }; traversed?: string[]; parent?: string }):
+    ts.ObjectLiteralExpression | ts.ArrayLiteralExpression | ts.ConditionalExpression => {
+    console.log("Invalidatin object : input:  ", input, "traversed : ", traversed, "values: ", values, "aprent : ", parent);
+    const v1 = input[0]
+    const vv1 = traversed.length > 0 ? `${traversed.join(".")}.${v1}` : `${v1}`
+    const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}.${v1}` : `${parent}.${v1}`
+    const v1t = values.find(v => v.name === vv1)!
+    // const v1t: ProcessThisResult["values"][0] = { name: "", meta: { isOptional: false, isArray: false } }
+    if (input.length === 1) {
+        // if (v1t.meta.isOptional) {
+        //     return ts.createConditional(
+        //         ts.createIdentifier(v),
+        //         convertToLietalExpand(v, v1t),
+        //         ts.createIdentifier(v)
+        //     )
+        // } else {
+        //     return convertToLietalExpand(v, v1t)
+        // }
+        return convertToLietalExpand(v, v1t)
     } else {
         const v2 = input[1]
-        const v2t = values.find(v => v.name === `${v}.${v2}`)!
-        return ts.createObjectLiteral([
-            ts.createSpreadAssignment(ts.createIdentifier(v)),
-            ts.createPropertyAssignment(
-                ts.createIdentifier(v2),
-                invalidateObject2({ map: { input: input.slice(1), values }, traversed: traversed.concat([v1]) })
-            ),
-        ])
+        const vv2 = `${vv1}.${v2}`
+        const v2t = values.find(v => v.name === vv2)!
+        const v2exapnd = invalidateObject2({ map: { input: input.slice(1), values }, traversed: traversed.concat([v1]) })
+        const expand = (v1t.meta.isArray) ?
+            ts.createArrayLiteral(
+                [ts.createSpread(ts.createCall(
+                    ts.createPropertyAccess(
+                        ts.createIdentifier(v),
+                        ts.createIdentifier("map")
+                    ),
+                    undefined,
+                    [ts.createArrowFunction(
+                        undefined,
+                        undefined,
+                        [
+                            ts.createParameter(
+                                undefined,
+                                undefined,
+                                undefined,
+                                ts.createIdentifier("v"),
+                                undefined,
+                                undefined,
+                                undefined
+                            ),
+                            ts.createParameter(
+                                undefined,
+                                undefined,
+                                undefined,
+                                ts.createIdentifier("index"),
+                                undefined,
+                                undefined,
+                                undefined
+                            )
+                        ],
+                        undefined,
+                        ts.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+                        ts.createConditional(
+                            ts.createBinary(
+                                v1t.meta.numberAcess!,
+                                ts.createToken(ts.SyntaxKind.EqualsEqualsEqualsToken),
+                                ts.createIdentifier("index")
+                            ),
+                            ts.createObjectLiteral(
+                                [ts.createSpreadAssignment(ts.createIdentifier("v")),
+                                ts.createPropertyAssignment(
+                                    ts.createIdentifier(v2),
+                                    v2exapnd
+                                )
+
+                                ],
+                                false
+                            ),
+                            ts.createIdentifier("v")
+                        )
+                    )]
+                ))],
+                false
+            )
+            : ts.createObjectLiteral([
+                ts.createSpreadAssignment(ts.createIdentifier(v)),
+                ts.createPropertyAssignment(
+                    ts.createIdentifier(v2),
+                    v2exapnd
+                ),
+            ])
+        if (v2t.meta.isOptional) {
+            return ts.createConditional(
+                ts.createIdentifier(v),
+                expand,
+                ts.createIdentifier(v)
+            )
+        }
+        return expand
     }
 }
 
 
 
 const invalidateObject = ({ input, traversed = [], parent = "state" }: { input: string[]; traversed?: string[]; parent?: string }): ts.ObjectLiteralExpression | ts.ArrayLiteralExpression => {
+    console.log("Invalidatin object : input:  ", input, "traversed : ");
     const v1 = input[0]
     const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}.${v1}` : `${parent}.${v1}`
     if (input.length === 1) {
