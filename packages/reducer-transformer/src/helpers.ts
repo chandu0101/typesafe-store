@@ -9,6 +9,7 @@ let members: ts.Symbol[] = null as any
 
 let memberTypes: { name: string, type: ts.Type }[] = null as any
 
+let arrayMutableMethods = ["push", "pop", "fill", "copyWithin", "shift", "sort", "splice", "unshift"]
 
 export function setTypeCheckerAndNode(tc: ts.TypeChecker, tn: ts.TypeNode) {
     typeChecker = tc;
@@ -66,10 +67,9 @@ export const getTypeOfPropertyDecl = (input: ts.PropertyDeclaration, checker: ts
     checker.getTypeAtLocation(input)
 }
 
-export function isPushStatement(s: ts.Statement) {
-    return ts.isExpressionStatement(s) && ts.isCallExpression(s.expression)
-        && ts.isPropertyAccessExpression(s.expression.expression)
-        && s.expression.expression.name.escapedText.toString() === "push"
+export function isArrayMutatableAction(s: ts.Identifier) {
+    const name = s.getText()
+    return arrayMutableMethods.includes(name)
 }
 
 
@@ -126,7 +126,8 @@ export function getTypeForPropertyAccess(input: string[], mTypes: { name: string
 
 
 export function isArrayType(input: ts.Type) {
-    console.log("Checking array for type : ", input.flags, "toString : ", typeChecker.typeToString(input));
+    console.log("Checking array for type2 : ", input.flags, "toString : ", typeChecker.typeToString(input),
+        "Node :", typeChecker.typeToTypeNode(input));
     // const s = input.symbol.valueDeclaration
     return ts.isArrayTypeNode(typeChecker.typeToTypeNode(input)!)
 }
@@ -147,26 +148,31 @@ export type ProcessThisResult = { g: string, v: string, values: MetaValue[], dyn
 export function processThisStatement(exp: ts.PropertyAccessExpression | ts.ElementAccessExpression, arrayMut?: boolean): ProcessThisResult {
     console.log("processTHis Statemenut input : ", exp.getText(), "arrayArg", arrayMut);
     const values: MetaValue[] = [];
-    let propIdentifier: Meta | undefined = undefined
+    let propIdentifier: Meta = {}
     const processInner = (input: ts.PropertyAccessExpression | ts.ElementAccessExpression = exp): ProcessThisResult => {
         if (ts.isPropertyAccessExpression(input)) {
             const parent = getNameofPropertyName(input.name)
             if (input.expression.kind === ts.SyntaxKind.ThisKeyword) {
                 let v = parent
+                let isObject = false;
                 console.log("Parent2 : ", v, "values: ", values);
                 if (values.length > 0) {
+                    isObject = true
                     console.log("before splice : ", arrayMut, values);
                     if (!arrayMut) values.splice(0, 1)
                     console.log("after  splice : ", arrayMut, values);
                     if (values.length > 0) {
                         values.forEach(v => {
                             v.name = `${parent}.${v.name}`
-                            v.meta.isArray = isArrayPropAccess(v.name)
+                            if (v.meta.numberAcess || v.meta.identifier || arrayMut) {
+                                v.meta.isArray = isArrayPropAccess(v.name)
+                            }
                         })
                         v = values[0].name
                     }
                 }
-                values.push({ name: parent, meta: { ...propIdentifier, isArray: isArrayPropAccess(parent) } })
+                const isArray = (propIdentifier.numberAcess || propIdentifier.identifier || arrayMut) ? isArrayPropAccess(parent) : false
+                values.push({ name: parent, meta: { ...propIdentifier, isArray, isObject: !isArray && isObject } })
                 const d = values.find((v, index) => v.meta.identifier)
                 const result = { g: parent, v, values, dynamicIdentifier: d }
                 console.log("processThisStatement Result :", result);

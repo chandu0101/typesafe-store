@@ -18,6 +18,7 @@
     "noFallthroughCasesInSwitch": true,
     /* Module Resolution Options */
     "moduleResolution": "node",
+    "preserveSymlinks": true, //https://github.com/TypeStrong/ts-node/issues/831
     "esModuleInterop": false,
     "resolveJsonModule": true,
     "paths": {

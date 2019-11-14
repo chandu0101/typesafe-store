@@ -11,7 +11,7 @@ export function transformer(program: ts.Program, _opts?: TranformerOptions) {
     const visitor = (ctx: ts.TransformationContext, sf: ts.SourceFile, _result: { seen: boolean }) => {
         const typeChecker = program.getTypeChecker();
         const visitor: ts.Visitor = (node: ts.Node) => {
-            if (ts.isCallExpression(node) && node.typeArguments && node.expression.getText(sf) == "getReducer") {
+            if (ts.isCallExpression(node) && node.typeArguments && node.expression.getText(sf) == "getReducerGroup") {
                 const [type] = node.typeArguments;
                 return createReducerFunction({ type, typeChecker })
             }

@@ -1,6 +1,6 @@
 import * as ts from 'typescript';
 import {
-    getMembersofTypeNode, getMethodsFromTypeMembers, getPropDeclsFromTypeMembers, getTypeName, getNameofPropertyName, groupByValue, replaceThisIdentifier, isPushStatement
+    getMembersofTypeNode, getMethodsFromTypeMembers, getPropDeclsFromTypeMembers, getTypeName, getNameofPropertyName, groupByValue, replaceThisIdentifier, isArrayMutatableAction
     , setTypeCheckerAndNode, cleanUpGloabals, ProcessThisResult, processThisStatement,
 } from './helpers';
 import { stringify } from 'querystring';
@@ -14,11 +14,34 @@ export const createReducerFunction = ({ type, typeChecker }: { type: ts.TypeNode
 
     const propDecls = getPropDeclsFromTypeMembers()
     const defaultState = getDefaultState(propDecls)
-
+    const group = getTypeName()
     const clauses = getSwitchClauses()
 
     cleanUpGloabals()
-    return buildFunction({ caseClauses: clauses, defaultState })
+    const f = buildFunction({ caseClauses: clauses })
+    return ts.createObjectLiteral(
+        [
+            ts.createPropertyAssignment(
+                ts.createIdentifier("r"),
+                f
+            ),
+            ts.createPropertyAssignment(
+                ts.createIdentifier("g"),
+                ts.createStringLiteral(group)
+            ),
+            ts.createPropertyAssignment(
+                ts.createIdentifier("ds"),
+                defaultState
+            ),
+            ts.createPropertyAssignment(
+                ts.createIdentifier("m"),
+                ts.createObjectLiteral(
+                    [],
+                    false
+                )
+            )
+        ]
+    )
 }
 
 
@@ -131,9 +154,9 @@ const getSwitchClauses = () => {
                         }
 
                         if (ts.isCallExpression(s.expression) && ts.isPropertyAccessExpression(s.expression.expression) &&
-                            isPushStatement(s)) {
-                            const exp = s.expression.expression.expression;
-                            const result = processThisStatement(exp as any, true)
+                            isArrayMutatableAction(s.expression.expression.name)) {
+                            const exp = s.expression.expression;
+                            const result = processThisStatement(exp.expression as any, true)
                             if (result.dynamicIdentifier) {//TODO 
 
                             } else {
@@ -162,10 +185,11 @@ const getSwitchClauses = () => {
 
             // 
             Object.entries(parentGroups).forEach(([key, value], index) => {
-                console.log("parent Group Entries : ", key, "Values : ", value);
+                console.log("parent Group Entries: ", key, "Values : ", value);
                 const keys = Array.from(value.keys())
                 if (value.size === 1 && keys[0].split(".").length === 1) {
                     const a1 = value.get(keys[0])![0]
+                    console.log("Single param : ", a1.meta);
                     reservedStatements.push(
                         ts.createVariableStatement(
                             undefined,
@@ -178,10 +202,16 @@ const getSwitchClauses = () => {
                                             ts.createIdentifier("state"),
                                             ts.createIdentifier(key)
                                         ))
-                                    ]) : ts.createPropertyAccess(
-                                        ts.createIdentifier("state"),
-                                        ts.createIdentifier(key)
-                                    )
+                                    ]) : a1.meta.isObject ?
+                                            ts.createObjectLiteral([
+                                                ts.createSpreadAssignment(ts.createPropertyAccess(
+                                                    ts.createIdentifier("state"),
+                                                    ts.createIdentifier(key)
+                                                ))
+                                            ]) : ts.createPropertyAccess(
+                                                ts.createIdentifier("state"),
+                                                ts.createIdentifier(key)
+                                            )
                                 )],
                                 ts.NodeFlags.Let
                             )
@@ -556,7 +586,7 @@ const getDefaultState = (props: ts.PropertyDeclaration[]) => {
 
 
 
-function buildFunction({ caseClauses, defaultState }: { caseClauses: ts.CaseClause[]; defaultState: ts.Expression; }) {
+function buildFunction({ caseClauses, }: { caseClauses: ts.CaseClause[]; }) {
 
     return ts.createArrowFunction(
         undefined,
@@ -569,7 +599,7 @@ function buildFunction({ caseClauses, defaultState }: { caseClauses: ts.CaseClau
                 ts.createIdentifier("state"),
                 undefined,
                 ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                defaultState
+                undefined
             ),
             ts.createParameter(
                 undefined,

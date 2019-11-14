@@ -1,14 +1,15 @@
-import { getReducer } from "../index"
-import { GetActionTypes, NonFunctionProperties } from "@typesafe-store/reducer";
+import { GetActionTypes, NonFunctionProperties, getReducerGroup } from "@typesafe-store/reducer";
 import { processThisStatement } from "../helpers";
 import * as ts from "typescript";
+
+type Book = { name: string, year: number }
 
 class Sample {
     name = "First"
     count = 0;
     person = { name: "P1", age: 10 }
+    books: Book[] = []
 
-    books: { name: string, year: number }[] = []
 
     changeName(name: string) {
         this.name = name
@@ -23,18 +24,33 @@ class Sample {
     changePersonAge(age: number) {
         this.person.age = age
     }
-    //     addBook(book: Sample["books"][0]) {
-    //         this.books.push(book)
-    //     }
+    addBooks(books: Book[]) {
+        this.books.push(...books)
+    }
+    removeLastBook() {
+        this.books.pop()
+    }
+    removeFirstBook() {
+        this.books.splice(0, 1);
+    }
+    replaceBooks(books: Book[]) {
+        this.books = books;
+    }
+    fillBookAt0(book: Book) {
+        this.books.fill(book, 0)
+    }
 
 }
 
-
 const shallowCompareExcept = (obj1: any, obj2: any, exceptFields: string[]): boolean => {
+
     if (obj1 === obj2) {
-        console.log("Shallow COmapre objst");
-        return false;
+        if (exceptFields.length > 0) {
+            return false
+        }
+        return true
     }
+
     for (const key in obj1) {
         const excluded = exceptFields.includes(key)
         if (!excluded && obj1[key] !== obj2[key]) {
@@ -51,10 +67,10 @@ const shallowCompareExcept = (obj1: any, obj2: any, exceptFields: string[]): boo
 
 describe("shallowCompareExcept", () => {
 
-    test('should return false on same objects', () => {
+    test('should return true on same objects and exceptFields empty', () => {
         const a = { name: "hello" }
         const b = a;
-        expect(shallowCompareExcept(a, b, [])).toBeFalsy()
+        expect(shallowCompareExcept(a, b, [])).toBeTruthy()
     })
 
     test("should return true", () => {
@@ -76,13 +92,13 @@ describe("shallowCompareExcept", () => {
 
 })
 
-describe("Reducer ", () => {
-    const reducer = getReducer<Sample, "Sample">()
-
+describe("Reducer", () => {
+    const reducerGroup = getReducerGroup<Sample, "Sample">()
+    const reducer = reducerGroup.r;
     test('should generate reducer function', () => {
         expect(reducer).not.toBeNull()
     })
-    let state = reducer(undefined, {} as any)
+    let state = reducer(reducerGroup.ds, {} as any)
     test('should return default state', () => {
         expect(state).toEqual(new Sample)
     })
@@ -112,12 +128,9 @@ describe("Reducer ", () => {
 
     })
 
-    test.only('should modify person', () => {
+    test('should modify person', () => {
         let prevState = state
-        console.log("Prev state2 : ", prevState);
-
-        state = reducer(state, { name: "chnagePersonName", group: "Sample", payload: "P12C" })
-        console.log("State: ", state);
+        state = reducer(state, { name: "chnagePersonName", group: "Sample", payload: "P1C" })
         expect(shallowCompareExcept(prevState, state, ["person"])).toBeTruthy()
         expect(state.person.name).toBe("P1C")
         prevState = state
@@ -127,15 +140,56 @@ describe("Reducer ", () => {
         expect(state.person.age).toBe(20)
     })
 
-    // test("should push to array", () => {
-    //     let prevState = state
-    //     state = reducer(state, {
-    //         name: "addBook", group: "Sample",
-    //         payload: { name: "", year: 3 }
-    //     })
-    //     console.log("Books", state.books);
-    //     expect(shallowCompareExcept(prevState, state, ["books"])).toBeTruthy()
-    // })
+    test("should push to an array", () => {
+        let prevState = state
+        const b = { name: "", year: 3 }
+        state = reducer(state, {
+            name: "addBooks", group: "Sample",
+            payload: [b]
+        })
+        expect(shallowCompareExcept(prevState, state, ["books"])).toBeTruthy()
+        expect(prevState.books.concat([b])).toStrictEqual(state.books)
+    })
+
+    test('should pop from an array', () => {
+        let prevState = state
+        state = reducer(state, { name: "removeLastBook", group: "Sample" })
+        expect(shallowCompareExcept(prevState, state, ["books"])).toBeTruthy()
+        const pb = [...prevState.books]
+        pb.pop()
+        expect(pb).toStrictEqual(state.books)
+    })
+
+    test('should splice an array', () => {
+        let prevState = state;
+        const b = { name: "", year: 3 }
+        prevState = reducer(state, {
+            name: "addBooks", group: "Sample",
+            payload: [b]
+        })
+        state = reducer(prevState, { name: "removeLastBook", group: "Sample" })
+        expect(shallowCompareExcept(prevState, state, ["books"])).toBeTruthy()
+        const pb = [...prevState.books]
+        pb.splice(0, 1)
+        expect(pb).toStrictEqual(state.books)
+    })
+
+    test('should fill an array', () => {
+        let prevState = state;
+        const b = { name: "", year: 3 }
+        prevState = reducer(state, {
+            name: "replaceBooks", group: "Sample",
+            payload: [b]
+        })
+        const b1 = { name: "b1", year: 1 }
+        state = reducer(prevState, { name: "fillBookAt0", group: "Sample", payload: b1 })
+        expect(shallowCompareExcept(prevState, state, ["books"])).toBeTruthy()
+        const pb = [...prevState.books]
+        pb.fill(b1, 0, 1)
+        expect
+        expect(pb).toStrictEqual(state.books)
+    })
+
 
 
 })
@@ -145,22 +199,22 @@ describe("play", () => {
 
 
     test('should Generate Prop Access', () => {
-        const s = processThisStatement(ts.createPropertyAccessChain(
-            ts.createPropertyAccessChain(
-                ts.createPropertyAccessChain(
-                    ts.createPropertyAccess(
-                        ts.createThis(),
-                        ts.createIdentifier("x")
-                    ),
-                    ts.createToken(ts.SyntaxKind.QuestionDotToken),
-                    ts.createIdentifier("b")
-                ),
-                undefined,
-                ts.createIdentifier("c")
-            ),
-            undefined,
-            ts.createIdentifier("d")
-        ))
+        // const s = processThisStatement(ts.createPropertyAccessChain(
+        //     ts.createPropertyAccessChain(
+        //         ts.createPropertyAccessChain(
+        //             ts.createPropertyAccess(
+        //                 ts.createThis(),
+        //                 ts.createIdentifier("x")
+        //             ),
+        //             ts.createToken(ts.SyntaxKind.QuestionDotToken),
+        //             ts.createIdentifier("b")
+        //         ),
+        //         undefined,
+        //         ts.createIdentifier("c")
+        //     ),
+        //     undefined,
+        //     ts.createIdentifier("d")
+        // ))
         // const s = processThisStatement(ts.createPropertyAccess(
         //     ts.createPropertyAccess(
         //         ts.createPropertyAccess(
@@ -174,7 +228,7 @@ describe("play", () => {
         //     ),
         //     ts.createIdentifier("d")
         // ))
-        console.log("s : ", s);
+        // console.log("s : ", s);
         // expect(JSON.stringify(s)).toBe("")
 
     })

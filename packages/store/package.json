@@ -1,12 +1,12 @@
 {
-  "name": "@typesafe-store/reducer-transformer",
+  "name": "@typesafe-store/store",
   "description": "type safe store reducer transformer",
   "version": "0.1.0",
   "main": "src/index.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/chandu0101/typesafe-store",
-    "directory": "packages/reducer-transformer"
+    "directory": "packages/storer"
   },
   "bugs": {
     "url": "https://github.com/chandu0101/typesafe-store/issues"
@@ -24,11 +24,15 @@
     "types": "build/index.d.ts"
   },
   "scripts": {
-    "test": "jest --watch --no-cache",
-    "build": "ttsc -p tsconfig.json",
-    "build2": "tsc -p tsconfig.json"
+    "test": "jest",
+    "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@typesafe-store/reducer": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^24.0.20",
+    "jest": "^24.9.0",
+    "ts-jest": "^24.1.0"
   }
 }

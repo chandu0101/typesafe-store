@@ -6046,6 +6046,11 @@ trim-off-newlines@^1.0.0:
   resolved "https://registry.yarnpkg.com/trim-off-newlines/-/trim-off-newlines-1.0.1.tgz#9f9ba9d9efa8764c387698bcbfeb2c848f11adb3"
   integrity sha1-n5up2e+odkw4dpi8v+sshI8RrbM=
 
+ts-essentials@^3.0.4:
+  version "3.0.4"
+  resolved "https://registry.yarnpkg.com/ts-essentials/-/ts-essentials-3.0.4.tgz#e783fc31ddce38e19429d2e7171d1c42654f3715"
+  integrity sha512-lVxvv4CzJURUagjsE3D2PwMK3yVZw0eGXWSlvXVI/cY5vICt5yQ/Cx9Row5fKRcy/rXXz1wzmmVHQtjJoL+lvg==
+
 ts-jest@^24.1.0:
   version "24.1.0"
   resolved "https://registry.yarnpkg.com/ts-jest/-/ts-jest-24.1.0.tgz#2eaa813271a2987b7e6c3fefbda196301c131734"
