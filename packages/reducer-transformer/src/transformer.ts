@@ -1,5 +1,6 @@
 import * as ts from "typescript";
 import { createReducerFunction } from "./generate";
+import * as fs from "fs"
 export interface TranformerOptions {
 
 }
@@ -13,6 +14,13 @@ export function transformer(program: ts.Program, _opts?: TranformerOptions) {
         const visitor: ts.Visitor = (node: ts.Node) => {
             if (ts.isCallExpression(node) && node.typeArguments && node.expression.getText(sf) == "getReducerGroup") {
                 const [type] = node.typeArguments;
+                console.log("fileName2 : ",
+                    __dirname, sf.fileName, sf.referencedFiles, sf.moduleName);
+                const f = sf.fileName
+                const c = `
+                  type Sample2 = { a:string,y:string}
+                `
+                fs.writeFileSync(f.replace("reducer.test.ts", "reducer.generated.ts"), c, { encoding: "utf8" })
                 return createReducerFunction({ type, typeChecker })
             }
             return ts.visitEachChild(node, visitor, ctx)

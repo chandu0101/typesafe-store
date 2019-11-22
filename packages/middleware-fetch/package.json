@@ -1,5 +1,5 @@
 {
-  "name": "@typesafe-store/middleware-rest",
+  "name": "@typesafe-store/middleware-fetch",
   "description": "type safe store reducer transformer",
   "version": "0.1.0",
   "main": "src/index.ts",

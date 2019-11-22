@@ -6,10 +6,9 @@ type Book = { name: string, year: number }
 
 class Sample {
     name = "First"
-    count = 0;
+    count = 1;
     person = { name: "P1", age: 10 }
     books: Book[] = []
-
 
     changeName(name: string) {
         this.name = name

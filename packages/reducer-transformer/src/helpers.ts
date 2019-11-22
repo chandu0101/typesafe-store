@@ -127,7 +127,7 @@ export function getTypeForPropertyAccess(input: string[], mTypes: { name: string
 
 export function isArrayType(input: ts.Type) {
     console.log("Checking array for type2 : ", input.flags, "toString : ", typeChecker.typeToString(input),
-        "Node :", typeChecker.typeToTypeNode(input));
+        "Node :");
     // const s = input.symbol.valueDeclaration
     return ts.isArrayTypeNode(typeChecker.typeToTypeNode(input)!)
 }
