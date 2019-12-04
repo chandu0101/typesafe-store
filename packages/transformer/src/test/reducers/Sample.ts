@@ -35,5 +35,9 @@ class Sample {
     fillBookAt0(book: Book) {
         this.books.fill(book, 0)
     }
+    chnageNameAndCount(name: string, count: number) {
+        this.person.name = name
+        this.count = count
+    }
 
 }

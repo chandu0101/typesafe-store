@@ -1,3 +1,2 @@
 
-                  type Sample2 = { a:string,y:string}
-                
+                //   type Sample2 = { a:string,y:string}
