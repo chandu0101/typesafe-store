@@ -35,8 +35,12 @@ function transformFile(file: string) {
     const sf = getProgram().getSourceFile(file)!
     const printer = ts.createPrinter();
     const newSf = ts.transform(sf, [reducerTransformer]).transformed[0]
-
-    writeFileSync(file.replace("/reducers/", "/reducers/generated/"), printer.printFile(newSf), { encoding: "utf8" })
+    const content = `
+     // this file is auto generated on ${new Date().toISOString()}, don't modify it
+     import { ReducerGroup } from "@typesafe-store/reducer"
+     ${printer.printFile(newSf)}
+    `
+    writeFileSync(file.replace("/reducers/", "/reducers/generated/"), content, { encoding: "utf8" })
     const t1 = performance.now()
     console.log("time : ", t1 - t0, " ms");
 }

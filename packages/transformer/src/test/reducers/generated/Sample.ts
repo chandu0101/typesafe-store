@@ -1,9 +1,11 @@
 
+
+import { ReducerGroup } from "@typesafe-store/reducer"
 export type SampleState = { name: string, count: number, person: { name: string; age: number; }, books: Book[] }
 
 export type SampleAction = { name: "changeName", group: "Sample", payload: string } | { name: "increment", group: "Sample" } | { name: "chnagePersonName", group: "Sample", payload: string } | { name: "changePersonAge", group: "Sample", payload: number } | { name: "addBooks", group: "Sample", payload: Book[] } | { name: "removeLastBook", group: "Sample" } | { name: "removeFirstBook", group: "Sample" } | { name: "replaceBooks", group: "Sample", payload: Book[] } | { name: "fillBookAt0", group: "Sample", payload: Book } | { name: "chnageNameAndCount", group: "Sample", payload: { name: string, count: number } }
 
-export const SampleReducerGroup = {
+export const SampleReducerGroup: ReducerGroup<SampleState, SampleAction, "Sample"> = {
     r:
         (state: SampleState, action: SampleAction) => {
             const t = action.name
@@ -71,7 +73,7 @@ export const SampleReducerGroup = {
                 default: return state;
             }
         }
-    , g: "Sample", ds: { name: "First", count: 1, person: { name: "P12", age: 10 }, books: [] }
+    , g: "Sample", m: {}, ds: { name: "First", count: 1, person: { name: "P12", age: 10 }, books: [] }
 }
 
 

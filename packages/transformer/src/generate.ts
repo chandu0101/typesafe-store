@@ -22,7 +22,7 @@ export const createReducerFunction = (cd: ts.ClassDeclaration) => {
          
          export type ${group}Action = ${getActionType()}
 
-         export const ${group}ReducerGroup = { r: ${f},g:"${group}",ds:${defaultState}}
+         export const ${group}ReducerGroup: ReducerGroup<${group}State,${group}Action,"${group}"> = { r: ${f},g:"${group}",ds:${defaultState},m:{}}
 
         `)
     cleanUpGloabals()
