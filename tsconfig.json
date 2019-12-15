@@ -9,6 +9,7 @@
     "baseUrl": "packages",
     "declaration": true,
     "composite": true,
+    "incremental": true,
     // "isolatedModules": true,
     "strict": true,
     /* Additional Checks */

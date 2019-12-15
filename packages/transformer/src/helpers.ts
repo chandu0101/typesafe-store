@@ -55,6 +55,11 @@ export const getStateType = () => {
     }).join(",")}}`
 }
 
+export const lastElementOfArray = <T>(a: T[]) => {
+    return a[a.length - 1]
+}
+
+
 export const getActionType = () => {
     const methods = getMethodsFromTypeMembers()
     const group = getTypeName()
