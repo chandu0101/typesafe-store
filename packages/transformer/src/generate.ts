@@ -33,7 +33,7 @@ export const createReducerFunction = (cd: ts.ClassDeclaration) => {
 type CallStatement = { group: string, exp: string, args: string }
 type AssignStatement = { group: string, exprLeft: string, exprRight: string, op: string }
 type GS = CallStatement | AssignStatement | string
-
+type NewValue = { name: string, op: string, value: string }
 const getSwitchClauses = () => {
 
     const typeName = getTypeName()
@@ -47,13 +47,13 @@ const getSwitchClauses = () => {
             const name = m.name.getText()
             const reservedStatements: string[] = [];
             const generalStatements: GS[] = [];
-            const parentGroups: Map<string, Map<string, [ProcessThisResult["values"], string]>> = new Map()
+            const parentGroups: Map<string, Map<string, [ProcessThisResult["values"], NewValue]>> = new Map()
             const PREFIX = "_tr_";
             const properyAssigments: string[] = []
             let duplicateExists = false
             let otherThanMutationStatements = false;
 
-            const addOrUpdateParentGroup = ({ g, v, values }: ProcessThisResult, newValue: string) => {
+            const addOrUpdateParentGroup = ({ g, v, values }: ProcessThisResult, newValue: NewValue) => {
 
                 const oldValue = parentGroups.get(g)
                 if (!oldValue) {
@@ -89,54 +89,54 @@ const getSwitchClauses = () => {
                         const exprLeft = operand.getText()
                         const exprRight = "1"
                         let modifiedField = lastElementOfArray(exprLeft.split("."))
-                        let newValue = ""
+                        let newValue = { name: modifiedField, op: "=", value: "" }
+                        const x = exprLeft.replace("this.", "state.")
                         if (result.dynamicIdentifier) { //TODO
 
+                        }
+                        if (s.expression.operator === ts.SyntaxKind.PlusPlusToken) {
+                            op = "+="
+                            newValue.value = `${x} + 1`
                         } else {
-                            if (s.expression.operator === ts.SyntaxKind.PlusPlusToken) {
-                                op = "+="
-                                newValue = `${modifiedField} = ${exprLeft} + 1`
-                            } else {
-                                op = "-="
-                                newValue = `${modifiedField} = ${exprLeft} - 1`
-                            }
+                            op = "-="
+                            newValue.value = `${x} - 1`
                         }
                         addOrUpdateParentGroup(result, newValue)
-                        generalStatements.push({ group: result.g, exprLeft, exprRight, op })
+                        generalStatements.push(`${exprLeft.replace("this.", PREFIX)} ${op} ${exprRight}`)
                     }
                     if (ts.isBinaryExpression(s.expression)) {
                         const left = s.expression.left
                         const result = processThisStatement(left as any)
                         const exprLeft = left.getText()
-                        let exprRight = ""
+                        let exprRight = s.expression.right.getText()
                         const op = s.expression.operatorToken.getText()
-                        let modifiedField = lastElementOfArray(exprLeft.split("."))                        let newValue = ""
-
+                        let modifiedField = lastElementOfArray(exprLeft.split("."))
+                        let newValue = { name: modifiedField, op: op, value: exprRight }
                         if (result.dynamicIdentifier) { //TODO
 
+                        }
+                        if (s.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+                            newValue.value = exprRight
                         } else {
-                            exprRight = s.expression.right.getText()
-                            newValue = `${modifiedField} ${op} ${exprRight}`
+                            newValue.value = `${exprLeft.replace("this.", "")} ${op} ${exprRight}`
                         }
                         addOrUpdateParentGroup(result, newValue)
-                        generalStatements.push({ group: result.g, exprLeft, exprRight, op })
+                        generalStatements.push(`${exprLeft.replace("this.", PREFIX)} ${op} ${exprRight}`)
                     }
 
                     if (ts.isCallExpression(s.expression) && ts.isPropertyAccessExpression(s.expression.expression) &&
                         isArrayMutatableAction(s.expression.expression.name)) {
                         const exp = s.expression.expression;
                         const result = processThisStatement(exp.expression as any, true)
-                        let args = ""
-                        let newValue = ""
-
+                        let args = s.expression.arguments.map(a => a.getText()).join(",")
+                        let modifiedField = lastElementOfArray(exp.expression.getText().split("."))
+                        let newValue = { name: modifiedField, op: s.expression.expression.name.getText(), value: "" }
                         if (result.dynamicIdentifier) {//TODO 
 
-                        } else {
-                            args = s.expression.arguments.map(a => a.getText()).join(",")
-                            newValue = `.${s.expression.expression.name.getText()}(${args})`
                         }
+                        newValue.value = args
                         addOrUpdateParentGroup(result, newValue)
-                        generalStatements.push({ group: result.g, exp: exp.getText(), args })
+                        generalStatements.push(s.getText().replace("this.", PREFIX))
 
                     }
 
@@ -152,35 +152,36 @@ const getSwitchClauses = () => {
                 const parentGroupsSize = parentGroups.size
                 const generalStatementsLength = generalStatements.length
                 parentGroups.forEach((value, group) => {
-                    console.log("parent Group Entries: ", group, "Values : ", value);
-                    const key = Array.from(value.keys())[0]
-                    if (value.size === 1 && !key.includes(".")) {
-                        const a1 = value.get(key)![0][0]
-                        const newValue = value.get(key)![0][1]
-                        console.log("Single param : ", a1.meta);
-                        let s = ""
-                        const sk = `${PREFIX}${group}`
-                        if (a1.meta.isArray) {
-                            properyAssigments.push(`${group}:[...state.${group}]${newValue}`)
-                        } else if (a1.meta.isObject) {
-                            properyAssigments.push(`${group}:[...state.${group}]${newValue}`)
-                            s = `let ${sk} = {...state.${group}}`
-                        } else {
-                            s = `let ${sk} = state.${group}`
-                        }
-                        reservedStatements.push(
-                            s
-                        )
-                    } else {
-                        reservedStatements.push(
-                            `let ${PREFIX}${group} = ${invalidateObjectWithList2({
-                                input: value
-                            })}`
-                        )
-                    }
+                    // console.log("parent Group Entries: ", group, "Values : ", value);
+                    // const key = Array.from(value.keys())[0]
+                    // if (value.size === 1 && !key.includes(".")) {
+                    //     const a1 = value.get(key)![0][0]
+                    //     const newValue = value.get(key)![0][1]
+                    //     console.log("Single param : ", a1.meta);
+                    //     let s = ""
+                    //     const sk = `${PREFIX}${group}`
+                    //     if (a1.meta.isArray) {
+                    //         properyAssigments.push(`${group}:[...state.${group}]${newValue}`)
+                    //     } else if (a1.meta.isObject) {
+                    //         properyAssigments.push(`${group}:[...state.${group}]${newValue}`)
+                    //         s = `let ${sk} = {...state.${group}}`
+                    //     } else {
+                    //         s = `let ${sk} = state.${group}`
+                    //     }
+                    //     reservedStatements.push(
+                    //         s
+                    //     )
+                    // } else {
+                    //     reservedStatements.push(
+                    //         `let ${PREFIX}${group} = ${invalidateObjectWithList2({
+                    //             input: value
+                    //         })}`
+                    //     )
+                    // }
                     properyAssigments.push(
-                        `${group}:${PREFIX}${group}`
+                        `${group}:${invalidateObjectWithList({ input: value })}`
                     )
+
                 })
                 return `case "${name}" : {
                     ${reservedStatements.join("\n")}
@@ -229,7 +230,7 @@ const getSwitchClauses = () => {
 
 
 const invalidateObjectWithList2 = ({ input, traversed = [], parent = "state" }:
-    { input: Map<string, [ProcessThisResult["values"], string]>; traversed?: string[]; parent?: string })
+    { input: Map<string, [ProcessThisResult["values"], NewValue]>; traversed?: string[]; parent?: string })
     : string => {
     const entries = Array.from(input.entries())
     if (input.size === 1) {
@@ -255,7 +256,7 @@ const invalidateObjectWithList2 = ({ input, traversed = [], parent = "state" }:
     }
 }
 
-const invalidateObject2 = ({ map: { input, values, newValue }, traversed = [], parent = "state" }: { map: { input: string[], values: ProcessThisResult["values"], newValue: string }; traversed?: string[]; parent?: string }):
+const invalidateObject2 = ({ map: { input, values, newValue }, traversed = [], parent = "state" }: { map: { input: string[], values: ProcessThisResult["values"], newValue: NewValue }; traversed?: string[]; parent?: string }):
     string => {
     console.log("Invalidatin object : input:  ", input, "traversed : ", traversed, "values: ", values, "aprent : ", parent);
     const v1 = input[0]
@@ -266,6 +267,7 @@ const invalidateObject2 = ({ map: { input, values, newValue }, traversed = [], p
     if (input.length === 1) {
         if (v1t.meta.isArray) {
             if (v1t.meta.numberAcess) {
+                console.log("****** numberAcess found2 ");
                 return `[...${v}.map((v,index) => index === ${v1t.meta.numberAcess} ? {...v} : v)]`
             }
             return `[...${v}]`
@@ -283,6 +285,110 @@ const invalidateObject2 = ({ map: { input, values, newValue }, traversed = [], p
             : `{ ...${v},${v2}:${v2exapnd} }`
 
         if (v2t.meta.isOptional) {
+            return `${v} ? ${expand} : ${v}`
+        }
+        return expand
+    }
+}
+
+const invalidateObjectWithList = ({ input, traversed = [], parent = "state" }:
+    { input: Map<string, [ProcessThisResult["values"], NewValue]>; traversed?: string[]; parent?: string })
+    : string => {
+    const entries = Array.from(input.entries())
+    if (input.size === 1) {
+        const [key, values] = entries[0]
+        const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}` : `${parent}`
+        return invalidateObject({ map: { input: key.split("."), values: values[0], newValue: values[1] }, parent: v })
+    } else { //TODO multiple 
+        return "TODO multiple entires of same object"
+        // const v1 = entries[0][0].split(".")[0]
+        // const props = groupByValue(input.filter(s => s.split(".").length > 1).map(s => {
+        //     const a = s.split(".")
+        //     return { key: a[1], value: a.slice(1).join(".") }
+        // }), "key")
+        // const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}.${v1}` : `${parent}.${v1}`
+        // return ts.createObjectLiteral([
+        //     ts.createSpreadAssignment(ts.createIdentifier(v)),
+        //     ...Object.keys(props).map(k =>
+        //         ts.createPropertyAssignment(
+        //             ts.createIdentifier(k),
+        //             invalidateObjectWithList({ input: props[k], traversed: traversed.concat([v1]) })
+        //         ))
+        // ])
+    }
+}
+
+const invalidateObject = ({ map: { input, values, newValue }, traversed = [], parent = "state" }: { map: { input: string[], values: ProcessThisResult["values"], newValue: NewValue }; traversed?: string[]; parent?: string }):
+    string => {
+    console.log("Invalidatin object : input:  ", input, "traversed : ", traversed, "values: ", values, "aprent : ", parent);
+    const v1 = input[0]
+    const vv1 = traversed.length > 0 ? `${traversed.join(".")}.${v1}` : `${v1}`
+    const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}.${v1}` : `${parent}.${v1}`
+    const v1t = values.find(v => v.name === vv1)!
+    // const v1t: ProcessThisResult["values"][0] = { name: "", meta: { isOptional: false, isArray: false } }
+    if (input.length === 1) {
+        if (traversed.length === 0 && !v1t.meta.isArray && !v1t.meta.isObject) {
+            return newValue.value
+        } else {
+            if (v1t.meta.isArray) {
+                let result = ""
+                if (v1t.meta.numberAcess || v1t.meta.identifier) {
+                    console.log("****** numberAcess found1 ");
+                    result = `[...${v}.map((v,_i) => _i === ${v1t.meta.numberAcess?.getText() || v1t.meta.identifier?.getText()} ? {...v,${newValue.name}:${newValue.value}} : v)]`
+                    console.log("result : ", result);
+                } else {
+                    const op = newValue.op
+                    const args = newValue.value
+                    switch (op) {
+                        case "push": {
+                            result = `${v}.concat(${args})`
+                            break;
+                        }
+                        case "pop": {
+                            result = `${v}.slice(0,-1)`
+                            break;
+                        }
+                        case "splice": {
+                            const a = args.split(",")
+                            if (a.length === 1) {
+                                result = `[...${v}.slice(0,${a[0]})]`
+                            } else if (a.length == 2) {
+                                result = `[...${v}.slice(0,${a[0]}),...${v}.slice(${parseInt(a[0], 10) + parseInt(a[1], 10)})]`
+                            } else {
+                                result = `[...${v}.slice(0,${a[0]}),${["..." + a[2]]},...${v}.slice(${parseInt(a[0], 10) + parseInt(a[1], 10)})]`
+                            }
+                            break;
+                        }
+                        default:
+                            result = `[...${v}].${op}(${args})`
+
+                    }
+                }
+                if (v1t.meta.isOptional) {
+                    return `${v} ? ${result} : ${v}`
+                }
+                return result;
+            }
+            else {
+                const r = `{...${v},${newValue.name}:${newValue.value}}`
+                if (v1t.meta.isOptional) {
+                    console.log(`Optional found1 : ,v1 = ${v1}, v = ${v}`);
+                    return `${v} ? ${r} : ${v}`
+                }
+                return r;
+            }
+        }
+    } else {
+        const v2 = input[1]
+        const v2t = values.find(v => v.name === vv1)!
+        const v2exapnd = invalidateObject({ map: { input: input.slice(1), values, newValue }, traversed: traversed.concat([v1]) })
+        console.log(`v2 expand : `, v2exapnd);
+        const expand = (v1t.meta.isArray) ?
+            `[...${v}.map((v,__i) => __i === ${v1t.meta.numberAcess} ? {...v,${v2}:${v2exapnd}} : v)]`
+            : `{ ...${v},${v2}:${v2exapnd} }`
+
+        if (v2t.meta.isOptional) {
+            console.log(`Optional found2 : ,v2 = ${v2}, v = ${v}`);
             return `${v} ? ${expand} : ${v}`
         }
         return expand

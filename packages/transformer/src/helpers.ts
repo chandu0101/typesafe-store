@@ -73,7 +73,7 @@ export const getActionType = () => {
         const pt = t.split("=>")[0].trim().slice(1).slice(0, -1)
         let p = ""
         if (pl === 1) {
-            p = pt.split(":")[1]
+            p = pt.slice(pt.indexOf(":") + 1).trim()
         } else {
             p = `{${pt}}`
         }
@@ -235,17 +235,23 @@ export function processThisStatement(exp: ts.PropertyAccessExpression | ts.Eleme
             values.forEach(v => {
                 v.name = `${parent}.${v.name}`
             })
-            values.push({ name: parent, meta: { isOptional: !!input.questionDotToken } })
+            values.push({ name: parent, meta: {} })
             return processInner(input.expression as any)
-        } else if (ts.isNonNullExpression(input)) {//TODO throw error!
-            return processInner(input.expression as any)
+        } else if (ts.isNonNullExpression(input) && ts.isPropertyAccessExpression(input.expression)) {
+            const parent = getNameofPropertyName(input.expression.name)
+            console.log("Processing parent : ", parent);
+            values.forEach(v => {
+                v.name = `${parent}.${v.name}`
+            })
+            values.push({ name: parent, meta: { isOptional: true } })
+            return processInner(input.expression.expression as any)
         }
         else if (ts.isPropertyAccessExpression(input.expression)
             && input.expression.expression.kind === ts.SyntaxKind.ThisKeyword
             && (ts.isElementAccessChain(input) || ts.isElementAccessExpression(input))) { //TODO this.prop[_] 
             propIdentifier = {}
             if (ts.isNumericLiteral(input.argumentExpression)) {
-                propIdentifier.numberAcess = input.expression
+                propIdentifier.numberAcess = input.argumentExpression
             } else if (ts.isStringLiteral(input.argumentExpression)) {
                 propIdentifier.stringAccess = input.argumentExpression
             } else {
