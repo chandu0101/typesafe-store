@@ -114,6 +114,10 @@ export function replaceThisIdentifier(input: ts.PropertyAccessExpression | ts.El
     }
 }
 
+export function getTypeForMultipleAccess(input: ts.Node) {
+
+}
+
 
 export function getTypeForPropertyAccess(input: string[], mTypes: { name: string, type: ts.Type }[] = memberTypes): ts.Type {
     const t = mTypes.find(mt => mt.name === input[0])!.type

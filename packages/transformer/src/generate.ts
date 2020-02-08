@@ -1,10 +1,8 @@
 import * as ts from 'typescript';
 import {
-    getMethodsFromTypeMembers, getPropDeclsFromTypeMembers, getTypeName, getNameofPropertyName, groupByValue, isArrayMutatableAction
-    , cleanUpGloabals, ProcessThisResult, processThisStatement, setClassDeclaration, getStateType, getActionType, lastElementOfArray,
+    getMethodsFromTypeMembers, getPropDeclsFromTypeMembers, getTypeName, isArrayMutatableAction
+    , cleanUpGloabals, ProcessThisResult, processThisStatement, setClassDeclaration, getStateType, getActionType, lastElementOfArray, MetaType,
 } from './helpers';
-
-
 
 
 export const createReducerFunction = (cd: ts.ClassDeclaration) => {
@@ -91,9 +89,6 @@ const getSwitchClauses = () => {
                         let modifiedField = lastElementOfArray(exprLeft.split("."))
                         let newValue = { name: modifiedField, op: "=", value: "" }
                         const x = exprLeft.replace("this.", "state.")
-                        if (result.dynamicIdentifier) { //TODO
-
-                        }
                         if (s.expression.operator === ts.SyntaxKind.PlusPlusToken) {
                             op = "+="
                             newValue.value = `${x} + 1`
@@ -112,9 +107,7 @@ const getSwitchClauses = () => {
                         const op = s.expression.operatorToken.getText()
                         let modifiedField = lastElementOfArray(exprLeft.split("."))
                         let newValue = { name: modifiedField, op: op, value: exprRight }
-                        if (result.dynamicIdentifier) { //TODO
 
-                        }
                         if (s.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
                             newValue.value = exprRight
                         } else {
@@ -131,13 +124,9 @@ const getSwitchClauses = () => {
                         let args = s.expression.arguments.map(a => a.getText()).join(",")
                         let modifiedField = lastElementOfArray(exp.expression.getText().split("."))
                         let newValue = { name: modifiedField, op: s.expression.expression.name.getText(), value: "" }
-                        if (result.dynamicIdentifier) {//TODO 
-
-                        }
                         newValue.value = args
                         addOrUpdateParentGroup(result, newValue)
                         generalStatements.push(s.getText().replace("this.", PREFIX))
-
                     }
 
                 }
@@ -197,9 +186,9 @@ const getSwitchClauses = () => {
                     console.log("Single param : ", a1.meta);
                     let s = ""
                     const sk = `${PREFIX}${group}`
-                    if (a1.meta.isArray) {
+                    if (a1.meta.type === MetaType.ARRAY) {
                         s = `let ${sk} = [...state.${group}]`
-                    } else if (a1.meta.isObject) {
+                    } else if (a1.meta.type === MetaType.OBJECT) {
                         s = `let ${sk} = {...state.${group}}`
                     } else {
                         s = `let ${sk} = state.${group}`
@@ -265,10 +254,10 @@ const invalidateObject2 = ({ map: { input, values, newValue }, traversed = [], p
     const v1t = values.find(v => v.name === vv1)!
     // const v1t: ProcessThisResult["values"][0] = { name: "", meta: { isOptional: false, isArray: false } }
     if (input.length === 1) {
-        if (v1t.meta.isArray) {
-            if (v1t.meta.numberAcess) {
+        if (v1t.meta.type === MetaType.ARRAY) {
+            if (v1t.meta.access) {
                 console.log("****** numberAcess found2 ");
-                return `[...${v}.map((v,index) => index === ${v1t.meta.numberAcess} ? {...v} : v)]`
+                return `[...${v}.map((v,index) => index === ${v1t.meta.access[0].name} ? {...v} : v)]`
             }
             return `[...${v}]`
         }
@@ -280,8 +269,8 @@ const invalidateObject2 = ({ map: { input, values, newValue }, traversed = [], p
         const vv2 = `${vv1}.${v2}`
         const v2t = values.find(v => v.name === vv2)!
         const v2exapnd = invalidateObject2({ map: { input: input.slice(1), values, newValue }, traversed: traversed.concat([v1]) })
-        const expand = (v1t.meta.isArray) ?
-            `[...${v}.map((v,index) => index === ${v1t.meta.numberAcess} ? {...v,${v2}:${v2exapnd}} : v)]`
+        const expand = (v1t.meta.type === MetaType.ARRAY) ?
+            `[...${v}.map((v,index) => index === ${v1t.meta.access?.[0].name} ? {...v,${v2}:${v2exapnd}} : v)]`
             : `{ ...${v},${v2}:${v2exapnd} }`
 
         if (v2t.meta.isOptional) {
@@ -318,24 +307,31 @@ const invalidateObjectWithList = ({ input, traversed = [], parent = "state" }:
     }
 }
 
-const invalidateObject = ({ map: { input, values, newValue }, traversed = [], parent = "state" }: { map: { input: string[], values: ProcessThisResult["values"], newValue: NewValue }; traversed?: string[]; parent?: string }):
+const invalidateObject = ({ map: { input, values, newValue }, traversed = [], parent = "state" }: { map: { input: string[], values: ProcessThisResult["values"], newValue: NewValue }; traversed?: { name: string, access?: string }[]; parent?: string }):
     string => {
     console.log("Invalidatin object : input:  ", input, "traversed : ", traversed, "values: ", values, "aprent : ", parent);
     const v1 = input[0]
-    const vv1 = traversed.length > 0 ? `${traversed.join(".")}.${v1}` : `${v1}`
-    const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}.${v1}` : `${parent}.${v1}`
+    const vv1 = traversed.length > 0 ? `${traversed.map(t => t.name).join(".")}.${v1}` : `${v1}`
+    const v = traversed.length > 0 ? `${parent}.${traversed.map(t => t.access ? `${t.name}${t.access}` : t.name).join(".")}.${v1}` : `${parent}.${v1}`
     const v1t = values.find(v => v.name === vv1)!
+    console.log("v:", v, "v1t:", v1t);
     // const v1t: ProcessThisResult["values"][0] = { name: "", meta: { isOptional: false, isArray: false } }
     if (input.length === 1) {
-        if (traversed.length === 0 && !v1t.meta.isArray && !v1t.meta.isObject) {
+        if (traversed.length === 0 && v1t.meta.type === MetaType.UNKNOWN) {
             return newValue.value
         } else {
-            if (v1t.meta.isArray) {
+            if (v1t.meta.type === MetaType.ARRAY) {
                 let result = ""
-                if (v1t.meta.numberAcess || v1t.meta.identifier) {
-                    console.log("****** numberAcess found1 ");
-                    result = `[...${v}.map((v,_i) => _i === ${v1t.meta.numberAcess?.getText() || v1t.meta.identifier?.getText()} ? {...v,${newValue.name}:${newValue.value}} : v)]`
+                if (v1t.meta.access) {
+                    console.log("****** numberAcess found1 ", v1t.meta.isOptional);
+                    const a = v1t.meta.access[0].name
+                    let obs = `{...v,${newValue.name}:${newValue.value}}`
+                    if (v1t.meta.isOptional) {
+                        obs = `v ? ${obs} : v`
+                    }
+                    const result = `[...${v}.map((v,_i) => _i === ${a} ? ${obs} : v)]`
                     console.log("result : ", result);
+                    return result;
                 } else {
                     const op = newValue.op
                     const args = newValue.value
@@ -363,11 +359,12 @@ const invalidateObject = ({ map: { input, values, newValue }, traversed = [], pa
                             result = `[...${v}].${op}(${args})`
 
                     }
+                    if (v1t.meta.isOptional) {
+                        return `${v} ? ${result} : ${v}`
+                    }
+                    return result;
                 }
-                if (v1t.meta.isOptional) {
-                    return `${v} ? ${result} : ${v}`
-                }
-                return result;
+
             }
             else {
                 const r = `{...${v},${newValue.name}:${newValue.value}}`
@@ -381,12 +378,25 @@ const invalidateObject = ({ map: { input, values, newValue }, traversed = [], pa
     } else {
         const v2 = input[1]
         const v2t = values.find(v => v.name === vv1)!
-        const v2exapnd = invalidateObject({ map: { input: input.slice(1), values, newValue }, traversed: traversed.concat([v1]) })
+        let access = v1t.meta.access?.[0].name || undefined
+        if (v1t.meta.isOptional) {
+            access = access ? `![${access}]` : "!"
+        }
+        const v2exapnd = invalidateObject({ map: { input: input.slice(1), values, newValue }, traversed: traversed.concat([{ name: v1, access }]) })
         console.log(`v2 expand : `, v2exapnd);
-        const expand = (v1t.meta.isArray) ?
-            `[...${v}.map((v,__i) => __i === ${v1t.meta.numberAcess} ? {...v,${v2}:${v2exapnd}} : v)]`
-            : `{ ...${v},${v2}:${v2exapnd} }`
-
+        let expand = ""
+        if (v1t.meta.type === MetaType.ARRAY) {
+            let obs = `{...v,${v2}:${v2exapnd}}`
+            if (v1t.meta.isOptional) {
+                obs = `v ? ${obs} : v`
+            }
+            expand = `[...${v}.map((v,_i) => _i === ${v1t.meta.access?.[0]} ? ${obs} : v)]`
+        } else {
+            expand = `{ ...${v},${v2}:${v2exapnd} }`
+            if (v1t.meta.isOptional) {
+                expand = `${v} ? ${expand} : ${v}`
+            }
+        }
         if (v2t.meta.isOptional) {
             console.log(`Optional found2 : ,v2 = ${v2}, v = ${v}`);
             return `${v} ? ${expand} : ${v}`

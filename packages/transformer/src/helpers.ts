@@ -1,7 +1,5 @@
 import * as ts from "typescript";
 
-
-
 let wcp: ts.WatchOfConfigFile<ts.SemanticDiagnosticsBuilderProgram> = null as any
 
 let program: ts.Program = null as any
@@ -34,9 +32,7 @@ export function setClassDeclaration(cd: ts.ClassDeclaration) {
     typeChecker = getProgram().getTypeChecker()
     const type = typeChecker.getTypeAtLocation(cd)
     members = cd.members
-    memberTypes = typeChecker.getPropertiesOfType(type).map(pt => {
-        return { name: pt.escapedName.toString(), type: typeChecker.getTypeOfSymbolAtLocation(pt, cd) }
-    })
+    memberTypes = getMembersOfType(type)
 }
 
 export function cleanUpGloabals() {
@@ -51,7 +47,7 @@ export const getStateType = () => {
     return `{${props.map(p => {
         const n = p.name.getText()
         const t = memberTypes.find(mt => mt.name === n)!.type
-        return `${n}:${typeChecker.typeToString(t)}`
+        return `${n}:${typeChecker.typeToString(t, undefined, ts.TypeFormatFlags.NoTruncation)}`
     }).join(",")}}`
 }
 
@@ -77,6 +73,9 @@ export const getActionType = () => {
         } else {
             p = `{${pt}}`
         }
+        if (n === "setConfigArr2") {
+            // console.log("****** Action TYpe : ", p);
+        }
         return `{name :"${n}",group:"${group}",payload:${p}}`
     }).join(" | ")
 }
@@ -91,12 +90,103 @@ export function getMembersofTypeNode(type: ts.TypeNode, typeChecker: ts.TypeChec
 }
 
 
-export function getMembersOfType(type: ts.Type) {
+export function getMembersOfType(type: ts.Type, symbol?: ts.Symbol) {
+    console.log("toString: ", typeChecker.typeToString(type));
     return typeChecker.getPropertiesOfType(type).map(
         s => {
-            return { type: typeChecker.getDeclaredTypeOfSymbol(s), name: s.escapedName.toString() }
+            return { type: typeChecker.getNonNullableType(typeChecker.getTypeOfSymbolAtLocation(s, classDecl)), name: s.escapedName.toString() }
         }
     )
+}
+
+export function getMembersOfType2(type: ts.Type, node: ts.Node, symbol?: ts.Symbol) {
+
+
+    if (symbol) {
+        // console.log("*** getMembersOfType2 Symbol props:",
+        // type.getProperties(),
+        //     "prop2:", typeChecker.getNonNullableType(type).getProperties(),
+        //     "toString", typeChecker.getTypeOfSymbolAtLocation(symbol, node).getProperties(),
+        //     "tostring2:", typeChecker.getTypeOfSymbolAtLocation(symbol, classDecl).getProperties(),
+        //     "tostring3 :", typeChecker.typeToString(type));
+    } else {
+        console.log("*** getMembersOfType2  props:", type.getProperties(),
+            "tostring3 :", typeChecker.typeToString(type));
+    }
+
+    return typeChecker.getPropertiesOfType(type).map(
+        s => {
+            return { type: typeChecker.getTypeOfSymbolAtLocation(s, node), name: s.escapedName.toString(), symbol: s }
+        }
+    )
+}
+
+function isTypeReference(type: ts.Type): type is ts.TypeReference {
+    return !!(
+        type.getFlags() & ts.TypeFlags.Object &&
+        (type as ts.ObjectType).objectFlags & ts.ObjectFlags.Reference
+    );
+}
+
+//   function isArrayType(type: ts.Type): boolean {
+//     return isTypeReference(type) && (
+//       type.target.symbol.name === "Array" ||
+//       type.target.symbol.name === "ReadonlyArray"
+//     );
+//   }
+
+export function getTypeForPropertyAccess(input: string[], mTypes: { name: string, type: ts.Type }[] = memberTypes): ts.Type {
+    // console.log("**getTypeForPropertyAccess : ", "input: ", input, mTypes.length);
+    let t = mTypes.find(mt => mt.name === input[0])!.type
+
+    if (input.length === 1) {
+        return t
+    } else {
+        if (isArrayType(t)) {
+            // console.log("**** ok its array type : ", input[0]);
+            if (isTypeReference(t)) {
+                // console.log("its reference type");
+                t = t.typeArguments![0]
+            } else {
+                t = (t as any).elementType
+                // console.log("its regular array type :", t);
+            }
+        }
+        return getTypeForPropertyAccess(input.slice(1), getMembersOfType(t))
+    }
+}
+
+
+export function isArrayType(input: ts.Type) {
+    // console.log("Checking array for type2 : ", input.flags, "toString : ", typeChecker.typeToString(input),
+    // "Node :");
+    // const s = input.symbol.valueDeclaration
+    return ts.isArrayTypeNode(typeChecker.typeToTypeNode(input)!)
+}
+
+
+export function isArrayPropAccess(input: string) {
+    // console.log("**** isArrayPropAccess", input);
+    const result = isArrayType(getTypeForPropertyAccess(input.split(".")))
+    // console.log("**** isArrayPropAccess result : ", result);
+    return result
+}
+
+function getTypeFromPropAccess(input: string): MetaType {
+    const t = getTypeForPropertyAccess(input.split("."))
+    const ts1 = typeChecker.typeToString(t)
+    let result = MetaType.OBJECT
+    if (ts1.endsWith("[]")) {
+        result = MetaType.ARRAY
+    }
+    return result;
+}
+
+function getTypeFromPropAccessAndElementAccess(input: string, accees: EAccess[]): [MetaType, EAccess[]] | undefined {
+    const t = getTypeForPropertyAccess(input.split("."))
+    const ts1 = typeChecker.typeToString(t)
+    let result: [MetaType, EAccess[]] | undefined = undefined
+    return result
 }
 
 export function getTypeName() {
@@ -167,123 +257,164 @@ export function replaceThisIdentifier(input: ts.PropertyAccessExpression | ts.El
     }
 }
 
-
-export function getTypeForPropertyAccess(input: string[], mTypes: { name: string, type: ts.Type }[] = memberTypes): ts.Type {
-    const t = mTypes.find(mt => mt.name === input[0])!.type
-    if (input.length == 1) {
-        return t
-    } else {
-        return getTypeForPropertyAccess(input.slice(1), getMembersOfType(t))
-    }
-}
-
-
-export function isArrayType(input: ts.Type) {
-    console.log("Checking array for type2 : ", input.flags, "toString : ", typeChecker.typeToString(input),
-        "Node :");
-    // const s = input.symbol.valueDeclaration
-    return ts.isArrayTypeNode(typeChecker.typeToTypeNode(input)!)
-}
-
-
-export function isArrayPropAccess(input: string) {
-    return isArrayType(getTypeForPropertyAccess(input.split(".")))
+export const enum MetaType {
+    OBJECT,
+    ARRAY,
+    UNKNOWN,
+    SET,
+    MAP
 }
 
 type Meta = {
-    isOptional?: boolean, isArray?: boolean,
-    isObject?: boolean,
-    numberAcess?: ts.Expression, stringAccess?: ts.Expression, identifier?: ts.Expression
+    isOptional?: boolean, type: MetaType
+    access?: EAccess[]
 }
-type MetaValue = { name: string, meta: Meta }
-export type ProcessThisResult = { g: string, v: string, values: MetaValue[], dynamicIdentifier?: MetaValue }
 
+export type EAccess = { name: string, type: MetaType, exp: ts.Expression, isOptional?: boolean }
+
+type MetaValue = { name: string, meta: Meta }
+export type ProcessThisResult = { g: string, v: string, values: MetaValue[] }
+
+
+function typeOfArray(input: string) {
+    return input.charCodeAt(0);
+}
+
+
+function convertTypeTo() {
+
+}
+
+function typeOfMultipleArray(input: EAccess[], name: string): EAccess[] {
+    const t = getTypeForPropertyAccess(name.split(","))
+    let result: MetaType[] = [];
+    if (isTypeReference(t)) {
+
+    } else {
+        const s = typeChecker.typeToString(t)
+        if (s.endsWith("[]") || s.startsWith("Array")) {
+            result.push(MetaType.ARRAY)
+        } else if (s.startsWith("Map")) {
+            result.push(MetaType.MAP)
+        } else if (s.startsWith("Set")) {
+            result.push(MetaType.SET)
+        } else {
+            result.push(MetaType.OBJECT)
+        }
+    }
+    // console.log("********** typeOfMultipleArray ***********", input[0].exp);
+    return input.map((a, index) => ({ ...a, type: result[index] }));
+}
 export function processThisStatement(exp: ts.PropertyAccessExpression | ts.ElementAccessExpression, arrayMut?: boolean): ProcessThisResult {
-    console.log("processTHis Statemenut input : ", exp.getText(), "arrayArg", arrayMut);
+    // console.log("processTHis Statemenut input : ", exp.getText(), "arrayArg", arrayMut);
     const values: MetaValue[] = [];
-    let propIdentifier: Meta = {}
+    let propIdentifier: Omit<Meta, "type"> = {}
+    let argumentAccessOptional = false
     const processInner = (input: ts.PropertyAccessExpression | ts.ElementAccessExpression = exp): ProcessThisResult => {
         if (ts.isPropertyAccessExpression(input)) {
             const parent = getNameofPropertyName(input.name)
             if (input.expression.kind === ts.SyntaxKind.ThisKeyword) {
                 let v = parent
                 let isObject = false;
-                console.log("Parent2 : ", v, "values: ", values);
+                // console.log("Parent2 : ", v, "values: ", values);
                 if (values.length > 0) {
                     isObject = true
-                    console.log("before splice : ", arrayMut, values);
+                    // console.log("before splice : ", arrayMut, values);
                     if (!arrayMut) values.splice(0, 1)
-                    console.log("after  splice : ", arrayMut, values);
                     if (values.length > 0) {
                         values.forEach(v => {
                             v.name = `${parent}.${v.name}`
-                            if (v.meta.numberAcess || v.meta.identifier || arrayMut) {
-                                v.meta.isArray = isArrayPropAccess(v.name)
+                            if ((v.meta.access || arrayMut) && isArrayPropAccess(v.name)) {
+                                v.meta.type = MetaType.ARRAY
+                            } else if (v.meta.access?.length && v.meta.access.length > 1) { // multiple prop access
+                                if (v.meta.access.filter(a => a.exp.kind === ts.SyntaxKind.Identifier).length > 0) {
+                                    throw new Error("dynamic identifier access not supported")
+                                }
+                                v.meta.access = typeOfMultipleArray(v.meta.access, v.name);
                             }
                         })
                         v = values[0].name
                     }
+                    // console.log("after  splice : ", arrayMut, values);
                 }
-                const isArray = (propIdentifier.numberAcess || propIdentifier.identifier || arrayMut) ? isArrayPropAccess(parent) : false
-                values.push({ name: parent, meta: { ...propIdentifier, isArray, isObject: !isArray && isObject } })
-                const d = values.find((v, index) => v.meta.identifier)
-                const result = { g: parent, v, values, dynamicIdentifier: d }
-                console.log("processThisStatement Result :", result);
+                const isArray = (propIdentifier.access || arrayMut) ? isArrayPropAccess(parent) : false
+                const t = isArray ? MetaType.ARRAY : isObject ? MetaType.OBJECT : MetaType.UNKNOWN
+                values.push({ name: parent, meta: { ...propIdentifier, type: t } })
+                const result = { g: parent, v, values }
+                // console.log("processThisStatement Result :", result);
                 return result
             }
-            console.log("Processing parent : ", parent);
+            // console.log("Processing parent2: ", parent);
             values.forEach(v => {
                 v.name = `${parent}.${v.name}`
             })
-            values.push({ name: parent, meta: {} })
+            values.push({ name: parent, meta: { ...propIdentifier, type: MetaType.UNKNOWN } })
+            propIdentifier = {}
             return processInner(input.expression as any)
-        } else if (ts.isNonNullExpression(input) && ts.isPropertyAccessExpression(input.expression)) {
+        }
+        else if (ts.isNonNullExpression(input) && ts.isPropertyAccessExpression(input.expression)) {
             const parent = getNameofPropertyName(input.expression.name)
-            console.log("Processing parent : ", parent);
+            // console.log("Processing parent : ", parent);
             values.forEach(v => {
                 v.name = `${parent}.${v.name}`
             })
-            values.push({ name: parent, meta: { isOptional: true } })
+            values.push({ name: parent, meta: { ...propIdentifier, type: MetaType.UNKNOWN, isOptional: true, } })
+            propIdentifier = {}
             return processInner(input.expression.expression as any)
         }
-        else if (ts.isPropertyAccessExpression(input.expression)
-            && input.expression.expression.kind === ts.SyntaxKind.ThisKeyword
-            && (ts.isElementAccessChain(input) || ts.isElementAccessExpression(input))) { //TODO this.prop[_] 
+        else if (ts.isNonNullExpression(input) && ts.isElementAccessExpression(input.expression)) {
+            argumentAccessOptional = true
+            return processInner(input.expression as any)
+        }
+        else if (ts.isElementAccessExpression(input) && ((ts.isNonNullExpression(input.expression) && ts.isPropertyAccessExpression(input.expression.expression))
+            || ts.isPropertyAccessExpression(input.expression))) { //TODO this.prop[_] 
             propIdentifier = {}
-            if (ts.isNumericLiteral(input.argumentExpression)) {
-                propIdentifier.numberAcess = input.argumentExpression
-            } else if (ts.isStringLiteral(input.argumentExpression)) {
-                propIdentifier.stringAccess = input.argumentExpression
-            } else {
-                propIdentifier.identifier = input.argumentExpression
+            propIdentifier.access = [{ name: input.argumentExpression.getText(), exp: input.argumentExpression, type: MetaType.UNKNOWN }]
+            if (argumentAccessOptional) {
+                propIdentifier.isOptional = true
+                argumentAccessOptional = false
             }
-            propIdentifier.isOptional = !!input.questionDotToken
             return processInner(input.expression as any)
-        } else {
-            const last = values[values.length - 1]
-            if (ts.isNumericLiteral(input.argumentExpression)) {
-                last.meta.numberAcess = input.argumentExpression
-            } else if (ts.isStringLiteral(input.argumentExpression)) {
-                last.meta.stringAccess = input.argumentExpression
-            } else {
-                last.meta.identifier = input.argumentExpression
+        } else if (ts.isElementAccessExpression(input) &&
+            ((ts.isElementAccessExpression(input.expression)) ||
+                (ts.isNonNullExpression(input.expression) && ts.isElementAccessExpression(input.expression.expression)))) { // multiple element access this.a[0][1]     
+            const { access, exp } = processMultipleElementAccess(input)
+            propIdentifier = {}
+            propIdentifier.access = access.map(a => ({ ...a, type: MetaType.UNKNOWN }))
+            if (argumentAccessOptional) {
+                propIdentifier.isOptional = true
+                argumentAccessOptional = false
             }
-            if (ts.isElementAccessChain(input)) {
-                if (input.questionDotToken) {
-                    last.meta.isOptional = true
-                }
-                return processInner(input.expression as any)
-            }
-            if (input.questionDotToken) {
-                last.meta.isOptional = true
-            }
-
-            return processInner(input.expression as any)
+            console.log("********** got multiple access *******", propIdentifier.access);
+            return processInner(exp)
+        }
+        else {
+            throw new Error(`${exp.getText()} is not supported.`)
         }
     }
     return processInner(exp)
 }
 
+
+type MultipleAccessReturn = { access: EAccess[], exp: any }
+
+
+function processMultipleElementAccess(input: ts.ElementAccessExpression): MultipleAccessReturn {
+    const a: EAccess[] = []
+    function processMultipleElementAccessInner(i: ts.PropertyAccessExpression | ts.ElementAccessExpression): MultipleAccessReturn {
+        if (ts.isElementAccessExpression(i)) {
+            a.push({ name: i.argumentExpression.getText(), exp: i.argumentExpression, type: MetaType.UNKNOWN })
+            return processMultipleElementAccessInner(i.expression as any)
+        }
+        else if (ts.isNonNullExpression(i) && ts.isElementAccessExpression(i.expression)) {
+            a.push({ name: i.expression.argumentExpression.getText(), isOptional: true, exp: i.expression.argumentExpression, type: MetaType.UNKNOWN })
+            return processMultipleElementAccessInner(i.expression.expression as any)
+        }
+        return { access: a, exp: i }
+    }
+
+    return processMultipleElementAccessInner(input as any)
+}
 
 
 export function groupBy<T, K extends keyof T,>(objectArray: T[], property: K, value: K | undefined) {
@@ -300,7 +431,6 @@ export function groupBy<T, K extends keyof T,>(objectArray: T[], property: K, va
         return acc;
     }, new Map());
 }
-
 
 export function groupByValue<T extends { value: any }>(objectArray: T[], property: keyof T): Record<string, string[]> {
     return objectArray.reduce(function (acc: any, obj) {

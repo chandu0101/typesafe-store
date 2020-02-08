@@ -2,6 +2,9 @@
   "name": "@typesafe-store/transformer",
   "description": "type safe store reducer transformer",
   "version": "0.1.0",
+  "bin": {
+    "tstore": "bin/tstore"
+  },
   "main": "src/index.ts",
   "repository": {
     "type": "git",
@@ -29,6 +32,6 @@
     "start": "ts-node src/index.ts"
   },
   "dependencies": {
-    "@typesafe-store/reducer": "0.1.0"
+    "@typesafe-store/reducer": "file:///Users/chandu0101/Desktop/kode/programming/typescript_projects/typesafe-store/packages/reducer"
   }
 }
