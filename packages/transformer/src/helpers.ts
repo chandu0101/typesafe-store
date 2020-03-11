@@ -1,5 +1,9 @@
 import * as ts from "typescript";
 
+//Constants
+
+const ASYNC_TYPES = ["Promise", "Fetch"];
+
 let wcp: ts.WatchOfConfigFile<ts.SemanticDiagnosticsBuilderProgram> = null as any;
 
 let program: ts.Program = null as any;
@@ -54,13 +58,12 @@ export const getStateType = () => {
   const props = getPropDeclsFromTypeMembers();
   return `{${props
     .map(p => {
-      const n = p.name.getText();
+      const n = p.pd.name.getText();
+      if (isAsyncPropDeclaration(p)) {
+        return `TODO Async Type`;
+      }
       const t = memberTypes.find(mt => mt.name === n)!.type;
-      return `${n}:${typeChecker.typeToString(
-        t,
-        undefined,
-        ts.TypeFormatFlags.NoTruncation
-      )}`;
+      return `${n}:${p.typeStr}`;
     })
     .join(",")}}`;
 };
@@ -234,11 +237,28 @@ export const isPropertyDecl = (input: ts.ClassElement) => {
   return ts.isPropertyDeclaration(input);
 };
 
-export const getPropDeclsFromTypeMembers = () => {
-  return members
-    .filter(ts.isPropertyDeclaration)
-    .map(m => m as ts.PropertyDeclaration);
+export type LocalPropertyDecls = {
+  pd: ts.PropertyDeclaration;
+  type: ts.Type;
+  typeStr: string;
 };
+
+export const getPropDeclsFromTypeMembers = (): LocalPropertyDecls[] => {
+  return members.filter(ts.isPropertyDeclaration).map(m => {
+    const pd = m as ts.PropertyDeclaration;
+    const type = memberTypes.find(mt => mt.name === pd.name.getText())!.type;
+    const typeStr = typeChecker.typeToString(
+      type,
+      undefined,
+      ts.TypeFormatFlags.NoTruncation
+    );
+    return { pd, type, typeStr };
+  });
+};
+
+export function isAsyncPropDeclaration(input: LocalPropertyDecls) {
+  return ASYNC_TYPES.filter(at => input.typeStr.startsWith(at)).length > 0;
+}
 
 export const getMethodsFromTypeMembers = () => {
   return members

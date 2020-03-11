@@ -27,7 +27,7 @@
     "types": "build/index.d.ts"
   },
   "scripts": {
-    "test": "jest --watch",
+    "test": "jest",
     "build": "tsc -p tsconfig.json",
     "start": "ts-node src/index.ts"
   },

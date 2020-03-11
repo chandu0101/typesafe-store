@@ -18,6 +18,7 @@ class Sample {
     arr2?: Array<Array<{ name: string }>>;
     arr3?: Array<Array<{ name: string } | undefined> | undefined>;
   } = {};
+
   changeName(name: string) {
     this.name = name;
   }

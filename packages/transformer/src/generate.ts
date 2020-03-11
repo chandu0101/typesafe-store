@@ -11,7 +11,9 @@ import {
   getStateType,
   getActionType,
   lastElementOfArray,
-  MetaType
+  MetaType,
+  LocalPropertyDecls,
+  isAsyncPropDeclaration
 } from "./helpers";
 
 //constants
@@ -49,13 +51,20 @@ type AssignStatement = {
 };
 type GS = CallStatement | AssignStatement | string;
 type NewValue = { name: string; op: string; value: string };
+
 const getSwitchClauses = () => {
   const typeName = getTypeName();
 
   const methods = getMethodsFromTypeMembers();
   const propDecls = getPropDeclsFromTypeMembers();
 
-  return methods
+  const asyncMethods: string[] = propDecls
+    .filter(isAsyncPropDeclaration)
+    .map(pd => {
+      return "";
+    });
+
+  const generalMethods = methods
     .filter(m => m.body && m.body.statements.length > 0)
     .map(m => {
       const name = m.name.getText();
@@ -66,7 +75,7 @@ const getSwitchClauses = () => {
         Map<string, [ProcessThisResult["values"], NewValue]>
       > = new Map();
       const PREFIX = "_tr_";
-      const properyAssigments: string[] = [];
+      const propertyAssigments: string[] = [];
       let duplicateExists = false;
       let otherThanMutationStatements = false;
 
@@ -202,13 +211,13 @@ const getSwitchClauses = () => {
           //         })}`
           //     )
           // }
-          properyAssigments.push(
+          propertyAssigments.push(
             `${group}:${invalidateObjectWithList({ input: value })}`
           );
         });
         return `case "${name}" : {
                     ${reservedStatements.join("\n")}
-                    return { ...state, ${properyAssigments.join(",")} }
+                    return { ...state, ${propertyAssigments.join(",")} }
                 }`;
       }
       //
@@ -235,15 +244,16 @@ const getSwitchClauses = () => {
             })}`
           );
         }
-        properyAssigments.push(`${group}:${PREFIX}${group}`);
+        propertyAssigments.push(`${group}:${PREFIX}${group}`);
       });
 
       return `case "${name}" : {
                 ${reservedStatements.join("\n")}
                 ${generalStatements.join("\n")}
-                return { ...state, ${properyAssigments.join(",")} }
+                return { ...state, ${propertyAssigments.join(",")} }
             }`;
     });
+  return generalMethods.concat(asyncMethods);
 };
 
 const invalidateObjectWithList2 = ({
@@ -535,10 +545,10 @@ const invalidateObject = ({
   }
 };
 
-const getDefaultState = (props: ts.PropertyDeclaration[]) => {
+const getDefaultState = (props: LocalPropertyDecls[]) => {
   return `{${props
-    .filter(p => p.initializer)
-    .map(p => `${p.name.getText()}:${p.initializer!.getText()}`)}}`;
+    .filter(p => p.pd.initializer)
+    .map(p => `${p.pd.name.getText()}:${p.pd.initializer!.getText()}`)}}`;
 };
 
 function buildFunction({
