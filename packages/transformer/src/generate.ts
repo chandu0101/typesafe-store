@@ -14,6 +14,10 @@ import {
   MetaType
 } from "./helpers";
 
+//constants
+
+const TSTORE_TEMP_V = "_tstore_v";
+
 export const createReducerFunction = (cd: ts.ClassDeclaration) => {
   setClassDeclaration(cd);
   const propDecls = getPropDeclsFromTypeMembers();
@@ -429,21 +433,28 @@ const invalidateObject = ({
           // TODO multiple argument access
           console.log("****** numberAcess found1 ", v1t.meta.isOptional);
           const a = v1t.meta.access[0].name;
-          let obs = `{...v,${newValue.name}:${newValue.value}}`;
+          let obs = `{...${TSTORE_TEMP_V},${newValue.name}:${newValue.value}}`;
           if (v1t.meta.isOptional) {
-            obs = `v ? ${obs} : v`;
+            obs = `${TSTORE_TEMP_V} ? ${obs} : ${TSTORE_TEMP_V}`;
           }
-          const result = `[...${v}.map((v,_i) => _i === ${a} ? ${obs} : v)]`;
+          const result = `[...${v}.map((${TSTORE_TEMP_V},_i) => _i === ${a} ? ${obs} : ${TSTORE_TEMP_V})]`;
           console.log("result : ", result);
           return result;
         } else if (v1t.meta.access) {
           // single argument access
           const a = v1t.meta.access[0].name;
-          let obs = `{...v,${newValue.name}:${newValue.value}}`;
+          console.log(
+            "********** Argument Access found",
+            "newValue : ",
+            newValue,
+            "v1t: ",
+            v1t
+          );
+          let obs = `{...${TSTORE_TEMP_V},${newValue.name}:${newValue.value}}`;
           if (v1t.meta.isOptional) {
-            obs = `v ? ${obs} : v`;
+            obs = `${TSTORE_TEMP_V} ? ${obs} : ${TSTORE_TEMP_V}`;
           }
-          const result = `[...${v}.map((v,_i) => _i === ${a} ? ${obs} : v)]`;
+          const result = `[...${v}.map((${TSTORE_TEMP_V},_i) => _i === ${a} ? ${obs} : ${TSTORE_TEMP_V})]`;
           console.log("result : ", result);
           return result;
         } else {
@@ -505,11 +516,11 @@ const invalidateObject = ({
     console.log(`v2 expand : `, v2exapnd);
     let expand = "";
     if (v1t.meta.type === MetaType.ARRAY) {
-      let obs = `{...v,${v2}:${v2exapnd}}`;
+      let obs = `{...${TSTORE_TEMP_V},${v2}:${v2exapnd}}`;
       if (v1t.meta.isOptional) {
-        obs = `v ? ${obs} : v`;
+        obs = `${TSTORE_TEMP_V} ? ${obs} : ${TSTORE_TEMP_V}`;
       }
-      expand = `[...${v}.map((v,_i) => _i === ${v1t.meta.access?.[0].name} ? ${obs} : v)]`;
+      expand = `[...${v}.map((${TSTORE_TEMP_V},_i) => _i === ${v1t.meta.access?.[0].name} ? ${obs} : ${TSTORE_TEMP_V})]`;
     } else {
       expand = `{ ...${v},${v2}:${v2exapnd} }`;
       if (v1t.meta.isOptional) {

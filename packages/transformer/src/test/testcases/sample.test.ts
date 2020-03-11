@@ -175,4 +175,64 @@ describe("Reducer", () => {
     state = reducer(prevState, { group: "Sample", name: "modifyConfigObj1" });
     expect(state.config.obj1?.one).toBe(6);
   });
+
+  test("should work for optional array argument access ", () => {
+    let prevState = state;
+    expect(prevState.config.obj2).toBeUndefined();
+    state = reducer(prevState, {
+      group: "Sample",
+      name: "setConfigObj2a",
+      payload: ""
+    });
+    expect(state.config.obj2).toBeUndefined();
+    prevState = state;
+    const o = { two: 3 };
+    state = reducer(state, {
+      group: "Sample",
+      name: "setConfigObj2",
+      payload: o
+    });
+    expect(state.config.obj2).toStrictEqual(o);
+    prevState = state;
+    state = reducer(prevState, {
+      group: "Sample",
+      name: "setConfigObj2a",
+      payload: ""
+    });
+    expect(state.config.obj2?.obj2a).toBeUndefined();
+    prevState = state;
+    const o1: Sample["config"]["obj2"] = { two: 5, obj2a: [{ name: "" }] };
+    state = reducer(prevState, {
+      group: "Sample",
+      name: "setConfigObj2",
+      payload: o1
+    });
+    expect(state.config.obj2).toStrictEqual(o1);
+    prevState = state;
+    state = reducer(prevState, {
+      group: "Sample",
+      name: "setConfigObj2a",
+      payload: ""
+    });
+    expect(state.config.obj2!.obj2a![0].obj2ao).toBeUndefined();
+    prevState = state;
+    const o2: Sample["config"]["obj2"] = {
+      two: 5,
+      obj2a: [{ name: "", obj2ao: { value: "hello1" } }]
+    };
+    state = reducer(prevState, {
+      group: "Sample",
+      name: "setConfigObj2",
+      payload: o2
+    });
+    expect(state.config.obj2).toStrictEqual(o2);
+    prevState = state;
+    const h = "hello2";
+    state = reducer(prevState, {
+      group: "Sample",
+      name: "setConfigObj2a",
+      payload: h
+    });
+    expect(state.config.obj2?.obj2a![0].obj2ao?.value).toStrictEqual(h);
+  });
 });

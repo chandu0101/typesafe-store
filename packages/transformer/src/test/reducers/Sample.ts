@@ -3,7 +3,7 @@ type Todo = { id: string; completed?: boolean; text: string };
 class Sample {
   name = "First";
   count = 1;
-  person = { name: "P1211", age: 10 };
+  person = { name: "P12", age: 10 };
   books: Book[] = [];
   optionalTodos: (Todo | undefined)[] = [];
   config: {

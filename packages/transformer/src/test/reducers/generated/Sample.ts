@@ -1,4 +1,4 @@
-// this file is auto generated on 2020-03-10T23:16:54.461Z, don't modify it
+// this file is auto generated on 2020-03-11T04:46:10.466Z, don't modify it
 import { ReducerGroup } from "@typesafe-store/reducer";
 
 export type SampleState = {
@@ -72,8 +72,7 @@ export type SampleAction =
     }
   | { name: "addTodo"; group: "Sample"; payload: Todo }
   | { name: "completeFirstTodo"; group: "Sample" }
-  | { name: "completeTodoAtIndex"; group: "Sample"; payload: number }
-  | { name: "modifyConfigObjectArr2"; group: "Sample"; payload: string };
+  | { name: "completeTodoAtIndex"; group: "Sample"; payload: number };
 
 export const SampleReducerGroup: ReducerGroup<
   SampleState,
@@ -126,8 +125,8 @@ export const SampleReducerGroup: ReducerGroup<
         return {
           ...state,
           books: [
-            ...state.books.map((v, _i) =>
-              _i === 1 ? { ...v, name: "modifiedName" } : v
+            ...state.books.map((_tstore_v, _i) =>
+              _i === 1 ? { ..._tstore_v, name: "modifiedName" } : _tstore_v
             )
           ]
         };
@@ -137,8 +136,10 @@ export const SampleReducerGroup: ReducerGroup<
         return {
           ...state,
           books: [
-            ...state.books.map((v, _i) =>
-              _i === index ? { ...v, name: `modified${index}Name` } : v
+            ...state.books.map((_tstore_v, _i) =>
+              _i === index
+                ? { ..._tstore_v, name: `modified${index}Name` }
+                : _tstore_v
             )
           ]
         };
@@ -205,11 +206,11 @@ export const SampleReducerGroup: ReducerGroup<
                     ...state.config.obj2,
                     obj2a: state.config.obj2!.obj2a
                       ? [
-                          ...state.config.obj2!.obj2a.map((v, _i) =>
+                          ...state.config.obj2!.obj2a.map((_tstore_v, _i) =>
                             _i === 0
-                              ? v
+                              ? _tstore_v
                                 ? {
-                                    ...v,
+                                    ..._tstore_v,
                                     obj2ao: state.config.obj2!.obj2a![0].obj2ao
                                       ? {
                                           ...state.config.obj2!.obj2a![0]
@@ -218,8 +219,8 @@ export const SampleReducerGroup: ReducerGroup<
                                         }
                                       : state.config.obj2!.obj2a![0].obj2ao
                                   }
-                                : v
-                              : v
+                                : _tstore_v
+                              : _tstore_v
                           )
                         ]
                       : state.config.obj2!.obj2a
@@ -241,8 +242,12 @@ export const SampleReducerGroup: ReducerGroup<
         return {
           ...state,
           optionalTodos: [
-            ...state.optionalTodos.map((v, _i) =>
-              _i === 0 ? (v ? { ...v, completed: true } : v) : v
+            ...state.optionalTodos.map((_tstore_v, _i) =>
+              _i === 0
+                ? _tstore_v
+                  ? { ..._tstore_v, completed: true }
+                  : _tstore_v
+                : _tstore_v
             )
           ]
         };
@@ -252,15 +257,15 @@ export const SampleReducerGroup: ReducerGroup<
         return {
           ...state,
           optionalTodos: [
-            ...state.optionalTodos.map((v, _i) =>
-              _i === index ? (v ? { ...v, completed: true } : v) : v
+            ...state.optionalTodos.map((_tstore_v, _i) =>
+              _i === index
+                ? _tstore_v
+                  ? { ..._tstore_v, completed: true }
+                  : _tstore_v
+                : _tstore_v
             )
           ]
         };
-      }
-      case "modifyConfigObjectArr2": {
-        const input = (action as any).payload;
-        return state;
       }
     }
   },
@@ -268,7 +273,7 @@ export const SampleReducerGroup: ReducerGroup<
   ds: {
     name: "First",
     count: 1,
-    person: { name: "P1211", age: 10 },
+    person: { name: "P12", age: 10 },
     books: [],
     optionalTodos: [],
     config: {}
