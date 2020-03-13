@@ -3,7 +3,7 @@ import * as ts from "typescript";
 //Constants
 
 const T_STORE_ASYNC_TYPE =
-  "Readonly<{ loading?: boolean | undefined; error?: Error | undefined;}>";
+  "Readonly<{ loading?: boolean | undefined; error?: Error | undefined; data?: ";
 enum AsyncTypes {
   PROMISE = "Promise",
   FETCH = "Fetch",
@@ -27,6 +27,8 @@ let classDecl: ts.ClassDeclaration = null as any;
 let members: ts.NodeArray<ts.ClassElement> = null as any;
 
 let memberTypes: { name: string; type: ts.Type }[] = null as any;
+
+let propDecls: LocalPropertyDecls[] = null as any;
 
 let arrayMutableMethods = [
   "push",
@@ -66,6 +68,7 @@ export function setClassDeclaration(cd: ts.ClassDeclaration) {
   const type = typeChecker.getTypeAtLocation(cd);
   members = cd.members;
   memberTypes = getMembersOfType(type);
+  propDecls = getPropDeclsFromTypeMembers();
 }
 
 export function cleanUpGloabals() {
@@ -73,11 +76,11 @@ export function cleanUpGloabals() {
   classDecl = null as any;
   members = null as any;
   memberTypes = null as any;
+  propDecls = null as any;
 }
 
 export const getStateType = () => {
-  const props = getPropDeclsFromTypeMembers();
-  return `{${props
+  return `{${propDecls
     .map(p => {
       const n = p.pd.name.getText();
       return `${n}:${p.typeStr}`;
@@ -95,12 +98,13 @@ export const lastElementOfArray = <T>(a: T[]) => {
  * @param tpeStr
  * @returns fetch Action Type
  */
-export function generateFetchActionType(pd: LocalPropertyDecls): string {
+export function generateFetchActionType(lpd: LocalPropertyDecls): string {
   console.log(
     "************** generateFetchActionType : ",
     "tpeStr: ",
-    pd.pd.type!.getText()
+    lpd.pd.type!.getText()
   );
+
   return "";
 }
 
@@ -132,18 +136,19 @@ export const getActionType = () => {
 
   // Asynchronus actions
 
-  const asyncActions: string[] = getPropDeclsFromTypeMembers()
+  const asyncActions: string[] = propDecls
     .filter(isAsyncPropDeclaration)
     .map(p => {
       let result = "";
+      const declaredType = p.pd.type!.getText();
+      console.log("********* declaredType : ", declaredType);
       console.log(
-        "************** generateFetchActionType : ",
-        "tpeStr: ",
-        p.pd.type!.getText()
+        "********* typeNodeToType ",
+        typeChecker.typeToString(typeChecker.getTypeFromTypeNode(p.pd.type!))
       );
-      if (p.typeStr.startsWith(AsyncTypes.PROMISE)) {
+      if (declaredType.startsWith(AsyncTypes.PROMISE)) {
         result = `{name:"${p.pd.name}",group:"${group}", promise: () => ${p.typeStr} }`;
-      } else if (isFetchType(p.typeStr)) {
+      } else if (isFetchType(declaredType)) {
         result = `{name:"${
           p.pd.name
         }",group:"${group}", fetch: ${generateFetchActionType(p)}  }`;
@@ -166,43 +171,12 @@ export function getMembersofTypeNode(
 }
 
 export function getMembersOfType(type: ts.Type, symbol?: ts.Symbol) {
-  console.log("toString: ", typeChecker.typeToString(type));
   return typeChecker.getPropertiesOfType(type).map(s => {
     return {
       type: typeChecker.getNonNullableType(
         typeChecker.getTypeOfSymbolAtLocation(s, classDecl)
       ),
       name: s.escapedName.toString()
-    };
-  });
-}
-
-export function getMembersOfType2(
-  type: ts.Type,
-  node: ts.Node,
-  symbol?: ts.Symbol
-) {
-  if (symbol) {
-    // console.log("*** getMembersOfType2 Symbol props:",
-    // type.getProperties(),
-    //     "prop2:", typeChecker.getNonNullableType(type).getProperties(),
-    //     "toString", typeChecker.getTypeOfSymbolAtLocation(symbol, node).getProperties(),
-    //     "tostring2:", typeChecker.getTypeOfSymbolAtLocation(symbol, classDecl).getProperties(),
-    //     "tostring3 :", typeChecker.typeToString(type));
-  } else {
-    console.log(
-      "*** getMembersOfType2  props:",
-      type.getProperties(),
-      "tostring3 :",
-      typeChecker.typeToString(type)
-    );
-  }
-
-  return typeChecker.getPropertiesOfType(type).map(s => {
-    return {
-      type: typeChecker.getTypeOfSymbolAtLocation(s, node),
-      name: s.escapedName.toString(),
-      symbol: s
     };
   });
 }
@@ -307,6 +281,9 @@ export const getPropDeclsFromTypeMembers = (): LocalPropertyDecls[] => {
 };
 
 export function isAsyncPropDeclaration(input: LocalPropertyDecls) {
+  if (input.pd.name.getText() === "getBooks") {
+    console.log("****** isAsyncPropDeclaration:", input.typeStr);
+  }
   return input.typeStr.startsWith(T_STORE_ASYNC_TYPE);
 }
 
