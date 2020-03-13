@@ -14,9 +14,9 @@ const reducerTransformer: ts.TransformerFactory<ts.SourceFile> = context => {
       // fs.writeFileSync(f.replace("reducer.test.ts", "reducer.generated.ts"), c, { encoding: "utf8" })
       return createReducerFunction(node);
     }
-    if (ts.isTypeAliasDeclaration(node)) {
-      return null as any;
-    }
+    // if (ts.isTypeAliasDeclaration(node)) {
+    //   return null as any;
+    // }
     return node;
   };
 
@@ -34,7 +34,12 @@ function transformFile(file: string) {
      import { ReducerGroup } from "@typesafe-store/reducer"
      ${printer.printFile(newSf)}
     `;
-  writeFileSync(file.replace("/reducers/", "/reducers/generated/"), content, {
+  const outFile = file
+    .replace("/reducers/", "/reducers/generated/")
+    .replace(".ts", "-gen.ts");
+  console.log("******* writing to out file : ", outFile);
+  console.log("outFile : ", outFile);
+  writeFileSync(outFile, content, {
     encoding: "utf8"
   });
   const t1 = performance.now();

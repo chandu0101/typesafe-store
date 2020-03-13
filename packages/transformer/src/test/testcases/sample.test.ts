@@ -1,4 +1,7 @@
-import { SampleReducerGroup, SampleState } from "../reducers/generated/Sample";
+import {
+  SampleReducerGroup,
+  SampleState
+} from "../reducers/generated/Sample-Gen";
 
 const shallowCompareExcept = (
   obj1: any,
@@ -201,7 +204,10 @@ describe("Reducer", () => {
     });
     expect(state.config.obj2?.obj2a).toBeUndefined();
     prevState = state;
-    const o1: Sample["config"]["obj2"] = { two: 5, obj2a: [{ name: "" }] };
+    const o1: {
+      two: number;
+      obj2a?: { name: string; obj2ao?: { value: string } }[];
+    } = { two: 5, obj2a: [{ name: "" }] };
     state = reducer(prevState, {
       group: "Sample",
       name: "setConfigObj2",
@@ -216,7 +222,10 @@ describe("Reducer", () => {
     });
     expect(state.config.obj2!.obj2a![0].obj2ao).toBeUndefined();
     prevState = state;
-    const o2: Sample["config"]["obj2"] = {
+    const o2: {
+      two: number;
+      obj2a?: { name: string; obj2ao?: { value: string } }[];
+    } = {
       two: 5,
       obj2a: [{ name: "", obj2ao: { value: "hello1" } }]
     };

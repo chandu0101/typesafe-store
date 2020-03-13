@@ -2,6 +2,8 @@ import * as ts from "typescript";
 
 //Constants
 
+const T_STORE_ASYNC_TYPE =
+  "Readonly<{ loading?: boolean | undefined; error?: Error | undefined;}>";
 enum AsyncTypes {
   PROMISE = "Promise",
   FETCH = "Fetch",
@@ -87,6 +89,21 @@ export const lastElementOfArray = <T>(a: T[]) => {
   return a[a.length - 1];
 };
 
+/**
+ *
+ * @param tpe  fetch type Fetch | FetchPost | FetchDelete | FetchPut | FetchPatch
+ * @param tpeStr
+ * @returns fetch Action Type
+ */
+export function generateFetchActionType(pd: LocalPropertyDecls): string {
+  console.log(
+    "************** generateFetchActionType : ",
+    "tpeStr: ",
+    pd.pd.type!.getText()
+  );
+  return "";
+}
+
 export const getActionType = () => {
   const methods = getMethodsFromTypeMembers();
   const group = getTypeName();
@@ -114,18 +131,27 @@ export const getActionType = () => {
   });
 
   // Asynchronus actions
+
   const asyncActions: string[] = getPropDeclsFromTypeMembers()
     .filter(isAsyncPropDeclaration)
     .map(p => {
       let result = "";
+      console.log(
+        "************** generateFetchActionType : ",
+        "tpeStr: ",
+        p.pd.type!.getText()
+      );
       if (p.typeStr.startsWith(AsyncTypes.PROMISE)) {
         result = `{name:"${p.pd.name}",group:"${group}", promise: () => ${p.typeStr} }`;
       } else if (isFetchType(p.typeStr)) {
-        result = `{name:"${p.pd.name}",group:"${group}", promise: () => ${p.typeStr} }`;
+        result = `{name:"${
+          p.pd.name
+        }",group:"${group}", fetch: ${generateFetchActionType(p)}  }`;
       }
       return result;
     });
-  return generalMethods.concat(asyncActions).join(" | ");
+  console.log("********** async Actions : ", asyncActions);
+  return generalMethods.join(" | ");
 };
 
 export function isMethod(input: ts.Symbol) {
@@ -281,11 +307,7 @@ export const getPropDeclsFromTypeMembers = (): LocalPropertyDecls[] => {
 };
 
 export function isAsyncPropDeclaration(input: LocalPropertyDecls) {
-  return (
-    Object.entries(AsyncTypes).filter(([key, value]) =>
-      input.typeStr.startsWith(value)
-    ).length > 0
-  );
+  return input.typeStr.startsWith(T_STORE_ASYNC_TYPE);
 }
 
 export const getMethodsFromTypeMembers = () => {

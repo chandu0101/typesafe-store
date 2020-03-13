@@ -1,6 +1,15 @@
-// this file is auto generated on 2020-03-11T04:46:10.466Z, don't modify it
+// this file is auto generated on 2020-03-13T06:11:19.829Z, don't modify it
 import { ReducerGroup } from "@typesafe-store/reducer";
-
+import { Fetch } from "@typesafe-store/reducer";
+type Book = {
+  name: string;
+  year: number;
+};
+type Todo = {
+  id: string;
+  completed?: boolean;
+  text: string;
+};
 export type SampleState = {
   name: string;
   count: number;
@@ -23,6 +32,11 @@ export type SampleState = {
     arr2?: { name: string }[][] | undefined;
     arr3?: (({ name: string } | undefined)[] | undefined)[] | undefined;
   };
+  getBooks: Readonly<{
+    loading?: boolean | undefined;
+    error?: Error | undefined;
+    data?: string[] | undefined;
+  }>;
 };
 
 export type SampleAction =
@@ -273,10 +287,11 @@ export const SampleReducerGroup: ReducerGroup<
   ds: {
     name: "First",
     count: 1,
-    person: { name: "P12", age: 10 },
+    person: { name: "P121", age: 10 },
     books: [],
     optionalTodos: [],
-    config: {}
+    config: {},
+    getBooks: {}
   },
   m: {}
 };
