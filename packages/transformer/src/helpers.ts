@@ -2,7 +2,17 @@ import * as ts from "typescript";
 
 //Constants
 
-const ASYNC_TYPES = ["Promise", "Fetch"];
+enum AsyncTypes {
+  PROMISE = "Promise",
+  FETCH = "Fetch",
+  FETCH_POST = "FetchPost",
+  FETCH_PUT = "FetchPut",
+  FETCH_DELETE = "FetchDelete",
+  FETCH_PATCH = "FetchPatch",
+  GRAPHQL_QUERY = "GraphqlQuery",
+  GRAPHQL_MUTATION = "GraphqlMutation",
+  GRAPHQL_SUBSCRIPTION = "GraphqlSubscription"
+}
 
 let wcp: ts.WatchOfConfigFile<ts.SemanticDiagnosticsBuilderProgram> = null as any;
 
@@ -60,9 +70,8 @@ export const getStateType = () => {
     .map(p => {
       const n = p.pd.name.getText();
       if (isAsyncPropDeclaration(p)) {
-        return `TODO Async Type`;
+        return `${n}:AsyncData<${p.typeStr}>`;
       }
-      const t = memberTypes.find(mt => mt.name === n)!.type;
       return `${n}:${p.typeStr}`;
     })
     .join(",")}}`;
@@ -75,33 +84,40 @@ export const lastElementOfArray = <T>(a: T[]) => {
 export const getActionType = () => {
   const methods = getMethodsFromTypeMembers();
   const group = getTypeName();
-  return methods
-    .map(m => {
-      const n = m.name.getText();
-      const pl = m.parameters.length;
-      if (pl === 0) {
-        return `{name :"${n}",group:"${group}"}`;
+  const generalMethods = methods.map(m => {
+    const n = m.name.getText();
+    const pl = m.parameters.length;
+    if (pl === 0) {
+      return `{name :"${n}",group:"${group}"}`;
+    }
+    const t = typeChecker.typeToString(
+      memberTypes.find(mt => mt.name === n)!.type
+    );
+    const pt = t
+      .split("=>")[0]
+      .trim()
+      .slice(1)
+      .slice(0, -1);
+    let p = "";
+    if (pl === 1) {
+      p = pt.slice(pt.indexOf(":") + 1).trim();
+    } else {
+      p = `{${pt}}`;
+    }
+    return `{name :"${n}",group:"${group}",payload:${p}}`;
+  });
+
+  // Asynchronus actions
+  const asyncActions: string[] = getPropDeclsFromTypeMembers()
+    .filter(isAsyncPropDeclaration)
+    .map(p => {
+      let result = "";
+      if (p.typeStr.startsWith(AsyncTypes.FETCH)) {
+        result = `{name:"${p.pd.name}",group:"${group}", promise: () => ${p.typeStr} }`;
       }
-      const t = typeChecker.typeToString(
-        memberTypes.find(mt => mt.name === n)!.type
-      );
-      const pt = t
-        .split("=>")[0]
-        .trim()
-        .slice(1)
-        .slice(0, -1);
-      let p = "";
-      if (pl === 1) {
-        p = pt.slice(pt.indexOf(":") + 1).trim();
-      } else {
-        p = `{${pt}}`;
-      }
-      if (n === "setConfigArr2") {
-        // console.log("****** Action TYpe : ", p);
-      }
-      return `{name :"${n}",group:"${group}",payload:${p}}`;
-    })
-    .join(" | ");
+      return result;
+    });
+  return generalMethods.concat(asyncActions).join(" | ");
 };
 
 export function isMethod(input: ts.Symbol) {
@@ -257,7 +273,11 @@ export const getPropDeclsFromTypeMembers = (): LocalPropertyDecls[] => {
 };
 
 export function isAsyncPropDeclaration(input: LocalPropertyDecls) {
-  return ASYNC_TYPES.filter(at => input.typeStr.startsWith(at)).length > 0;
+  return (
+    Object.entries(AsyncTypes).filter(([key, value]) =>
+      input.typeStr.startsWith(value)
+    ).length > 0
+  );
 }
 
 export const getMethodsFromTypeMembers = () => {
