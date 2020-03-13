@@ -37,6 +37,15 @@ let arrayMutableMethods = [
   "unshift"
 ];
 
+export function isFetchType(tpe: string) {
+  return (
+    tpe.startsWith(AsyncTypes.FETCH) ||
+    tpe.startsWith(AsyncTypes.FETCH_POST) ||
+    tpe.startsWith(AsyncTypes.FETCH_PATCH) ||
+    tpe.startsWith(AsyncTypes.FETCH_DELETE)
+  );
+}
+
 export function setWatchCompilerHost(p: typeof wcp) {
   wcp = p;
 }
@@ -69,9 +78,6 @@ export const getStateType = () => {
   return `{${props
     .map(p => {
       const n = p.pd.name.getText();
-      if (isAsyncPropDeclaration(p)) {
-        return `${n}:AsyncData<${p.typeStr}>`;
-      }
       return `${n}:${p.typeStr}`;
     })
     .join(",")}}`;
@@ -112,7 +118,9 @@ export const getActionType = () => {
     .filter(isAsyncPropDeclaration)
     .map(p => {
       let result = "";
-      if (p.typeStr.startsWith(AsyncTypes.FETCH)) {
+      if (p.typeStr.startsWith(AsyncTypes.PROMISE)) {
+        result = `{name:"${p.pd.name}",group:"${group}", promise: () => ${p.typeStr} }`;
+      } else if (isFetchType(p.typeStr)) {
         result = `{name:"${p.pd.name}",group:"${group}", promise: () => ${p.typeStr} }`;
       }
       return result;
