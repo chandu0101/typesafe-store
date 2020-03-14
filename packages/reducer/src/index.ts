@@ -60,7 +60,7 @@ export type Json =
   | { [property: string]: Json }
   | Json[];
 
-export type AsyncData<D> = Readonly<{
+export type AsyncData<D, U, B, T> = Readonly<{
   loading?: boolean;
   error?: Error;
   data?: D;
@@ -92,7 +92,9 @@ export type Fetch<
   U extends string | DynamicURL,
   R extends Record<string, any>,
   T extends Transform<R, any> | null = null
-> = T extends Transform<R, infer D> ? AsyncData<D> : AsyncData<R>;
+> = T extends Transform<R, infer D>
+  ? AsyncData<D, U, {}, T>
+  : AsyncData<R, U, {}, T>;
 
 /**
  *  U: url string static/dynamic
@@ -105,7 +107,9 @@ export type FetchPost<
   B extends Json,
   R extends Record<string, any>,
   T extends Transform<R, any> | null = null
-> = T extends Transform<R, infer D> ? AsyncData<D> : AsyncData<R>;
+> = T extends Transform<R, infer D>
+  ? AsyncData<D, U, B, T>
+  : AsyncData<R, U, B, T>;
 
 /**
  *  U: url string static/dynamic
@@ -118,7 +122,9 @@ export type FetchPut<
   B extends Json,
   R extends Record<string, any>,
   T extends Transform<R, any> | null = null
-> = T extends Transform<R, infer D> ? AsyncData<D> : AsyncData<R>;
+> = T extends Transform<R, infer D>
+  ? AsyncData<D, U, B, T>
+  : AsyncData<R, U, B, T>;
 
 /**
  *  U: url string static/dynamic
@@ -131,7 +137,9 @@ export type FetchPatch<
   B extends Json,
   R extends Record<string, any>,
   T extends Transform<R, any> | null = null
-> = T extends Transform<R, infer D> ? AsyncData<D> : AsyncData<R>;
+> = T extends Transform<R, infer D>
+  ? AsyncData<D, U, B, T>
+  : AsyncData<R, U, B, T>;
 
 /**
  *  U: url string static/dynamic
@@ -144,7 +152,9 @@ export type FetchDelete<
   B extends Json,
   R extends Record<string, any>,
   T extends Transform<R, any> | null = null
-> = T extends Transform<R, infer D> ? AsyncData<D> : AsyncData<R>;
+> = T extends Transform<R, infer D>
+  ? AsyncData<D, U, B, T>
+  : AsyncData<R, U, B, T>;
 
 const sample = (input: { a: number }[]) => {
   return input.length > 0 ? { new: input.length } : { new: 0 };

@@ -13,7 +13,8 @@ import {
   lastElementOfArray,
   MetaType,
   LocalPropertyDecls,
-  isAsyncPropDeclaration
+  isAsyncPropDeclaration,
+  getAsyncActionType
 } from "./helpers";
 
 //constants
@@ -33,6 +34,8 @@ export const createReducerFunction = (cd: ts.ClassDeclaration) => {
          export type ${group}State = ${getStateType()}
          
          export type ${group}Action = ${getActionType()}
+
+        //  export type ${group}AsyncAction = ${getAsyncActionType()}
 
          export const ${group}ReducerGroup: ReducerGroup<${group}State,${group}Action,"${group}"> = { r: ${f},g:"${group}",ds:${defaultState},m:{}}
 
@@ -107,6 +110,7 @@ const getSwitchClauses = () => {
         }
         reservedStatements.push(v);
       }
+
       const statements = m.body!.statements;
       statements.forEach(s => {
         const text = s.getText().trim();
@@ -177,40 +181,31 @@ const getSwitchClauses = () => {
           }
         } else {
           otherThanMutationStatements = true;
-          generalStatements.push(s.getText());
+          // other than straight mutations handle forEach/if else/tenary operator
+          if (
+            ts.isExpressionStatement(s) &&
+            ts.isCallExpression(s.expression) &&
+            ts.isPropertyAccessExpression(s.expression.expression) &&
+            s.expression.expression.name.getText() === "forEach"
+          ) {
+            // forEach
+          } else if (
+            ts.isExpressionStatement(s) &&
+            ts.isConditionalExpression(s.expression)
+          ) {
+            // terinary op
+          } else if (ts.isIfStatement(s) && !s.elseStatement) {
+            // only if
+          } else if (ts.isIfStatement(s) && s.elseStatement) {
+            // if and else
+          } else {
+            generalStatements.push(s.getText());
+          }
         }
       });
 
       if (!duplicateExists && !otherThanMutationStatements) {
-        const parentGroupsSize = parentGroups.size;
-        const generalStatementsLength = generalStatements.length;
         parentGroups.forEach((value, group) => {
-          // console.log("parent Group Entries: ", group, "Values : ", value);
-          // const key = Array.from(value.keys())[0]
-          // if (value.size === 1 && !key.includes(".")) {
-          //     const a1 = value.get(key)![0][0]
-          //     const newValue = value.get(key)![0][1]
-          //     console.log("Single param : ", a1.meta);
-          //     let s = ""
-          //     const sk = `${PREFIX}${group}`
-          //     if (a1.meta.isArray) {
-          //         properyAssigments.push(`${group}:[...state.${group}]${newValue}`)
-          //     } else if (a1.meta.isObject) {
-          //         properyAssigments.push(`${group}:[...state.${group}]${newValue}`)
-          //         s = `let ${sk} = {...state.${group}}`
-          //     } else {
-          //         s = `let ${sk} = state.${group}`
-          //     }
-          //     reservedStatements.push(
-          //         s
-          //     )
-          // } else {
-          //     reservedStatements.push(
-          //         `let ${PREFIX}${group} = ${invalidateObjectWithList2({
-          //             input: value
-          //         })}`
-          //     )
-          // }
           propertyAssigments.push(
             `${group}:${invalidateObjectWithList({ input: value })}`
           );
@@ -239,7 +234,7 @@ const getSwitchClauses = () => {
           reservedStatements.push(s);
         } else {
           reservedStatements.push(
-            `let ${PREFIX}${group} = ${invalidateObjectWithList2({
+            `let ${PREFIX}${group} = ${invalidateObjectWithList({
               input: value
             })}`
           );

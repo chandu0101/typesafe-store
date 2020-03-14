@@ -102,11 +102,43 @@ export function generateFetchActionType(lpd: LocalPropertyDecls): string {
   console.log(
     "************** generateFetchActionType : ",
     "tpeStr: ",
-    lpd.pd.type!.getText()
+    lpd.pd.type!.getText(),
+    lpd.pd.type!.kind,
+    ((lpd.pd.type! as any) as ts.TypeReference).typeArguments,
+    isTypeReference(lpd.type)
   );
+  //   if (isTypeReference(lpd.pd.type! as any)) {
+  console.log(
+    "target : ",
+    ((lpd.pd.type! as any) as ts.TypeReference).target.typeArguments
+  );
+  //   }
 
   return "";
 }
+
+export const getAsyncActionType = () => {
+  const group = getTypeName();
+  return propDecls
+    .filter(isAsyncPropDeclaration)
+    .map(p => {
+      let result = "";
+      const declaredType = p.pd.type!.getText();
+      console.log(
+        "target : ",
+        ((p.pd.type! as any) as ts.TypeReference).target.typeArguments
+      );
+      if (declaredType.startsWith(AsyncTypes.PROMISE)) {
+        result = `{name:"${p.pd.name}",group:"${group}", promise: () => ${p.typeStr} }`;
+      } else if (isFetchType(declaredType)) {
+        result = `{name:"${
+          p.pd.name
+        }",group:"${group}", fetch: ${generateFetchActionType(p)}  }`;
+      }
+      return result;
+    })
+    .join(" | ");
+};
 
 export const getActionType = () => {
   const methods = getMethodsFromTypeMembers();
@@ -136,26 +168,6 @@ export const getActionType = () => {
 
   // Asynchronus actions
 
-  const asyncActions: string[] = propDecls
-    .filter(isAsyncPropDeclaration)
-    .map(p => {
-      let result = "";
-      const declaredType = p.pd.type!.getText();
-      console.log("********* declaredType : ", declaredType);
-      console.log(
-        "********* typeNodeToType ",
-        typeChecker.typeToString(typeChecker.getTypeFromTypeNode(p.pd.type!))
-      );
-      if (declaredType.startsWith(AsyncTypes.PROMISE)) {
-        result = `{name:"${p.pd.name}",group:"${group}", promise: () => ${p.typeStr} }`;
-      } else if (isFetchType(declaredType)) {
-        result = `{name:"${
-          p.pd.name
-        }",group:"${group}", fetch: ${generateFetchActionType(p)}  }`;
-      }
-      return result;
-    });
-  console.log("********** async Actions : ", asyncActions);
   return generalMethods.join(" | ");
 };
 
@@ -281,9 +293,6 @@ export const getPropDeclsFromTypeMembers = (): LocalPropertyDecls[] => {
 };
 
 export function isAsyncPropDeclaration(input: LocalPropertyDecls) {
-  if (input.pd.name.getText() === "getBooks") {
-    console.log("****** isAsyncPropDeclaration:", input.typeStr);
-  }
   return input.typeStr.startsWith(T_STORE_ASYNC_TYPE);
 }
 
