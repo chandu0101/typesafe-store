@@ -1,4 +1,5 @@
 import * as ts from "typescript";
+import { LocalPropertyDecls, EAccess, MetaType, ProcessThisResult, MetaValue, Meta, GlobalInMemory } from "./types";
 
 //Constants
 
@@ -30,6 +31,10 @@ let memberTypes: { name: string; type: ts.Type }[] = null as any;
 
 let propDecls: LocalPropertyDecls[] = null as any;
 
+let currentProcessingFile: string = ""
+
+let globalMeta: Map<string, GlobalInMemory> = new Map()
+
 let arrayMutableMethods = [
   "push",
   "pop",
@@ -41,13 +46,12 @@ let arrayMutableMethods = [
   "unshift"
 ];
 
-export function isFetchType(tpe: string) {
-  return (
-    tpe.startsWith(AsyncTypes.FETCH) ||
-    tpe.startsWith(AsyncTypes.FETCH_POST) ||
-    tpe.startsWith(AsyncTypes.FETCH_PATCH) ||
-    tpe.startsWith(AsyncTypes.FETCH_DELETE)
-  );
+
+export function setCurrentProcessingFile(file: string) {
+  currentProcessingFile = file
+  if (!globalMeta.get(file)) {
+    globalMeta.set(file, {})
+  }
 }
 
 export function setWatchCompilerHost(p: typeof wcp) {
@@ -77,6 +81,7 @@ export function cleanUpGloabals() {
   members = null as any;
   memberTypes = null as any;
   propDecls = null as any;
+  currentProcessingFile = ""
 }
 
 export const getStateType = () => {
@@ -101,30 +106,33 @@ export const lastElementOfArray = <T>(a: T[]) => {
 export function generateFetchActionType(lpd: LocalPropertyDecls): string {
   console.log("generateFetchActionType Input: ", lpd.typeStr);
   const tpe = lpd.typeStr;
-  const metaIndex = lpd.typeStr.indexOf("_meta")
-  const metaTypeRaw = tpe.substring(metaIndex).replace("_meta?:", "");
+  const metaIndex = lpd.typeStr.indexOf("_fmeta")
+  const metaTypeRaw = tpe.substring(metaIndex).replace("_fmeta?:", "");
   const lastOrIndex = metaTypeRaw.lastIndexOf("|");
   const result = metaTypeRaw.substr(0, lastOrIndex);
   console.log("generateFetchActionType Output: ", result);
   return result;
 }
 
+/**
+ *  All async actions of a class
+ */
 export const getAsyncActionType = () => {
   const group = getTypeName();
   return propDecls
     .filter(isAsyncPropDeclaration)
     .map(p => {
-      let result = "";
+      let result = "undefined";
       const declaredType = p.pd.type!.getText();
       console.log(
         "Async TypeStr : ", p.typeStr,
-        "type : ", p.type
       );
+      const tpe = p.typeStr
       if (declaredType.startsWith(AsyncTypes.PROMISE)) {
         result = `{name:"${p.pd.name}",group:"${group}", promise: () => ${p.typeStr} }`;
-      } else if (isFetchType(declaredType)) {
+      } else if (tpe.includes("_fmeta")) {
         result = `{name:"${
-          p.pd.name
+          p.pd.name.getText()
           }",group:"${group}", fetch: ${generateFetchActionType(p)}  }`;
       }
       return result;
@@ -265,11 +273,6 @@ export const isPropertyDecl = (input: ts.ClassElement) => {
   return ts.isPropertyDeclaration(input);
 };
 
-export type LocalPropertyDecls = {
-  pd: ts.PropertyDeclaration;
-  type: ts.Type;
-  typeStr: string;
-};
 
 export const getPropDeclsFromTypeMembers = (): LocalPropertyDecls[] => {
   return members.filter(ts.isPropertyDeclaration).map(m => {
@@ -374,29 +377,8 @@ export function replaceThisIdentifier(
   }
 }
 
-export const enum MetaType {
-  OBJECT,
-  ARRAY,
-  UNKNOWN,
-  SET,
-  MAP
-}
 
-type Meta = {
-  isOptional?: boolean;
-  type: MetaType;
-  access?: EAccess[];
-};
 
-export type EAccess = {
-  name: string;
-  type: MetaType;
-  exp: ts.Expression;
-  isOptional?: boolean;
-};
-
-type MetaValue = { name: string; meta: Meta };
-export type ProcessThisResult = { g: string; v: string; values: MetaValue[] };
 
 function typeOfArray(input: string) {
   return input.charCodeAt(0);

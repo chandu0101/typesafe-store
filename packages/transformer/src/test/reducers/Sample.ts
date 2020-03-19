@@ -6,7 +6,7 @@ type GetBooks = Fetch<{ path: "books" }, string[]>;
 class Sample {
   name = "First";
   count = 1;
-  person = { name: "P121", age: 10 };
+  person = { name: "P12", age: 10 };
   books: Book[] = [];
   optionalTodos: (Todo | undefined)[] = [];
   config: {

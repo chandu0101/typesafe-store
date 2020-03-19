@@ -13,9 +13,13 @@ const formatHost: ts.FormatDiagnosticsHost = {
 
 let filesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
 let initialFiles: string[] = []
-let reducersFolderPath = "/test/reducers"
+export const REDUCERS_FOLDER_PATH = "/test/reducers"
 let reducersGeneratedFolderPath = "/test/reducers/generated"
 let program: ts.Program = null as any
+
+export function getBaseReducersPath() {
+    return REDUCERS_FOLDER_PATH;
+}
 
 function watchMain() {
     const configPath = ts.findConfigFile(
@@ -146,7 +150,7 @@ function processFiles(diagnostic: ts.Diagnostic) {
 }
 
 function handleFileChange(f: string, e: ts.FileWatcherEventKind) {
-    if (f.includes(reducersFolderPath) && !f.includes(reducersGeneratedFolderPath)) {
+    if (f.includes(REDUCERS_FOLDER_PATH) && !f.includes(reducersGeneratedFolderPath)) {
         if (e == ts.FileWatcherEventKind.Deleted) {
             //handle deleted files
         } else {

@@ -1,5 +1,10 @@
 import { DeepReadonly } from "ts-essentials";
 
+
+//constants 
+
+
+
 export type GetActionTypes<T, G extends string> = {
   [K in keyof T]: T[K] extends () => any
   ? { name: K; group: G; payload?: undefined }
@@ -31,16 +36,19 @@ export type Reducer<S extends any, A extends Action> = (
  *  g : group name reducer belongs to
  *  ds: default state of reducer
  *  m : meta info of reducer
+ *  aa: async action type
  */
 export type ReducerGroup<
   S extends any,
   A extends Action,
-  G extends string
+  G extends string,
+  AA,
   > = Readonly<{
     r: Reducer<S, A>;
     g: G;
     ds: S;
     m: RMeta;
+    aa?: AA
   }>;
 
 /**
@@ -60,19 +68,24 @@ export type Json =
   | { [property: string]: Json }
   | Json[];
 
-type FetchVariants = "GET" | "POST" | "PATCH" | "DELETE" | "PUT"
 
-export type FetchAsyncData<D, U, B, FT extends FetchVariants> = Readonly<{
+export const enum FetchVariants {
+  GET = "GET",
+  POST = "POST",
+  PATCH = "PATCH",
+  DELETE = "DELETE",
+  PUT = "PUT"
+}
+
+// type FetchVariants = "GET" | "POST" | "PATCH" | "DELETE" | "PUT"
+
+export type FetchAsyncData<D, U, B, FV extends FetchVariants> = Readonly<{
   loading?: boolean;
   error?: Error;
   data?: D;
-  _fmeta?: { type: FT, url: U, body: B }
+  _fmeta?: { type: FV, url: U, body: B }
 }>;
 
-
-enum FetchTypes {
-  GET = "GET"
-}
 
 /**
  *
@@ -103,7 +116,7 @@ export type FUrl = {
 export type Fetch<
   U extends FUrl,
   R extends Record<string, any>,
-  > = FetchAsyncData<R, U, {}>;
+  > = FetchAsyncData<R, U, {}, FetchVariants.GET>;
 
 /**
  *  U: url string static/dynamic
@@ -114,7 +127,7 @@ export type FetchPost<
   U extends FUrl,
   B extends Json,
   R extends Record<string, any>,
-  > = FetchAsyncData<R, U, B>;
+  > = FetchAsyncData<R, U, B, FetchVariants.POST>;
 
 /**
  *  U: url string static/dynamic
@@ -125,7 +138,7 @@ export type FetchPut<
   U extends FUrl,
   B extends Json,
   R extends Record<string, any>
-  > = FetchAsyncData<R, U, B>;
+  > = FetchAsyncData<R, U, B, FetchVariants.PUT>;
 
 /**
  *  U: url string static/dynamic
@@ -137,7 +150,7 @@ export type FetchPatch<
   U extends FUrl,
   B extends Json,
   R extends Record<string, any>,
-  > = FetchAsyncData<R, U, B>;
+  > = FetchAsyncData<R, U, B, FetchVariants.PATCH>;
 
 /**
  *  U: url string static/dynamic
@@ -148,7 +161,7 @@ export type FetchDelete<
   U extends FUrl,
   B extends Json,
   R extends Record<string, any>
-  > = FetchAsyncData<R, U, B>;
+  > = FetchAsyncData<R, U, B, FetchVariants.DELETE>;
 
 const sample = (input: { a: number }[]) => {
   return input.length > 0 ? { new: input.length } : { new: 0 };
@@ -168,7 +181,8 @@ export function getReducerGroup<T, G extends string>(
 ): ReducerGroup<
   DeepReadonly<NonFunctionProperties<T>>,
   GetActionTypes<T, G>,
-  G
+  G,
+  any
 > {
   throw new Error(
     "Looks like you didn't configured reducer-transformer in your tsconfig"

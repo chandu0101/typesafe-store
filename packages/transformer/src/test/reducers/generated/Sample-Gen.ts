@@ -1,6 +1,6 @@
 
-     // this file is auto generated on 2020-03-19T05:58:32.899Z, don't modify it
-     import { ReducerGroup } from "@typesafe-store/reducer"
+     // this file is auto generated on 2020-03-19T21:03:37.050Z, don't modify it
+     import { ReducerGroup,FetchVariants } from "@typesafe-store/reducer"
      import { Fetch } from "@typesafe-store/reducer";
 type Book = {
     name: string;
@@ -11,15 +11,17 @@ type Todo = {
     completed?: boolean;
     text: string;
 };
-type GetBooks = Fetch<"books", string[]>;
+type GetBooks = Fetch<{
+    path: "books";
+}, string[]>;
 
-         export type SampleState = {name:string,count:number,person:{ name: string; age: number; },books:Book[],optionalTodos:(Todo | undefined)[],config:{ count?: number | undefined; status?: string | undefined; obj1?: { one: number; obj1c?: { value: string; } | undefined; } | undefined; obj2?: { two: number; obj2a?: { name: string; obj2ao?: { value: string; } | undefined; }[] | undefined; } | undefined; arr1?: string[] | undefined; arr2?: { name: string; }[][] | undefined; arr3?: (({ name: string; } | undefined)[] | undefined)[] | undefined; },getBooks:Readonly<{ loading?: boolean | undefined; error?: Error | undefined; data?: string[] | undefined; _meta?: { url: "books"; body: {}; } | undefined; }>,getTwoBooks:Readonly<{ loading?: boolean | undefined; error?: Error | undefined; data?: Book[] | undefined; _meta?: { url: { uri: ""; qParams: { limit: 2; }; }; body: {}; } | undefined; }>}
+         export type SampleState = {name:string,count:number,person:{ name: string; age: number; },books:Book[],optionalTodos:(Todo | undefined)[],config:{ count?: number | undefined; status?: string | undefined; obj1?: { one: number; obj1c?: { value: string; } | undefined; } | undefined; obj2?: { two: number; obj2a?: { name: string; obj2ao?: { value: string; } | undefined; }[] | undefined; } | undefined; arr1?: string[] | undefined; arr2?: { name: string; }[][] | undefined; arr3?: (({ name: string; } | undefined)[] | undefined)[] | undefined; },getBooks:Readonly<{ loading?: boolean | undefined; error?: Error | undefined; data?: string[] | undefined; _fmeta?: { type: FetchVariants.GET; url: { path: "books"; }; body: {}; } | undefined; }>,getTwoBooks:Readonly<{ loading?: boolean | undefined; error?: Error | undefined; data?: Book[] | undefined; _fmeta?: { type: FetchVariants.GET; url: { path: ""; queryParams: { limit: 2; }; }; body: {}; } | undefined; }>}
          
          export type SampleAction = {name :"changeName",group:"Sample",payload:string} | {name :"increment",group:"Sample"} | {name :"changePersonName",group:"Sample",payload:string} | {name :"changePersonAge",group:"Sample",payload:number} | {name :"addBooks",group:"Sample",payload:Book[]} | {name :"removeLastBook",group:"Sample"} | {name :"removeFirstBook",group:"Sample"} | {name :"replaceBooks",group:"Sample",payload:Book[]} | {name :"fillBookAt0",group:"Sample",payload:Book} | {name :"modifyBookAt0",group:"Sample"} | {name :"modifyBookAtIndex",group:"Sample",payload:number} | {name :"chnageNameAndCount",group:"Sample",payload:{name: string, count: number}} | {name :"changeConfigCount",group:"Sample",payload:number} | {name :"modifyConfigObj1",group:"Sample"} | {name :"setConfigObj1",group:"Sample",payload:{ one: number; obj1c?: { value: string; } | undefined; } | undefined} | {name :"setConfigObj1C",group:"Sample",payload:string} | {name :"setConfigObj2",group:"Sample",payload:{ two: number; obj2a?: { name: string; obj2ao?: { value: string; } | undefined; }[] | undefined; } | undefined} | {name :"setConfigObj2a",group:"Sample",payload:string} | {name :"setConfigArr2",group:"Sample",payload:{ name: string; }[][] | undefined} | {name :"addTodo",group:"Sample",payload:Todo} | {name :"completeFirstTodo",group:"Sample"} | {name :"completeTodoAtIndex",group:"Sample",payload:number}
 
-        //  export type SampleAsyncAction =  | {name:"[object Object]",group:"Sample", fetch:   }
+         export type SampleAsyncAction = {name:"getBooks",group:"Sample", fetch:  { type: FetchVariants.GET; url: { path: "books"; }; body: {}; }   } | {name:"getTwoBooks",group:"Sample", fetch:  { type: FetchVariants.GET; url: { path: ""; queryParams: { limit: 2; }; }; body: {}; }   }
 
-         export const SampleReducerGroup: ReducerGroup<SampleState,SampleAction,"Sample"> = { r: 
+         export const SampleReducerGroup: ReducerGroup<SampleState,SampleAction,"Sample",SampleAsyncAction> = { r: 
       (state:SampleState,action:SampleAction) => {
          const t = action.name
          switch(t) {
@@ -117,7 +119,7 @@ case "completeTodoAtIndex" : {
 
          }
       }
-    ,g:"Sample",ds:{name:"First",count:1,person:{ name: "P121", age: 10 },books:[],optionalTodos:[],config:{},getBooks:{},getTwoBooks:{}},m:{}}
+    ,g:"Sample",ds:{name:"First",count:1,person:{ name: "P12", age: 10 },books:[],optionalTodos:[],config:{},getBooks:{},getTwoBooks:{}},m:{},aa:undefined}
 
         
 

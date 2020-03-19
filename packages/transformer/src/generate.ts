@@ -5,17 +5,15 @@ import {
   getTypeName,
   isArrayMutatableAction,
   cleanUpGloabals,
-  ProcessThisResult,
   processThisStatement,
   setClassDeclaration,
   getStateType,
   getActionType,
   lastElementOfArray,
-  MetaType,
-  LocalPropertyDecls,
   isAsyncPropDeclaration,
   getAsyncActionType
 } from "./helpers";
+import { ProcessThisResult, MetaType, LocalPropertyDecls } from "./types";
 
 //constants
 
@@ -35,9 +33,9 @@ export const createReducerFunction = (cd: ts.ClassDeclaration) => {
          
          export type ${group}Action = ${getActionType()}
 
-        //  export type ${group}AsyncAction = ${getAsyncActionType()}
+         export type ${group}AsyncAction = ${getAsyncActionType()}
 
-         export const ${group}ReducerGroup: ReducerGroup<${group}State,${group}Action,"${group}"> = { r: ${f},g:"${group}",ds:${defaultState},m:{}}
+         export const ${group}ReducerGroup: ReducerGroup<${group}State,${group}Action,"${group}",${group}AsyncAction> = { r: ${f},g:"${group}",ds:${defaultState},m:{},aa:undefined}
 
         `
   );

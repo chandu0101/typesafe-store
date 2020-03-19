@@ -31,7 +31,7 @@ function transformFile(file: string) {
   const newSf = ts.transform(sf, [reducerTransformer]).transformed[0];
   const content = `
      // this file is auto generated on ${new Date().toISOString()}, don't modify it
-     import { ReducerGroup } from "@typesafe-store/reducer"
+     import { ReducerGroup,FetchVariants } from "@typesafe-store/reducer"
      ${printer.printFile(newSf)}
     `;
   const outFile = file
