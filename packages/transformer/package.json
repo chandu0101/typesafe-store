@@ -32,7 +32,7 @@
     "start": "ts-node src/index.ts"
   },
   "dependencies": {
-    "@typesafe-store/reducer": "file:///Users/chandu0101/Desktop/kode/programming/typescript_projects/typesafe-store/packages/reducer",
+    "@typesafe-store/reducer": "0.1.0",
     "tsutils": "^3.17.1"
   }
 }

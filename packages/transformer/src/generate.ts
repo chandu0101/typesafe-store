@@ -112,6 +112,9 @@ const getSwitchClauses = () => {
       }
 
       const statements = m.body!.statements;
+
+      // const processStatements = ()
+
       statements.forEach(s => {
         const text = s.getText().trim();
         if (ts.isExpressionStatement(s) && text.startsWith("this.")) {
@@ -422,8 +425,8 @@ const invalidateObject = ({
   const v =
     traversed.length > 0
       ? `${parent}.${traversed
-          .map(t => (t.access ? `${t.name}${t.access}` : t.name))
-          .join(".")}.${v1}`
+        .map(t => (t.access ? `${t.name}${t.access}` : t.name))
+        .join(".")}.${v1}`
       : `${parent}.${v1}`;
   const v1t = values.find(v => v.name === vv1)!;
   console.log("v:", v, "v1t:", v1t);

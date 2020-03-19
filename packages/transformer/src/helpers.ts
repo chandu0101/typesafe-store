@@ -125,15 +125,15 @@ export const getAsyncActionType = () => {
       let result = "";
       const declaredType = p.pd.type!.getText();
       console.log(
-        "target : ",
-        ((p.pd.type! as any) as ts.TypeReference).target.typeArguments
+        "Async TypeStr : ", p.typeStr,
+        "type : ", p.type
       );
       if (declaredType.startsWith(AsyncTypes.PROMISE)) {
         result = `{name:"${p.pd.name}",group:"${group}", promise: () => ${p.typeStr} }`;
       } else if (isFetchType(declaredType)) {
         result = `{name:"${
           p.pd.name
-        }",group:"${group}", fetch: ${generateFetchActionType(p)}  }`;
+          }",group:"${group}", fetch: ${generateFetchActionType(p)}  }`;
       }
       return result;
     })
@@ -410,7 +410,7 @@ function typeOfArray(input: string) {
   return input.charCodeAt(0);
 }
 
-function convertTypeTo() {}
+function convertTypeTo() { }
 
 function typeOfMultipleArray(input: EAccess[], name: string): EAccess[] {
   const t = getTypeForPropertyAccess(name.split(","));
@@ -478,8 +478,8 @@ export function processThisStatement(
         const t = isArray
           ? MetaType.ARRAY
           : isObject
-          ? MetaType.OBJECT
-          : MetaType.UNKNOWN;
+            ? MetaType.OBJECT
+            : MetaType.UNKNOWN;
         values.push({ name: parent, meta: { ...propIdentifier, type: t } });
         const result = { g: parent, v, values };
         console.log("processThisStatement Result :", result);
@@ -625,7 +625,7 @@ export function groupBy<T, K extends keyof T>(
   property: K,
   value: K | undefined
 ) {
-  return objectArray.reduce(function(acc: Map<T[K], (T | T[K])[]>, obj) {
+  return objectArray.reduce(function (acc: Map<T[K], (T | T[K])[]>, obj) {
     var key = obj[property];
     if (!acc.has(key)) {
       acc.set(key, []);
@@ -643,7 +643,7 @@ export function groupByValue<T extends { value: any }>(
   objectArray: T[],
   property: keyof T
 ): Record<string, string[]> {
-  return objectArray.reduce(function(acc: any, obj) {
+  return objectArray.reduce(function (acc: any, obj) {
     var key = obj[property];
     if (!acc[key]) {
       acc[key] = [];
