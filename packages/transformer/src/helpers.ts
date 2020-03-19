@@ -92,29 +92,21 @@ export const lastElementOfArray = <T>(a: T[]) => {
   return a[a.length - 1];
 };
 
+
+
 /**
- *
- * @param tpe  fetch type Fetch | FetchPost | FetchDelete | FetchPut | FetchPatch
- * @param tpeStr
- * @returns fetch Action Type
+ * 
+ * @param lpd async(Fetch) property declaration
  */
 export function generateFetchActionType(lpd: LocalPropertyDecls): string {
-  console.log(
-    "************** generateFetchActionType : ",
-    "tpeStr: ",
-    lpd.pd.type!.getText(),
-    lpd.pd.type!.kind,
-    ((lpd.pd.type! as any) as ts.TypeReference).typeArguments,
-    isTypeReference(lpd.type)
-  );
-  //   if (isTypeReference(lpd.pd.type! as any)) {
-  console.log(
-    "target : ",
-    ((lpd.pd.type! as any) as ts.TypeReference).target.typeArguments
-  );
-  //   }
-
-  return "";
+  console.log("generateFetchActionType Input: ", lpd.typeStr);
+  const tpe = lpd.typeStr;
+  const metaIndex = lpd.typeStr.indexOf("_meta")
+  const metaTypeRaw = tpe.substring(metaIndex).replace("_meta?:", "");
+  const lastOrIndex = metaTypeRaw.lastIndexOf("|");
+  const result = metaTypeRaw.substr(0, lastOrIndex);
+  console.log("generateFetchActionType Output: ", result);
+  return result;
 }
 
 export const getAsyncActionType = () => {

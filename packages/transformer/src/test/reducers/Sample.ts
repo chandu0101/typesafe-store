@@ -2,11 +2,11 @@ import { Fetch } from "@typesafe-store/reducer";
 
 type Book = { name: string; year: number };
 type Todo = { id: string; completed?: boolean; text: string };
-type GetBooks = Fetch<"books", string[]>;
+type GetBooks = Fetch<{ path: "books" }, string[]>;
 class Sample {
   name = "First";
   count = 1;
-  person = { name: "P12", age: 10 };
+  person = { name: "P121", age: 10 };
   books: Book[] = [];
   optionalTodos: (Todo | undefined)[] = [];
   config: {
@@ -23,6 +23,8 @@ class Sample {
   } = {};
 
   getBooks: GetBooks = {};
+
+  getTwoBooks: Fetch<{ path: "", queryParams: { limit: 2 } }, Book[]> = {}
 
   changeName(name: string) {
     this.name = name;

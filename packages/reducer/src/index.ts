@@ -60,12 +60,19 @@ export type Json =
   | { [property: string]: Json }
   | Json[];
 
-export type AsyncData<D, U, B> = Readonly<{
+type FetchVariants = "GET" | "POST" | "PATCH" | "DELETE" | "PUT"
+
+export type FetchAsyncData<D, U, B, FT extends FetchVariants> = Readonly<{
   loading?: boolean;
   error?: Error;
   data?: D;
-  __meta?: { url: U, body: B }
+  _fmeta?: { type: FT, url: U, body: B }
 }>;
+
+
+enum FetchTypes {
+  GET = "GET"
+}
 
 /**
  *
@@ -78,10 +85,15 @@ export type FetchRequest<B> = {
 
 export type Transform<T, D> = (input: T) => D;
 
-export type DynamicURL = {
-  uri: string;
-  params?: (string | number)[];
-  qParams?: Record<string, string | number>;
+/**
+ * path  static path of API (Example : "books", "updateBooks")
+ *  dynamicPath dynamic part of API (Example : "bookId/update" = dynamicPath:[string// bookId,"update"])
+ *  queryParams  query params of url (Example : "books?limit=10" = queryParams:{limit:number})
+ */
+export type FUrl = {
+  path: string,
+  dynamicPath?: (string | number)[],
+  queryParams?: Record<string, string | number>;
 };
 
 /**
@@ -89,9 +101,9 @@ export type DynamicURL = {
  *  R: Result of fetch API
  */
 export type Fetch<
-  U extends string | DynamicURL,
+  U extends FUrl,
   R extends Record<string, any>,
-  > = AsyncData<R, U, {}>;
+  > = FetchAsyncData<R, U, {}>;
 
 /**
  *  U: url string static/dynamic
@@ -99,10 +111,10 @@ export type Fetch<
  *  R:  Result of fetch API
  */
 export type FetchPost<
-  U extends string | DynamicURL,
+  U extends FUrl,
   B extends Json,
   R extends Record<string, any>,
-  > = AsyncData<R, U, B>;
+  > = FetchAsyncData<R, U, B>;
 
 /**
  *  U: url string static/dynamic
@@ -110,10 +122,10 @@ export type FetchPost<
  *  R:  Result of fetch API
  */
 export type FetchPut<
-  U extends string | DynamicURL,
+  U extends FUrl,
   B extends Json,
   R extends Record<string, any>
-  > = AsyncData<R, U, B>;
+  > = FetchAsyncData<R, U, B>;
 
 /**
  *  U: url string static/dynamic
@@ -122,10 +134,10 @@ export type FetchPut<
  *  T: Transform function, provide it if you want to transform Result of fetch api into another shape
  */
 export type FetchPatch<
-  U extends string | DynamicURL,
+  U extends FUrl,
   B extends Json,
   R extends Record<string, any>,
-  > = AsyncData<R, U, B>;
+  > = FetchAsyncData<R, U, B>;
 
 /**
  *  U: url string static/dynamic
@@ -133,21 +145,21 @@ export type FetchPatch<
  *  R:  Result of fetch API
  */
 export type FetchDelete<
-  U extends string | DynamicURL,
+  U extends FUrl,
   B extends Json,
   R extends Record<string, any>
-  > = AsyncData<R, U, B>;
+  > = FetchAsyncData<R, U, B>;
 
 const sample = (input: { a: number }[]) => {
   return input.length > 0 ? { new: input.length } : { new: 0 };
 };
 
 const s: Fetch<
-  { uri: ""; params: ["dude", number]; qParams: {} },
+  { path: ""; dynamicPath: ["dude", number]; qParams: {} },
   []
 > = {};
 
-const s1: FetchPost<"", { age: number }, []> = {};
+const s1: FetchPost<{ path: "" }, { age: number }, []> = {};
 
 // export declare function getReducer<T, G extends string>(typeName?: string):
 
