@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as ts from "typescript";
 import { transformFiles } from "./util";
 import { setWatchCompilerHost, setProgram } from "./helpers";
+import { TypeSafeStoreConfig } from "./types";
 
 
 const formatHost: ts.FormatDiagnosticsHost = {
@@ -17,8 +18,24 @@ export const REDUCERS_FOLDER_PATH = "/test/reducers"
 let reducersGeneratedFolderPath = "/test/reducers/generated"
 let program: ts.Program = null as any
 
-export function getBaseReducersPath() {
-    return REDUCERS_FOLDER_PATH;
+let typeSafeStoreConfig: TypeSafeStoreConfig = null as any
+
+export function getTypesSafeStoreConfig() {
+    return typeSafeStoreConfig
+}
+
+function isValidConfig(obj: Record<string, string>): [boolean, string] {
+    let result: [boolean, string] = [true, ""]
+    if (!obj["storePath"]) {
+        result = [false, "you should provide a valid storePath "]
+    } else {
+        const storePath = obj["storePath"]
+        if (!fs.existsSync(storePath)) {
+            result = [false, "you should provide a valid storePath "]
+        }
+    }
+
+    return result;
 }
 
 function watchMain() {
@@ -31,7 +48,19 @@ function watchMain() {
         throw new Error("Could not find a valid 'tsconfig.json'.");
     }
 
-    console.log("Config Pah : ", configPath);
+    console.log("Config Path : ", configPath);
+
+    const tsConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"))
+
+    if (!tsConfig[TYPESAFE_STORE_CONFIG_KEY]) {
+        throw new Error("You didn't provided valid typesafe-store config ,please follow the documentation link : TODO ")
+    }
+    const [validConfig, message] = isValidConfig(tsConfig[TYPESAFE_STORE_CONFIG_KEY])
+    if (!validConfig) {
+        throw new Error(`You didn't provided valid typesafe-store config : ${message},please follow the documentation link : TODO `)
+    }
+
+    typeSafeStoreConfig = tsConfig[TYPESAFE_STORE_CONFIG_KEY]
 
     // TypeScript can use several different program creation "strategies":
     //  * ts.createEmitAndSemanticDiagnosticsBuilderProgram,
@@ -50,7 +79,6 @@ function watchMain() {
     const createProgram = ts.createSemanticDiagnosticsBuilderProgram;
 
 
-    const path = "/Users/chandu0101/Desktop/kode/programming/typescript_projects/typesafe-store/packages/transformer/src/test/reducers/*"
     // Note that there is another overload for `createWatchCompilerHost` that takes
     // a set of root files.
     const host = ts.createWatchCompilerHost(

@@ -1,21 +1,6 @@
 import * as ts from "typescript";
-import { LocalPropertyDecls, EAccess, MetaType, ProcessThisResult, MetaValue, Meta, GlobalInMemory } from "./types";
+import { LocalPropertyDecls, EAccess, MetaType, ProcessThisResult, MetaValue, Meta, GlobalInMemory, AsyncTypes } from "./types";
 
-//Constants
-
-const T_STORE_ASYNC_TYPE =
-  "Readonly<{ loading?: boolean | undefined; error?: Error | undefined; data?: ";
-enum AsyncTypes {
-  PROMISE = "Promise",
-  FETCH = "Fetch",
-  FETCH_POST = "FetchPost",
-  FETCH_PUT = "FetchPut",
-  FETCH_DELETE = "FetchDelete",
-  FETCH_PATCH = "FetchPatch",
-  GRAPHQL_QUERY = "GraphqlQuery",
-  GRAPHQL_MUTATION = "GraphqlMutation",
-  GRAPHQL_SUBSCRIPTION = "GraphqlSubscription"
-}
 
 let wcp: ts.WatchOfConfigFile<ts.SemanticDiagnosticsBuilderProgram> = null as any;
 
@@ -50,7 +35,10 @@ let arrayMutableMethods = [
 export function setCurrentProcessingFile(file: string) {
   currentProcessingFile = file
   if (!globalMeta.get(file)) {
-    globalMeta.set(file, {})
+    // const baseReducersPath = getBaseReducersPath()
+
+
+    // globalMeta.set(file, {fullPath:file,path:})
   }
 }
 

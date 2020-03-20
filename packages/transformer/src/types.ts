@@ -40,3 +40,39 @@ export type GlobalInMemory = {
     group: string,
     asyncActions: { name: string, type: string }[]
 }
+
+
+export type CallStatement = { group: string; exp: string; args: string };
+
+export type AssignStatement = {
+    group: string;
+    exprLeft: string;
+    exprRight: string;
+    op: string;
+};
+
+export type GS = CallStatement | AssignStatement | string;
+
+export type NewValue = { name: string; op: string; value: string };
+
+
+export type TypeSafeStoreConfig = {
+    storePath: string,
+    framework: "React" | "Vanilla" | "LitHTML" | "Angular" | "Vue"
+    | "Ionic" | "Svelte" | "Haunted" | "Preact"
+    | "Stencil"
+
+}
+
+
+export enum AsyncTypes {
+    PROMISE = "Promise",
+    FETCH = "Fetch",
+    FETCH_POST = "FetchPost",
+    FETCH_PUT = "FetchPut",
+    FETCH_DELETE = "FetchDelete",
+    FETCH_PATCH = "FetchPatch",
+    GRAPHQL_QUERY = "GraphqlQuery",
+    GRAPHQL_MUTATION = "GraphqlMutation",
+    GRAPHQL_SUBSCRIPTION = "GraphqlSubscription"
+}

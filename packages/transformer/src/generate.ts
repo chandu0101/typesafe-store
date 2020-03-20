@@ -13,7 +13,7 @@ import {
   isAsyncPropDeclaration,
   getAsyncActionType
 } from "./helpers";
-import { ProcessThisResult, MetaType, LocalPropertyDecls } from "./types";
+import { ProcessThisResult, MetaType, LocalPropertyDecls, NewValue, GS } from "./types";
 
 //constants
 
@@ -43,15 +43,6 @@ export const createReducerFunction = (cd: ts.ClassDeclaration) => {
   return result;
 };
 
-type CallStatement = { group: string; exp: string; args: string };
-type AssignStatement = {
-  group: string;
-  exprLeft: string;
-  exprRight: string;
-  op: string;
-};
-type GS = CallStatement | AssignStatement | string;
-type NewValue = { name: string; op: string; value: string };
 
 const getSwitchClauses = () => {
   const typeName = getTypeName();
