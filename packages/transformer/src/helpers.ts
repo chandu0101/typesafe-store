@@ -1,5 +1,6 @@
 import * as ts from "typescript";
 import { LocalPropertyDecls, EAccess, MetaType, ProcessThisResult, MetaValue, Meta, GlobalInMemory, AsyncTypes } from "./types";
+import { T_STORE_ASYNC_TYPE } from "./constants";
 
 
 let wcp: ts.WatchOfConfigFile<ts.SemanticDiagnosticsBuilderProgram> = null as any;

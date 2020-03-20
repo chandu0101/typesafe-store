@@ -2,7 +2,14 @@ import * as fs from "fs";
 import * as ts from "typescript";
 import { transformFiles } from "./util";
 import { setWatchCompilerHost, setProgram } from "./helpers";
-import { TypeSafeStoreConfig } from "./types";
+import { TypeSafeStoreConfig, SupportedFrameworks } from "./types";
+import { TYPESAFE_STORE_CONFIG_STORE_PATH_KEY, TYPESAFE_STORE_CONFIG_FRAMEWORK_KEY, TYPESAFE_STORE_CONFIG_KEY, REDUCERS_FOLDER, GENERATED_FOLDER } from "./constants";
+import { resolve, join } from "path";
+
+
+let filesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
+let initialFiles: string[] = []
+let config: TypeSafeStoreConfig = null as any
 
 
 const formatHost: ts.FormatDiagnosticsHost = {
@@ -12,26 +19,23 @@ const formatHost: ts.FormatDiagnosticsHost = {
 };
 
 
-let filesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
-let initialFiles: string[] = []
-export const REDUCERS_FOLDER_PATH = "/test/reducers"
-let reducersGeneratedFolderPath = "/test/reducers/generated"
-let program: ts.Program = null as any
-
-let typeSafeStoreConfig: TypeSafeStoreConfig = null as any
-
 export function getTypesSafeStoreConfig() {
-    return typeSafeStoreConfig
+    return config
 }
 
 function isValidConfig(obj: Record<string, string>): [boolean, string] {
     let result: [boolean, string] = [true, ""]
-    if (!obj["storePath"]) {
+    if (!obj[TYPESAFE_STORE_CONFIG_STORE_PATH_KEY]) {
         result = [false, "you should provide a valid storePath "]
     } else {
-        const storePath = obj["storePath"]
+        const storePath = obj[TYPESAFE_STORE_CONFIG_STORE_PATH_KEY]
         if (!fs.existsSync(storePath)) {
             result = [false, "you should provide a valid storePath "]
+        } else {
+            const framework = obj[TYPESAFE_STORE_CONFIG_FRAMEWORK_KEY]
+            if (!Object.entries(SupportedFrameworks).map(([key, value]) => value.toString()).includes(framework)) {
+                result = [false, `${framework} is not supported yet!, please file an issue if you want it.`]
+            }
         }
     }
 
@@ -50,7 +54,7 @@ function watchMain() {
 
     console.log("Config Path : ", configPath);
 
-    const tsConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"))
+    const tsConfig = ts.parseConfigFileTextToJson(configPath, fs.readFileSync(configPath, "utf-8")).config
 
     if (!tsConfig[TYPESAFE_STORE_CONFIG_KEY]) {
         throw new Error("You didn't provided valid typesafe-store config ,please follow the documentation link : TODO ")
@@ -60,7 +64,12 @@ function watchMain() {
         throw new Error(`You didn't provided valid typesafe-store config : ${message},please follow the documentation link : TODO `)
     }
 
-    typeSafeStoreConfig = tsConfig[TYPESAFE_STORE_CONFIG_KEY]
+    //populate config
+    config = tsConfig[TYPESAFE_STORE_CONFIG_KEY]
+    config.storePath = resolve(config.storePath)
+    config.reducersPath = join(config.storePath, REDUCERS_FOLDER)
+    //TODO create folder then assign    
+    config.reducersGeneratedPath = join(config.reducersGeneratedPath, GENERATED_FOLDER)
 
     // TypeScript can use several different program creation "strategies":
     //  * ts.createEmitAndSemanticDiagnosticsBuilderProgram,
@@ -86,7 +95,7 @@ function watchMain() {
         {},
         ts.sys,
         createProgram,
-        reportDiagnostic,
+        undefined, // Don't provide custom reporting ,just go with the default
         reportWatchStatusChanged
     );
 
@@ -117,8 +126,7 @@ function watchMain() {
 
     const origWatchFile = host.watchFile
     host.watchFile = (path, cb) => {
-        // console.log("Changed File : ", path, cb);
-        if (path.includes("test/reducers")) {
+        if (path.includes(config.reducersPath)) {
             initialFiles.push(path)
         }
         return origWatchFile(path, (f, e) => {
@@ -178,7 +186,7 @@ function processFiles(diagnostic: ts.Diagnostic) {
 }
 
 function handleFileChange(f: string, e: ts.FileWatcherEventKind) {
-    if (f.includes(REDUCERS_FOLDER_PATH) && !f.includes(reducersGeneratedFolderPath)) {
+    if (f.includes(config.reducersPath) && !f.includes(config.reducersGeneratedPath)) {
         if (e == ts.FileWatcherEventKind.Deleted) {
             //handle deleted files
         } else {

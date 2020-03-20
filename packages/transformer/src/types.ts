@@ -1,5 +1,6 @@
 
 import * as ts from "typescript";
+import { TYPESAFE_STORE_CONFIG_STORE_PATH_KEY, TYPESAFE_STORE_CONFIG_FRAMEWORK_KEY } from "./constants";
 
 export type LocalPropertyDecls = {
     pd: ts.PropertyDeclaration;
@@ -56,14 +57,31 @@ export type GS = CallStatement | AssignStatement | string;
 export type NewValue = { name: string; op: string; value: string };
 
 
-export type TypeSafeStoreConfig = {
-    storePath: string,
-    framework: "React" | "Vanilla" | "LitHTML" | "Angular" | "Vue"
-    | "Ionic" | "Svelte" | "Haunted" | "Preact"
-    | "Stencil"
 
+export type TypeSafeStoreConfig = {
+    [TYPESAFE_STORE_CONFIG_STORE_PATH_KEY]: string,
+    [TYPESAFE_STORE_CONFIG_FRAMEWORK_KEY]: SupportedFrameworks,
+    reducersPath: string,
+    reducersGeneratedPath: string
 }
 
+
+
+
+// enums 
+
+export enum SupportedFrameworks {
+    REACT = "react",
+    VANILLA = "vanilla",
+    LITHTML = "lit-html",
+    ANGULAR = "angular",
+    VUE = "vue",
+    IONIC = "ionic",
+    SVELTE = "svelte",
+    HAUNTED = "haunted",
+    PREACT = "preact",
+    STENCIL = "stencil"
+}
 
 export enum AsyncTypes {
     PROMISE = "Promise",

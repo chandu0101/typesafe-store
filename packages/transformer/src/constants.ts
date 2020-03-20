@@ -3,15 +3,25 @@
 /**
  *  
  */
-const T_STORE_ASYNC_TYPE =
+export const T_STORE_ASYNC_TYPE =
     "Readonly<{ loading?: boolean | undefined; error?: Error | undefined; data?: ";
 
 
-const TYPESAFE_STORE_CONFIG_KEY = "typesafe-store"
+//Keys
+export const TYPESAFE_STORE_CONFIG_KEY = "typesafe-store"
 
-const REDUCERS_FOLDER = "reducers"
+export const TYPESAFE_STORE_CONFIG_STORE_PATH_KEY = "storePath"
 
-const GENERATED_FOLDER = "generated"
+export const TYPESAFE_STORE_CONFIG_FRAMEWORK_KEY = "framework"
 
-const SELECTORS_FOLDER = "selectors"
+
+
+
+export const REDUCERS_FOLDER = "reducers"
+
+export const GENERATED_FOLDER = "generated"
+
+export const SELECTORS_FOLDER = "selectors"
+
+
 
