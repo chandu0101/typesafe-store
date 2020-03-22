@@ -1,6 +1,8 @@
 import * as ts from "typescript";
-import { LocalPropertyDecls, EAccess, MetaType, ProcessThisResult, MetaValue, Meta, GlobalInMemory, AsyncTypes } from "./types";
-import { T_STORE_ASYNC_TYPE } from "./constants";
+import * as fs from "fs";
+import { LocalPropertyDecls, EAccess, MetaType, ProcessThisResult, MetaValue, Meta, GlobalInMemory, AsyncTypes, TypeSafeStoreConfig, TypeSafeStoreConfigExtra } from "./types";
+import { T_STORE_ASYNC_TYPE, REDUCERS_FOLDER, GENERATED_FOLDER, STORE_TYPES_FOLDER, REST_API_TYPES_FOLDER, GRAPHQL_API_TYPES_FOLDER } from "./constants";
+import { resolve, join, dirname } from "path";
 
 
 let wcp: ts.WatchOfConfigFile<ts.SemanticDiagnosticsBuilderProgram> = null as any;
@@ -32,6 +34,8 @@ let arrayMutableMethods = [
   "unshift"
 ];
 
+let config: TypeSafeStoreConfigExtra = null as any
+
 
 export function setCurrentProcessingFile(file: string) {
   currentProcessingFile = file
@@ -45,6 +49,29 @@ export function setCurrentProcessingFile(file: string) {
 
 export function setWatchCompilerHost(p: typeof wcp) {
   wcp = p;
+}
+
+export function setTypeSafeStoreConfig(c: TypeSafeStoreConfig) {
+  config = {
+    ...c, reducersPath: "", reducersGeneratedPath: "",
+    typesPath: "",
+    restApiTypesPath: "",
+    graphqlApiTypesPath: ""
+  };
+  config.storePath = resolve(config.storePath)
+  config.reducersPath = join(config.storePath, REDUCERS_FOLDER)
+
+  config.reducersGeneratedPath = join(config.reducersPath, GENERATED_FOLDER)
+
+  config.typesPath = join(config.storePath, STORE_TYPES_FOLDER)
+
+  config.restApiTypesPath = join(config.typesPath, REST_API_TYPES_FOLDER)
+
+  config.graphqlApiTypesPath = join(config.typesPath, GRAPHQL_API_TYPES_FOLDER)
+}
+
+export function getTypeSafeStoreConfig() {
+  return config;
 }
 
 export function setProgram(p: ts.Program) {
@@ -614,4 +641,26 @@ export function groupByValue<T extends { value: any }>(
     acc[key].push(obj.value);
     return acc;
   }, {});
+}
+
+
+export function deleteGeneratedFile(sourcePath: string, ) {
+
+}
+
+export function getGeneratedFilePath(sourcePath: string) {
+  //  const 
+}
+
+/**
+ * 
+ * @param path 
+ * @param content 
+ */
+export function writeFile(path: string, content: string) {
+  const dir = dirname(path)
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir)
+  }
+  fs.writeFileSync(path, content)
 }

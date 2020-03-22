@@ -3,15 +3,16 @@ import { ReducerGroup, Action, RMeta } from "@typesafe-store/reducer"
 import compose from "./compose"
 
 
-type S<T extends Record<string, ReducerGroup<any, any, any>>> = {
-    [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G> ? S : never }
+type S<T extends Record<string, ReducerGroup<any, any, any, any>>> = {
+    [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? S : never }
 
-type S2<T extends Record<string, ReducerGroup<any, any, any>>> = {
-    [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G> ? S : never }
+type S2<T extends Record<string, ReducerGroup<any, any, any, any>>> = {
+    [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? S : never }
 
-type A<T> = { [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G> ? A : never }[keyof T]
+type A<T> = { [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? A : never }[keyof T]
 
-class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any>>> {
+
+export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, any>>> {
 
     private reducers: R
     private _state: S<R> = {} as any
@@ -113,7 +114,7 @@ export type Meta = Record<string, RMeta>
 
 export type MiddleWareInfo<S = any> = Readonly<{
     state: () => S,
-    meta: Record<string, ReducerGroup<any, any, any>>
+    meta: Record<string, ReducerGroup<any, any, any, any>>
 }>
 
 export type MiddleWare<S = any> = (info: MiddleWareInfo<S>) =>
@@ -125,8 +126,8 @@ export type MiddleWare<S = any> = (info: MiddleWareInfo<S>) =>
 //     ) => (action: Action) => any
 // }
 
-const g1: ReducerGroup<"", Readonly<{ name: "test", group: "Hello" }>, "Hello"> = { r: <A>(s: "", a: A) => "", g: "Hello", ds: "", m: 2 }
-const g2: ReducerGroup<4, Readonly<{ name: "test", group: "Hello2" }>, "Hello2"> = { r: <A>(s: 4, a: A) => 4, g: "Hello2", ds: 4, m: 2 }
+// const g1: ReducerGroup<"", Readonly<{ name: "test", group: "Hello" }>, "Hello", undefined> = { r: <A>(s: "", a: A) => "", g: "Hello", ds: "",aa:undefined }
+// const g2: ReducerGroup<4, Readonly<{ name: "test", group: "Hello2" }>, "Hello2", undefined> = { r: <A>(s: 4, a: A) => 4, g: "Hello2", ds: 4, }
 
 
 const s = { "Hello": "" }

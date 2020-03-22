@@ -4,6 +4,7 @@ import { promises as fs, writeFileSync, readFileSync } from "fs";
 import { performance } from "perf_hooks";
 import { createReducerFunction } from "./generate";
 import { getProgram } from "./helpers";
+import { GEN_SUFFIX } from "./constants";
 
 const reducerTransformer: ts.TransformerFactory<ts.SourceFile> = context => {
   const visit: ts.Visitor = node => {
@@ -36,7 +37,7 @@ function transformFile(file: string) {
     `;
   const outFile = file
     .replace("/reducers/", "/reducers/generated/")
-    .replace(".ts", "-gen.ts");
+    .replace(".ts", `${GEN_SUFFIX}.ts`);
   console.log("******* writing to out file : ", outFile);
   console.log("outFile : ", outFile);
   writeFileSync(outFile, content, {

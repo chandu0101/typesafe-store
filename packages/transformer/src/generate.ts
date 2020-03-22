@@ -14,49 +14,46 @@ import {
   getAsyncActionType
 } from "./helpers";
 import { ProcessThisResult, MetaType, LocalPropertyDecls, NewValue, GS } from "./types";
+import { TSTORE_TEMP_V } from "./constants";
 
 //constants
-
-const TSTORE_TEMP_V = "_tstore_v";
 
 export const createReducerFunction = (cd: ts.ClassDeclaration) => {
   setClassDeclaration(cd);
   const propDecls = getPropDeclsFromTypeMembers();
   const defaultState = getDefaultState(propDecls);
   const group = getTypeName();
-  const clauses = getSwitchClauses();
+  const caseClauses = getSwitchClauses();
+  const asyncActionType = getAsyncActionType()
+  let result = ts.createIdentifier("")
+  if (caseClauses.length === 0 && asyncActionType === "") { // If no async properties and methods then return empty node
+    result = ts.createIdentifier("//define some methods or async properties in class ")
+  } else {
+    const f = buildFunction({ caseClauses: caseClauses, group });
+    result = ts.createIdentifier(
+      `
+           export type ${group}State = ${getStateType()}
+           
+           export type ${group}Action = ${getActionType()}
+  
+           export type ${group}AsyncAction = ${asyncActionType}
+  
+           export const ${group}ReducerGroup: ReducerGroup<${group}State,${group}Action,"${group}",${group}AsyncAction> = { r: ${f},g:"${group}",ds:${defaultState},m:{},aa:undefined}
+  
+          `
+    );
+  }
 
-  const f = buildFunction({ caseClauses: clauses, group });
-  const result = ts.createIdentifier(
-    `
-         export type ${group}State = ${getStateType()}
-         
-         export type ${group}Action = ${getActionType()}
-
-         export type ${group}AsyncAction = ${getAsyncActionType()}
-
-         export const ${group}ReducerGroup: ReducerGroup<${group}State,${group}Action,"${group}",${group}AsyncAction> = { r: ${f},g:"${group}",ds:${defaultState},m:{},aa:undefined}
-
-        `
-  );
   cleanUpGloabals();
   return result;
 };
 
 
 const getSwitchClauses = () => {
-  const typeName = getTypeName();
 
   const methods = getMethodsFromTypeMembers();
-  const propDecls = getPropDeclsFromTypeMembers();
 
-  const asyncMethods: string[] = propDecls
-    .filter(isAsyncPropDeclaration)
-    .map(pd => {
-      return "";
-    });
-
-  const generalMethods = methods
+  return methods
     .filter(m => m.body && m.body.statements.length > 0)
     .map(m => {
       const name = m.name.getText();
@@ -240,7 +237,6 @@ const getSwitchClauses = () => {
                 return { ...state, ${propertyAssigments.join(",")} }
             }`;
     });
-  return generalMethods.concat(asyncMethods);
 };
 
 const invalidateObjectWithList2 = ({

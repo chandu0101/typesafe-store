@@ -1,15 +1,15 @@
 import * as fs from "fs";
 import * as ts from "typescript";
 import { transformFiles } from "./util";
-import { setWatchCompilerHost, setProgram } from "./helpers";
-import { TypeSafeStoreConfig, SupportedFrameworks } from "./types";
-import { TYPESAFE_STORE_CONFIG_STORE_PATH_KEY, TYPESAFE_STORE_CONFIG_FRAMEWORK_KEY, TYPESAFE_STORE_CONFIG_KEY, REDUCERS_FOLDER, GENERATED_FOLDER } from "./constants";
-import { resolve, join } from "path";
+import { setProgram, setTypeSafeStoreConfig, getTypeSafeStoreConfig } from "./helpers";
+import { typeSafeStoreConfigDecoder, TypeSafeStoreConfig, RestApiConfig } from "./types";
+import { TYPESAFE_STORE_CONFIG_KEY } from "./constants";
+import { resolve } from "path";
 
 
 let filesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
 let initialFiles: string[] = []
-let config: TypeSafeStoreConfig = null as any
+
 
 
 const formatHost: ts.FormatDiagnosticsHost = {
@@ -19,30 +19,52 @@ const formatHost: ts.FormatDiagnosticsHost = {
 };
 
 
-export function getTypesSafeStoreConfig() {
-    return config
-}
-
-function isValidConfig(obj: Record<string, string>): [boolean, string] {
+async function isValidRestAPisConfig(restApis?: RestApiConfig[]): Promise<[boolean, string]> {
     let result: [boolean, string] = [true, ""]
-    if (!obj[TYPESAFE_STORE_CONFIG_STORE_PATH_KEY]) {
-        result = [false, "you should provide a valid storePath "]
-    } else {
-        const storePath = obj[TYPESAFE_STORE_CONFIG_STORE_PATH_KEY]
-        if (!fs.existsSync(storePath)) {
-            result = [false, "you should provide a valid storePath "]
+    if (restApis && restApis.length > 0) {
+        const al = restApis.length
+        const sl = new Set(restApis.map(ra => ra.name)).values.length
+        if (al !== sl) {
+            result = [false, "restApis config names should be unique"]
         } else {
-            const framework = obj[TYPESAFE_STORE_CONFIG_FRAMEWORK_KEY]
-            if (!Object.entries(SupportedFrameworks).map(([key, value]) => value.toString()).includes(framework)) {
-                result = [false, `${framework} is not supported yet!, please file an issue if you want it.`]
+            const validFiles = restApis.filter(ra =>
+                fs.existsSync(ra.openApiSpec) && (ra.openApiSpec.endsWith(".json") || ra.openApiSpec.endsWith(".yaml"))).length
+            if (validFiles !== al) {
+                result = [false, "restApis config openApiSpec paths should be a valid .yaml or .json file"]
+            } else {
+
             }
         }
+    }
+    return result
+}
+
+
+async function isValidConfig(obj: Record<string, string>): Promise<[boolean, string]> {
+    let result: [boolean, string] = [true, ""]
+    try {
+        const validJson = typeSafeStoreConfigDecoder.run(obj)
+        if (!validJson.ok) {
+            result = [false, `not a valid config : ${validJson.error}`]
+        } else {
+            const config: TypeSafeStoreConfig = obj as any
+            if (!fs.lstatSync(resolve(config.storePath)).isDirectory()) {
+                result = [false, "you should provide a valid storePath folder"]
+            } else {
+                result = await isValidRestAPisConfig(config.restApis)
+                if (result[0]) {
+
+                }
+            }
+        }
+    } catch (error) {
+        result = [false, error]
     }
 
     return result;
 }
 
-function watchMain() {
+async function watchMain() {
     const configPath = ts.findConfigFile(
     /*searchPath*/ "./",
         ts.sys.fileExists,
@@ -59,17 +81,13 @@ function watchMain() {
     if (!tsConfig[TYPESAFE_STORE_CONFIG_KEY]) {
         throw new Error("You didn't provided valid typesafe-store config ,please follow the documentation link : TODO ")
     }
-    const [validConfig, message] = isValidConfig(tsConfig[TYPESAFE_STORE_CONFIG_KEY])
+    const [validConfig, message] = await isValidConfig(tsConfig[TYPESAFE_STORE_CONFIG_KEY])
     if (!validConfig) {
         throw new Error(`You didn't provided valid typesafe-store config : ${message},please follow the documentation link : TODO `)
     }
 
     //populate config
-    config = tsConfig[TYPESAFE_STORE_CONFIG_KEY]
-    config.storePath = resolve(config.storePath)
-    config.reducersPath = join(config.storePath, REDUCERS_FOLDER)
-    //TODO create folder then assign    
-    config.reducersGeneratedPath = join(config.reducersGeneratedPath, GENERATED_FOLDER)
+    setTypeSafeStoreConfig(tsConfig[TYPESAFE_STORE_CONFIG_KEY])
 
     // TypeScript can use several different program creation "strategies":
     //  * ts.createEmitAndSemanticDiagnosticsBuilderProgram,
@@ -119,14 +137,14 @@ function watchMain() {
 
     host.afterProgramCreate = program => {
         setProgram(program.getProgram())
-        console.log("** We finished making the program! **");
+        // console.log("** We finished making the program! **");
         origPostProgramCreate!(program);
     };
 
 
     const origWatchFile = host.watchFile
     host.watchFile = (path, cb) => {
-        if (path.includes(config.reducersPath)) {
+        if (path.includes(getTypeSafeStoreConfig().reducersPath)) {
             initialFiles.push(path)
         }
         return origWatchFile(path, (f, e) => {
@@ -186,9 +204,10 @@ function processFiles(diagnostic: ts.Diagnostic) {
 }
 
 function handleFileChange(f: string, e: ts.FileWatcherEventKind) {
-    if (f.includes(config.reducersPath) && !f.includes(config.reducersGeneratedPath)) {
+    if (f.includes(getTypeSafeStoreConfig().reducersPath) && !f.includes(getTypeSafeStoreConfig().reducersGeneratedPath)) {
         if (e == ts.FileWatcherEventKind.Deleted) {
             //handle deleted files
+
         } else {
             filesChanged.push({ path: f, event: e })
         }
