@@ -27,13 +27,8 @@ async function isValidRestAPisConfig(restApis?: RestApiConfig[]): Promise<[boole
         if (al !== sl) {
             result = [false, "restApis config names should be unique"]
         } else {
-            const validFiles = restApis.filter(ra =>
-                fs.existsSync(ra.openApiSpec) && (ra.openApiSpec.endsWith(".json") || ra.openApiSpec.endsWith(".yaml"))).length
-            if (validFiles !== al) {
-                result = [false, "restApis config openApiSpec paths should be a valid .yaml or .json file"]
-            } else {
 
-            }
+
         }
     }
     return result

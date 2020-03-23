@@ -1,6 +1,6 @@
 
 import * as ts from "typescript";
-import { Decoder, string, object, array, oneOf, constant, optional } from "@mojotech/json-type-validation"
+import { Decoder, string, object, array, oneOf, constant, optional, anyJson } from "@mojotech/json-type-validation"
 
 
 // enums 
@@ -30,6 +30,10 @@ export enum AsyncTypes {
     GRAPHQL_SUBSCRIPTION = "GraphqlSubscription"
 }
 
+export enum ContentType {
+    APPLICATION_JSON = "application/json",
+    APPLICATION_OCTET_STREAM = "application/octet-stream"
+}
 
 export type LocalPropertyDecls = {
     pd: ts.PropertyDeclaration;
@@ -86,16 +90,37 @@ export type GS = CallStatement | AssignStatement | string;
 export type NewValue = { name: string; op: string; value: string };
 
 /**
- *  name : name of your api
- *  openApiSpec: path to openApiSepc file 
+ *  path : http url path 
+ *  method : optional rest api method (GET | POST | PUT | ..), default value = GET
+ *  headers : optional http headers 
+ *  body : optional http body ,provide it if method is not GET
  */
-export type RestApiConfig = { name: string, openApiSpec: string }
+export type ConfigUrl = {
+    path: string, method?: string, headers?: Record<string, string>,
+    body?: Record<string, string>
+}
+
+/**
+ *  name : name of your api
+ *  file: path to openApiSepc file .json/.yaml   
+ *  url : url to download openApiSpec 
+ */
+export type RestApiConfig = {
+    name: string, file?: string,
+    url?: ConfigUrl
+}
+
+export type OpenApiSpecFormat = "yaml" | "json"
 
 /**
  *  name : name with which you want to write graphql queries example : gql` query allUsers{ id }` , shopify` query shoppingList{ price}`, github`query allRepos{ name }`
- *  schema : url or local path to graphql schema file.
+ *  file : path to local schema file 
+ *   url : url to get graphql schema 
  */
-export type GraphqlApiConfig = { name: string, schema: string }
+export type GraphqlApiConfig = {
+    name: string, file?: string,
+    url?: ConfigUrl
+}
 
 /**
  *  storepath : "folderPath" to store.
@@ -124,8 +149,26 @@ export const typeSafeStoreConfigDecoder: Decoder<TypeSafeStoreConfig> = object({
         constant(SupportedFrameworks.VUE),
         constant(SupportedFrameworks.PREACT),
     ),
-    restApis: optional(array(object({ name: string(), openApiSpec: string() }))),
-    graphqlApis: optional(array(object({ name: string(), schema: string() }))),
+    restApis: optional(array(object({
+        name: string(),
+        file: optional(string()),
+        url: optional(object({
+            path: string(),
+            method: optional(string()),
+            headers: optional(anyJson()),
+            body: optional(anyJson()),
+        }))
+    }))),
+    graphqlApis: optional(array(object({
+        name: string(),
+        file: optional(string()),
+        url: optional(object({
+            path: string(),
+            method: optional(string()),
+            headers: optional(anyJson()),
+            body: optional(anyJson()),
+        }))
+    }))),
 })
 
 export type TypeSafeStoreConfigExtra = {

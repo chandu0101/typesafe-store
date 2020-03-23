@@ -1,9 +1,9 @@
 import * as ts from "typescript";
 import * as fs from "fs";
-import { LocalPropertyDecls, EAccess, MetaType, ProcessThisResult, MetaValue, Meta, GlobalInMemory, AsyncTypes, TypeSafeStoreConfig, TypeSafeStoreConfigExtra } from "./types";
+import { LocalPropertyDecls, EAccess, MetaType, ProcessThisResult, MetaValue, Meta, GlobalInMemory, AsyncTypes, TypeSafeStoreConfig, TypeSafeStoreConfigExtra, ConfigUrl } from "./types";
 import { T_STORE_ASYNC_TYPE, REDUCERS_FOLDER, GENERATED_FOLDER, STORE_TYPES_FOLDER, REST_API_TYPES_FOLDER, GRAPHQL_API_TYPES_FOLDER } from "./constants";
 import { resolve, join, dirname } from "path";
-
+import fetch from "node-fetch";
 
 let wcp: ts.WatchOfConfigFile<ts.SemanticDiagnosticsBuilderProgram> = null as any;
 
@@ -653,7 +653,7 @@ export function getGeneratedFilePath(sourcePath: string) {
 }
 
 /**
- * 
+ *  Writes the content to file(if directory doesn't exist it will create directory) 
  * @param path 
  * @param content 
  */
@@ -664,3 +664,6 @@ export function writeFile(path: string, content: string) {
   }
   fs.writeFileSync(path, content)
 }
+
+
+

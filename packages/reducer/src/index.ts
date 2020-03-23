@@ -99,13 +99,13 @@ export type FetchRequest<B> = {
 export type Transform<T, D> = (input: T) => D;
 
 /**
- * path  static path of API (Example : "books", "updateBooks")
- *  dynamicPath dynamic part of API (Example : "bookId/update" = dynamicPath:[string// bookId,"update"])
+ *  path  static path of API (Example : "books", "updateBooks")
+ *  url params (Example : "books/{bookid}/update" , params= {bookid:string} )
  *  queryParams  query params of url (Example : "books?limit=10" = queryParams:{limit:number})
  */
 export type FUrl = {
   path: string,
-  dynamicPath?: (string | number)[],
+  params?: Record<string, string | number>,
   queryParams?: Record<string, string | number>;
 };
 
