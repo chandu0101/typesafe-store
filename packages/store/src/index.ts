@@ -9,7 +9,7 @@ type S<T extends Record<string, ReducerGroup<any, any, any, any>>> = {
 type S2<T extends Record<string, ReducerGroup<any, any, any, any>>> = {
     [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? S : never }
 
-type A<T> = { [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? A : never }[keyof T]
+type A<T> = { [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? AA extends undefined ? A : A & AA : never }[keyof T]
 
 
 export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, any>>> {
@@ -19,6 +19,8 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     // private meta: Meta = {} as any
 
+    private reducerGroupToStateKeyMap: Record<string, string> = {}
+
     private listeners: Record<keyof S<R>, Callback[]> = {} as any
 
     private storage?: PersistanceStorage<S<R>>
@@ -26,24 +28,28 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
     readonly dipatch: Dispatch<A<R>>
 
     constructor({ reducers, middleWares, storage }:
-        { reducers: R, middleWares: MiddleWare[], storage?: PersistanceStorage<S<R>> }) {
+        { reducers: R, middleWares: MiddleWare<R>[], storage?: PersistanceStorage<S<R>> }) {
         this.reducers = reducers
-        const mchain = middleWares.map(m => m({
-            state: () => this._state,
-            meta: this.reducers
-        }))
+        const mchain = middleWares.map(m => m(this))
         this.dipatch = compose<Dispatch<A<R>>>(...mchain)(this.defaultDispatch)
         if (storage) {
             this.prepareStoreWithStorage(storage, middleWares)
         } else {
-            for (const r in reducers) {
-                this._state[r] = reducers[r].ds
+            for (const stateKey in reducers) {
+                const rg = reducers[stateKey]
+                const assignedToAnotherStateKey = this.reducerGroupToStateKeyMap[rg.g]
+                if (assignedToAnotherStateKey) {
+                    throw new Error(`This reducer ${rg.g} already assigned to ${assignedToAnotherStateKey}`)
+                }
+                this.reducerGroupToStateKeyMap[rg.g] = stateKey
+                this._state[stateKey] = rg.ds
             }
             this.isReady = true
         }
     }
 
-    async prepareStoreWithStorage(storage: PersistanceStorage<S<R>>, middleWares: MiddleWare[]) {
+    //TODO statekey map
+    async prepareStoreWithStorage(storage: PersistanceStorage<S<R>>, middleWares: MiddleWare<R>[]) {
         this.storage = storage
         const sState = await storage.getState()
         if (sState) {
@@ -58,11 +64,12 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     private defaultDispatch(a: A<R>) {
         const { group, name } = a;
-        const rg = this.reducers[group]
-        const ps = this._state[group]
+        const stateKey = this.reducerGroupToStateKeyMap[group]
+        const rg = this.reducers[stateKey]
+        const ps = this._state[stateKey]
         const s = rg.r(ps, a)
         if (s !== ps) {
-            (this._state as any)[group] = s
+            (this._state as any)[stateKey] = s
             // notify listeners 
             if (this.storage) {
                 this.notifyPerssitor(a)
@@ -76,6 +83,11 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     get state() {
         return this._state
+    }
+
+    getReducerGroup(group: string) {
+        const stateKey = this.reducerGroupToStateKeyMap[group]
+        return this.reducers[stateKey]
     }
 
     subscribe<K extends keyof S<R>>(groups: (Record<K, (keyof S<R>[K])[]>)[], callback: () => any) {
@@ -107,9 +119,9 @@ export interface PersistanceStorage<S> {
 type Callback = () => any
 
 
-type Dispatch<A extends Action = Action> = (action: A) => any
+export type Dispatch<A extends Action = Action> = (action: A) => any
 
-export type Meta = Record<string, RMeta>
+// export type Meta = Record<string, RMeta>
 
 
 export type MiddleWareInfo<S = any> = Readonly<{
@@ -117,7 +129,7 @@ export type MiddleWareInfo<S = any> = Readonly<{
     meta: Record<string, ReducerGroup<any, any, any, any>>
 }>
 
-export type MiddleWare<S = any> = (info: MiddleWareInfo<S>) =>
+export type MiddleWare<R extends Record<string, ReducerGroup<any, any, any, any>>> = (store: TypeSafeStore<R>) =>
     (next: Dispatch) => (action: Action) => any
 
 // export interface MiddleWare<S = any> {
@@ -146,3 +158,4 @@ const a1 = { name: "Hello", g: "One" } as const
 const a2 = { name: "Hello", g: "Two" }
 
 const a3 = { [a1.g]: a1 }
+

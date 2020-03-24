@@ -28,6 +28,9 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {},
+  "peerDependencies": {
+    "@typesafe-store/store": "0.1.0"
+  },
   "devDependencies": {
     "@types/jest": "^24.0.20",
     "jest": "^24.9.0",

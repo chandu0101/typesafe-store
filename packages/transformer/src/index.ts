@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as ts from "typescript";
 import { transformFiles } from "./util";
-import { setProgram, setTypeSafeStoreConfig, getTypeSafeStoreConfig } from "./helpers";
+import { setProgram, setTypeSafeStoreConfig, getTypeSafeStoreConfig, setStorePath } from "./helpers";
 import { typeSafeStoreConfigDecoder, TypeSafeStoreConfig, RestApiConfig } from "./types";
 import { TYPESAFE_STORE_CONFIG_KEY } from "./constants";
 import { resolve } from "path";
@@ -28,7 +28,6 @@ async function isValidRestAPisConfig(restApis?: RestApiConfig[]): Promise<[boole
             result = [false, "restApis config names should be unique"]
         } else {
 
-
         }
     }
     return result
@@ -46,6 +45,7 @@ async function isValidConfig(obj: Record<string, string>): Promise<[boolean, str
             if (!fs.lstatSync(resolve(config.storePath)).isDirectory()) {
                 result = [false, "you should provide a valid storePath folder"]
             } else {
+                setStorePath(resolve(config.storePath))
                 result = await isValidRestAPisConfig(config.restApis)
                 if (result[0]) {
 

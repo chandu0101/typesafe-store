@@ -3,7 +3,7 @@ import { promises as fs, writeFileSync, readFileSync } from "fs";
 
 import { performance } from "perf_hooks";
 import { createReducerFunction } from "./generate";
-import { getProgram } from "./helpers";
+import { getProgram, dontModifyMessage } from "./helpers";
 import { GEN_SUFFIX } from "./constants";
 
 const reducerTransformer: ts.TransformerFactory<ts.SourceFile> = context => {
@@ -31,7 +31,7 @@ function transformFile(file: string) {
   const printer = ts.createPrinter();
   const newSf = ts.transform(sf, [reducerTransformer]).transformed[0];
   const content = `
-     // this file is auto generated on ${new Date().toISOString()}, don't modify it
+     ${dontModifyMessage()}
      import { ReducerGroup,FetchVariants } from "@typesafe-store/reducer"
      ${printer.printFile(newSf)}
     `;

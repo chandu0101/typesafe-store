@@ -1,6 +1,6 @@
 import * as ts from "typescript";
 import * as fs from "fs";
-import { LocalPropertyDecls, EAccess, MetaType, ProcessThisResult, MetaValue, Meta, GlobalInMemory, AsyncTypes, TypeSafeStoreConfig, TypeSafeStoreConfigExtra, ConfigUrl } from "./types";
+import { LocalPropertyDecls, EAccess, MetaType, ProcessThisResult, MetaValue, Meta, ReducersMeta, AsyncTypes, TypeSafeStoreConfig, TypeSafeStoreConfigExtra, ConfigUrl } from "./types";
 import { T_STORE_ASYNC_TYPE, REDUCERS_FOLDER, GENERATED_FOLDER, STORE_TYPES_FOLDER, REST_API_TYPES_FOLDER, GRAPHQL_API_TYPES_FOLDER } from "./constants";
 import { resolve, join, dirname } from "path";
 import fetch from "node-fetch";
@@ -21,7 +21,7 @@ let propDecls: LocalPropertyDecls[] = null as any;
 
 let currentProcessingFile: string = ""
 
-let globalMeta: Map<string, GlobalInMemory> = new Map()
+let globalMeta: Map<string, ReducersMeta> = new Map()
 
 let arrayMutableMethods = [
   "push",
@@ -33,6 +33,8 @@ let arrayMutableMethods = [
   "splice",
   "unshift"
 ];
+
+let storePath: string = null as any
 
 let config: TypeSafeStoreConfigExtra = null as any
 
@@ -51,6 +53,17 @@ export function setWatchCompilerHost(p: typeof wcp) {
   wcp = p;
 }
 
+export function setStorePath(path: string) {
+  storePath = path
+}
+
+export function getStoreTypesPath() {
+  return join(config.storePath, STORE_TYPES_FOLDER)
+}
+
+export function getRestApisPath() {
+  return join(getStoreTypesPath(), REST_API_TYPES_FOLDER)
+}
 export function setTypeSafeStoreConfig(c: TypeSafeStoreConfig) {
   config = {
     ...c, reducersPath: "", reducersGeneratedPath: "",
@@ -63,9 +76,9 @@ export function setTypeSafeStoreConfig(c: TypeSafeStoreConfig) {
 
   config.reducersGeneratedPath = join(config.reducersPath, GENERATED_FOLDER)
 
-  config.typesPath = join(config.storePath, STORE_TYPES_FOLDER)
+  config.typesPath = getStoreTypesPath()
 
-  config.restApiTypesPath = join(config.typesPath, REST_API_TYPES_FOLDER)
+  config.restApiTypesPath = getRestApisPath()
 
   config.graphqlApiTypesPath = join(config.typesPath, GRAPHQL_API_TYPES_FOLDER)
 }
@@ -657,7 +670,7 @@ export function getGeneratedFilePath(sourcePath: string) {
  * @param path 
  * @param content 
  */
-export function writeFile(path: string, content: string) {
+export function writeFileE(path: string, content: string) {
   const dir = dirname(path)
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir)
@@ -666,4 +679,6 @@ export function writeFile(path: string, content: string) {
 }
 
 
-
+export function dontModifyMessage() {
+  return `// this file is auto generated on ${new Date().toISOString()}, don't modify it`
+}

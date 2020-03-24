@@ -22,6 +22,10 @@ import swagger2openapi from "swagger2openapi";
 import { readFileSync, existsSync } from "fs";
 import groupBy from "lodash/groupBy"
 import YAML from "yamljs"
+import { dontModifyMessage, getRestApisPath, writeFileE } from "./helpers";
+import { join } from "path";
+import { GENERATED_FOLDER } from "./constants";
+import chalk from "chalk"
 
 // credits https://github.com/contiamo/restful-react/blob/master/src/scripts/import-open-api.ts
 
@@ -253,7 +257,7 @@ function generateInterface(name: string, schema: SchemaObject) {
  * 
  * @param responsesOrRequestes 
  */
-function getResResTypes(responsesOrRequestes: Array<[string, ResponseObject | ReferenceObject | RequestBodyObject]>) {
+function getReqResTypes(responsesOrRequestes: Array<[string, ResponseObject | ReferenceObject | RequestBodyObject]>) {
     return uniq(
         responsesOrRequestes.map(([_, res]) => {
             if (!res) {
@@ -290,7 +294,7 @@ function generateRequestBodiesDefinition(requestBodies: ComponentsObject["reques
         Object.entries(requestBodies)
             .map(([name, requestBody]) => {
                 const doc = isReference(requestBody) ? "" : formatDescription(requestBody.description)
-                const type = getResResTypes([["", requestBody]])
+                const type = getReqResTypes([["", requestBody]])
                 const isEmptyInterface = type === "{}"
                 if (isEmptyInterface) {
                     return `// tslint:disable-next-line:no-empty-interface
@@ -318,7 +322,7 @@ function generateResponseDefinition(responses: ComponentsObject["responses"] = {
         Object.entries(responses)
             .map(([name, response]) => {
                 const doc = isReference(response) ? "" : formatDescription(response.description)
-                const type = getResResTypes([["", response]])
+                const type = getReqResTypes([["", response]])
                 const isEmptyInterface = type === "{}"
                 if (isEmptyInterface) {
                     return `// tslint:disable-next-line:no-empty-interface
@@ -368,7 +372,7 @@ function getParamsInPath(path: string) {
 /**
  * 
  */
-function generatePathTypes(spec: OpenAPIObject) {
+function generatePathTypes(spec: OpenAPIObject): string {
     let serverPath = ""
     const servers = spec.servers
     const paths = spec.paths
@@ -405,8 +409,32 @@ function generatePathTypes(spec: OpenAPIObject) {
                             throw new Error(`${ERROR_READING_OPENAPI_SPEC} : ParameterObject for ${pr} is not in ${op.operationId} `)
                         }
                         return `${pr} ${po.required ? "" : "?"}:${resolveValue(po.schema!)}`
-                    })} }`
+                    }).join(", ")} }`
                 }
+                let queryParamsType: string | undefined = undefined
+                if (queryParams.length) {
+                    queryParamsType = `{ 
+                       ${queryParams.map(qp => {
+                        const processName = IdentifierRegexp.test(qp.name) ? qp.name : `"${qp.name}"`
+                        return `${formatDescription(qp.description, 2)}${processName}${qp.required ? "" : "?"}:${resolveValue(qp.schema!)}`
+                    }).join(", ")}
+                   }`
+                }
+                const isOk = ([statusCode]: [string, ResponseObject | ReferenceObject]) => statusCode.toString().startsWith("2")
+                const isError = ([statusCode]: [string, ResponseObject | ReferenceObject]) => statusCode.toString().startsWith("4")
+                    || statusCode.toString().startsWith("5") || statusCode === "default"
+                const responseTypes = getReqResTypes(Object.entries(op.responses).filter(isOk)) || "void"
+                const errorTypes = getReqResTypes(Object.entries(op.responses).filter(isError)) || "unknown"
+                const requestBodyTypes = getReqResTypes([["body", op.requestBody!]])
+                let type = ""
+                const path = `${serverPath}${route}`
+                const urlType = `FUrl<{path:${path}${pathParamsType ? `,params:${pathParamsType}` : ""}${queryParamsType ? `, queryParams:${queryParamsType}` : ""}}>`
+                if (verb === "get") {
+                    type = `Fetch<${urlType},${responseTypes},${errorTypes}>`
+                } else {
+                    type = `Fetch${pascal(verb)}<${urlType},${requestBodyTypes},${responseTypes},${errorTypes}>`
+                }
+                result += `export ${name} = ${type}` + "\n\n"
             }
         })
     })
@@ -442,8 +470,6 @@ export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): 
 
         resolveDiscriminators(spec)
 
-        let output = ""
-
         const schemas = generateSchemaDefinitions(spec.components && spec.components.schemas)
 
         const reqBodies = generateRequestBodiesDefinition(spec.components && spec.components.requestBodies)
@@ -451,7 +477,44 @@ export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): 
         const responses = generateResponseDefinition(spec.components && spec.components.responses)
 
         const pathTypes = generatePathTypes(spec)
-        console.log("");
+
+        const haveGet = pathTypes.includes("Fetch<")
+        const havePost = pathTypes.includes("FetchPost<")
+        const haveDelete = pathTypes.includes("FetchDelete<")
+        const havePatch = pathTypes.includes("FetchPatch<")
+        const havePut = pathTypes.includes("FetchPut<")
+        const reducerImports: string[] = ["FUrl"]
+        if (haveGet) {
+            reducerImports.push("Fetch")
+        }
+        if (havePut) {
+            reducerImports.push("FetchPut")
+        }
+        if (havePost) {
+            reducerImports.push("FetchPost")
+        }
+        if (haveDelete) {
+            reducerImports.push("FetchDelete")
+        }
+        if (havePatch) {
+            reducerImports.push("FetchPatch")
+        }
+        const output = `
+         ${dontModifyMessage()} 
+         import {${reducerImports.join(",")}}  fomr "@typsafe-store/reducer"
+
+         namespace ${rApi.name} {
+             ${schemas}
+             ${reqBodies}
+             ${responses}
+             ${pathTypes}
+         }
+        
+        `
+        const outFile = join(getRestApisPath(), GENERATED_FOLDER, rApi.name + ".ts")
+        writeFileE(outFile, output)
+        chalk.yellow(`Successfully generated types for ${rApi.name}.`)
+
     })
     )
 

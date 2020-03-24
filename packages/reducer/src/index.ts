@@ -36,7 +36,6 @@ export type Reducer<S extends any, A extends Action> = (
  *  g : group name reducer belongs to
  *  ds: default state of reducer
  *  m : meta info of reducer
- *  aa: async action type
  */
 export type ReducerGroup<
   S extends any,
@@ -47,17 +46,17 @@ export type ReducerGroup<
     r: Reducer<S, A>;
     g: G;
     ds: S;
-    m: RMeta;
-    aa?: AA
+    m: RMeta<AA>;
   }>;
 
 /**
  *  f: fetch meta
  */
-export type RMeta = Readonly<{
-  f?: any;
-  gql?: any;
-  grpc?: any;
+export type RMeta<AA> = Readonly<{
+  f?: Record<string, any>;
+  gql?: Record<string, any>;
+  grpc?: Record<string, any>;
+  async?: AA
 }>;
 
 export type Json =
@@ -79,13 +78,14 @@ export const enum FetchVariants {
 
 // type FetchVariants = "GET" | "POST" | "PATCH" | "DELETE" | "PUT"
 
-export type FetchAsyncData<D, U, B, FV extends FetchVariants> = Readonly<{
+export type FetchAsyncData<D, U extends FUrl, B, FV extends FetchVariants, E> = Readonly<{
   loading?: boolean;
-  error?: Error;
+  error?: E;
   data?: D;
-  _fmeta?: { type: FV, url: U, body: B }
+  _fmeta?: FetchMeta<FV, U, B>
 }>;
 
+export type FetchMeta<FV extends FetchVariants, U extends FUrl, B> = { type: FV, url: U, body: B }
 
 /**
  *
@@ -116,7 +116,8 @@ export type FUrl = {
 export type Fetch<
   U extends FUrl,
   R extends Record<string, any>,
-  > = FetchAsyncData<R, U, {}, FetchVariants.GET>;
+  E,
+  > = FetchAsyncData<R, U, {}, FetchVariants.GET, E>;
 
 /**
  *  U: url string static/dynamic
@@ -127,7 +128,8 @@ export type FetchPost<
   U extends FUrl,
   B extends Json,
   R extends Record<string, any>,
-  > = FetchAsyncData<R, U, B, FetchVariants.POST>;
+  E,
+  > = FetchAsyncData<R, U, B, FetchVariants.POST, E>;
 
 /**
  *  U: url string static/dynamic
@@ -137,8 +139,9 @@ export type FetchPost<
 export type FetchPut<
   U extends FUrl,
   B extends Json,
-  R extends Record<string, any>
-  > = FetchAsyncData<R, U, B, FetchVariants.PUT>;
+  R extends Record<string, any>,
+  E
+  > = FetchAsyncData<R, U, B, FetchVariants.PUT, E>;
 
 /**
  *  U: url string static/dynamic
@@ -150,7 +153,8 @@ export type FetchPatch<
   U extends FUrl,
   B extends Json,
   R extends Record<string, any>,
-  > = FetchAsyncData<R, U, B, FetchVariants.PATCH>;
+  E
+  > = FetchAsyncData<R, U, B, FetchVariants.PATCH, E>;
 
 /**
  *  U: url string static/dynamic
@@ -160,8 +164,9 @@ export type FetchPatch<
 export type FetchDelete<
   U extends FUrl,
   B extends Json,
-  R extends Record<string, any>
-  > = FetchAsyncData<R, U, B, FetchVariants.DELETE>;
+  R extends Record<string, any>,
+  E
+  > = FetchAsyncData<R, U, B, FetchVariants.DELETE, E>;
 
 const sample = (input: { a: number }[]) => {
   return input.length > 0 ? { new: input.length } : { new: 0 };
@@ -169,10 +174,10 @@ const sample = (input: { a: number }[]) => {
 
 const s: Fetch<
   { path: ""; dynamicPath: ["dude", number]; qParams: {} },
-  []
+  [], "unknown"
 > = {};
 
-const s1: FetchPost<{ path: "" }, { age: number }, []> = {};
+const s1: FetchPost<{ path: "" }, { age: number }, [], "string"> = {};
 
 // export declare function getReducer<T, G extends string>(typeName?: string):
 

@@ -65,10 +65,16 @@ export const enum MetaType {
     MAP
 }
 
+
+export type GlobalMeta = {
+    restApis:,
+    reducers: Map<string, ReducersMeta>
+}
+
 /**
  * 
  */
-export type GlobalInMemory = {
+export type ReducersMeta = {
     path: string,
     fullPath: string,
     group: string,
