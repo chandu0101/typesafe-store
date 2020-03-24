@@ -8,6 +8,7 @@ function isFetchAction(rg: ReducerGroup<any, any, any, any>, action: Action) {
     return rg.m.f && rg.m.f[action.name]
 }
 
+
 async function processFetchAction<R extends Record<string, ReducerGroup<any, any, any, any>>>(store: TypeSafeStore<R>, action: Action, rg: ReducerGroup<any, any, any, any>) {
     const fetchMeta: FetchMeta<FetchVariants, FUrl, Json> = (action as any).fetch
 

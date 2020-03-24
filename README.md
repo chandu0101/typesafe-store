@@ -3,6 +3,87 @@
 
 ### Work In Progress
 
+TypeSafe Store is a library which manages all state needs of your application, you define your app state using classes in mutable way `transformer` package converts them into immutable reducers in compile time.
+
+If you're familiar with redux you know what reducer is..., if not reducer is a function which takes two paramaeters a state object and an action and returns a new state object without modifying original state.
+
+### Example 
+
+```ts
+  // a simple reducer
+  import {v1 as uuid} from "uuid" // random string generator 
+
+  type Todo {id:string,text:string,completed:boolean}
+  
+  const CREATE_TODO = "CREATE_TODO"
+  const UPDATE_TODO = "UPDATE_TODO"
+  const DELETE_TODO = "DELETE_TODO"
+
+  type CreateTodoActionType = { type: typeof CREATE_TODO,payload:{text:string} }
+
+  type UpdateTodoActionType = { type: typeof UPDATE_TODO, payload: {id:string,text:string,completed:boolean} }
+
+  type DeleteTodoActionType = { type:typeof UPDATE_TODO,
+    payload: {id:string}
+  }
+
+  type Action = CreateTodoActionType | UpdateTodoActionType } DleteTodoActionType
+ 
+ function reducer(state:Todo[] = [],action:Action) {
+    
+    switch(action.type) {
+      case "CREATE_TODO": {
+         const {text} = action.payload;
+         const todo:Todo = { id:uuid(),text,completed:false }
+         return state.concat(todo) // see we're not mutating original input
+      }
+      case "UPDATE_TODO": {
+         const {id,text,completed} = action.payload 
+         return state.map(todo => todo.id === id ? {...todo,completed,text}: todo)
+      }
+      case "DELETE_TODO": {
+         const {id} = action.payload
+         return state.filter(todo => todo.id !== id)
+      }
+
+      default:
+        return state; 
+    }
+ }
+
+```
+
+In TypeSafe Store we define the same reducer like below :
+
+```ts
+import {v1 as uuid} from "uuid" // random string generator 
+
+  type Todo {id:string,text:string,completed:boolean}
+ 
+ class TodoReducer { 
+    
+    todos:Todo[] = []
+
+    createTodo(text:string) {
+        const todo:Todo = { id:uuid(),text,completed:false };
+        this.todos.push(todo) // mutableway
+    }
+
+    updateTodo(todo: Todo) {
+      this.todos[todo.id] = todo;
+    }
+
+    deleteTodo(id:string) {
+      delete this.todos[id]
+    }
+
+ }
+
+```
+`transformer` package converts this class into a immutable reducer like above in compile time without any runtime over head.
+
+>If you're wondering about why we need immutability, if we update our state in immutable way then we can easily check which part of our app state changed and update those parts(DOM) in more efficient way.
+
 
 # Packages 
 
