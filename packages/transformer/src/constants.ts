@@ -39,4 +39,7 @@ export const STORE_TYPES_FOLDER = "types"
 export const GEN_SUFFIX = "-gen"
 
 
+export const EMPTY_REDUCER_TRANFORM_MESSAGE = "//define some methods or async properties in class"
+
+
 

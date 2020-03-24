@@ -11,10 +11,10 @@ import {
   getActionType,
   lastElementOfArray,
   isAsyncPropDeclaration,
-  getAsyncActionType
+  getAsyncActionTypeAndMeta
 } from "./helpers";
 import { ProcessThisResult, MetaType, LocalPropertyDecls, NewValue, GS } from "./types";
-import { TSTORE_TEMP_V } from "./constants";
+import { TSTORE_TEMP_V, EMPTY_REDUCER_TRANFORM_MESSAGE } from "./constants";
 
 //constants
 
@@ -22,23 +22,31 @@ export const createReducerFunction = (cd: ts.ClassDeclaration) => {
   setClassDeclaration(cd);
   const propDecls = getPropDeclsFromTypeMembers();
   const defaultState = getDefaultState(propDecls);
-  const group = getTypeName();
+  const typeName = getTypeName();
   const caseClauses = getSwitchClauses();
-  const asyncActionType = getAsyncActionType()
+  let [asyncActionType, asyncMeta] = getAsyncActionTypeAndMeta();
   let result = ts.createIdentifier("")
   if (caseClauses.length === 0 && asyncActionType === "") { // If no async properties and methods then return empty node
-    result = ts.createIdentifier("//define some methods or async properties in class ")
+    result = ts.createIdentifier(EMPTY_REDUCER_TRANFORM_MESSAGE)
   } else {
-    const f = buildFunction({ caseClauses: caseClauses, group });
+    const f = buildFunction({ caseClauses: caseClauses, group: typeName });
+    let actionType = getActionType()
+    if (actionType === "") {
+      actionType = "undefined"
+    }
+    if (asyncActionType === "") {
+      asyncActionType = "undefined"
+    }
+    const meta = `{aa:undefined,${asyncMeta}}`
     result = ts.createIdentifier(
       `
-           export type ${group}State = ${getStateType()}
+           export type ${typeName}State = ${getStateType()}
            
-           export type ${group}Action = ${getActionType()}
+           export type ${typeName}Action = ${actionType}
   
-           export type ${group}AsyncAction = ${asyncActionType}
+           export type ${typeName}AsyncAction = ${asyncActionType}
   
-           export const ${group}ReducerGroup: ReducerGroup<${group}State,${group}Action,"${group}",${group}AsyncAction> = { r: ${f},g:"${group}",ds:${defaultState},m:{},aa:undefined}
+           export const ${typeName}ReducerGroup: ReducerGroup<${typeName}State,${typeName}Action,"${typeName}",${typeName}AsyncAction> = { r: ${f},g:"${typeName}",ds:${defaultState},m:${meta}}
   
           `
     );
@@ -541,12 +549,21 @@ function buildFunction({
   caseClauses: string[];
   group: string;
 }) {
-  return `
-      (state:${group}State,action:${group}Action) => {
-         const t = action.name
-         switch(t) {
-           ${caseClauses.join("\n")}
-         }
+  if (caseClauses.length > 0) {
+    return `
+    (state:${group}State,action:${group}Action) => {
+       const t = action.name
+       switch(t) {
+         ${caseClauses.join("\n")}
+       }
+    }
+  `;
+  } else {
+    return `
+     (state:${group}State,action:${group}Action) => {
+       return state;
       }
-    `;
+     `
+  }
+
 }

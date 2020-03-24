@@ -1,9 +1,9 @@
 import * as ts from "typescript";
 import * as fs from "fs";
 import { LocalPropertyDecls, EAccess, MetaType, ProcessThisResult, MetaValue, Meta, ReducersMeta, AsyncTypes, TypeSafeStoreConfig, TypeSafeStoreConfigExtra, ConfigUrl } from "./types";
-import { T_STORE_ASYNC_TYPE, REDUCERS_FOLDER, GENERATED_FOLDER, STORE_TYPES_FOLDER, REST_API_TYPES_FOLDER, GRAPHQL_API_TYPES_FOLDER } from "./constants";
-import { resolve, join, dirname } from "path";
-import fetch from "node-fetch";
+import { T_STORE_ASYNC_TYPE, REDUCERS_FOLDER, GENERATED_FOLDER, STORE_TYPES_FOLDER, REST_API_TYPES_FOLDER, GRAPHQL_API_TYPES_FOLDER, GEN_SUFFIX } from "./constants";
+import { resolve, join, dirname, sep } from "path";
+
 
 let wcp: ts.WatchOfConfigFile<ts.SemanticDiagnosticsBuilderProgram> = null as any;
 
@@ -19,7 +19,7 @@ let memberTypes: { name: string; type: ts.Type }[] = null as any;
 
 let propDecls: LocalPropertyDecls[] = null as any;
 
-let currentProcessingFile: string = ""
+let currentProcessingReducerFile: string = ""
 
 let globalMeta: Map<string, ReducersMeta> = new Map()
 
@@ -39,14 +39,18 @@ let storePath: string = null as any
 let config: TypeSafeStoreConfigExtra = null as any
 
 
-export function setCurrentProcessingFile(file: string) {
-  currentProcessingFile = file
+export function setCurrentProcessingReducerFile(file: string) {
+  currentProcessingReducerFile = file
   if (!globalMeta.get(file)) {
     // const baseReducersPath = getBaseReducersPath()
 
 
     // globalMeta.set(file, {fullPath:file,path:})
   }
+}
+
+export function getCurrentProcessingReducerFile() {
+  return currentProcessingReducerFile;
 }
 
 export function setWatchCompilerHost(p: typeof wcp) {
@@ -64,6 +68,7 @@ export function getStoreTypesPath() {
 export function getRestApisPath() {
   return join(getStoreTypesPath(), REST_API_TYPES_FOLDER)
 }
+
 export function setTypeSafeStoreConfig(c: TypeSafeStoreConfig) {
   config = {
     ...c, reducersPath: "", reducersGeneratedPath: "",
@@ -110,7 +115,7 @@ export function cleanUpGloabals() {
   members = null as any;
   memberTypes = null as any;
   propDecls = null as any;
-  currentProcessingFile = ""
+  currentProcessingReducerFile = ""
 }
 
 export const getStateType = () => {
@@ -146,9 +151,11 @@ export function generateFetchActionType(lpd: LocalPropertyDecls): string {
 /**
  *  All async actions of a class
  */
-export const getAsyncActionType = () => {
-  const group = getTypeName();
-  return propDecls
+export const getAsyncActionTypeAndMeta = (): [string, string] => {
+  const group = `${getPrefixPathForReducerGroup(currentProcessingReducerFile)}${getTypeName()}`;
+  const fetchProps: string[] = []
+  const gqlProps: string[] = []
+  const asyncType = propDecls
     .filter(isAsyncPropDeclaration)
     .map(p => {
       let result = "undefined";
@@ -160,18 +167,25 @@ export const getAsyncActionType = () => {
       if (declaredType.startsWith(AsyncTypes.PROMISE)) {
         result = `{name:"${p.pd.name}",group:"${group}", promise: () => ${p.typeStr} }`;
       } else if (tpe.includes("_fmeta")) {
+        const name = p.pd.name.getText()
+        fetchProps.push(name)
         result = `{name:"${
-          p.pd.name.getText()
+          name
           }",group:"${group}", fetch: ${generateFetchActionType(p)}  }`;
       }
       return result;
     })
     .join(" | ");
+  const meta = `
+    f:${fetchProps.length > 0 ? `{${fetchProps.map(p => `${p}:{}`).join(",")}}` : "undefined"},
+    gql:${gqlProps.length > 0 ? `{${gqlProps.map(p => `${p}:{}`).join(",")}}` : "undefined"}
+  `
+  return [asyncType, meta]
 };
 
 export const getActionType = () => {
   const methods = getMethodsFromTypeMembers();
-  const group = getTypeName();
+  const group = `${getPrefixPathForReducerGroup(currentProcessingReducerFile)}${getTypeName()}`;
   const generalMethods = methods.map(m => {
     const n = m.name.getText();
     const pl = m.parameters.length;
@@ -678,7 +692,30 @@ export function writeFileE(path: string, content: string) {
   fs.writeFileSync(path, content)
 }
 
-
+/**
+ *  header message for generated files
+ */
 export function dontModifyMessage() {
   return `// this file is auto generated on ${new Date().toISOString()}, don't modify it`
+}
+
+/**
+ *  if reducer defined in subfolders of reducers folder then get subfolders path as prefix
+ *   (Example : reducers/one/Sample.ts  group = ${PREFIX}/Sample = one/Sample )
+ * @param file 
+ */
+export function getPrefixPathForReducerGroup(file: string) {
+  const dir = dirname(file)
+  const reducersPath = config.reducersPath
+  return dir.replace(reducersPath, "").split(sep).join("/")
+}
+
+/**
+ *   
+ * @param file 
+ */
+export function getOutputPathForReducerSourceFile(file: string) {
+  const reducers = `${sep}${REDUCERS_FOLDER}${sep}`
+  const genReducers = `${reducers}${GENERATED_FOLDER}${sep}`
+  return file.replace(reducers, genReducers).replace(".ts", `${GEN_SUFFIX}.ts`)
 }

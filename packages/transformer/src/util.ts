@@ -3,8 +3,8 @@ import { promises as fs, writeFileSync, readFileSync } from "fs";
 
 import { performance } from "perf_hooks";
 import { createReducerFunction } from "./generate";
-import { getProgram, dontModifyMessage } from "./helpers";
-import { GEN_SUFFIX } from "./constants";
+import { getProgram, dontModifyMessage, setCurrentProcessingReducerFile, getOutputPathForReducerSourceFile, writeFileE } from "./helpers";
+import { GEN_SUFFIX, EMPTY_REDUCER_TRANFORM_MESSAGE } from "./constants";
 
 const reducerTransformer: ts.TransformerFactory<ts.SourceFile> = context => {
   const visit: ts.Visitor = node => {
@@ -27,22 +27,24 @@ const reducerTransformer: ts.TransformerFactory<ts.SourceFile> = context => {
 function transformFile(file: string) {
   console.log("transforming file : ", file);
   const t0 = performance.now();
+  setCurrentProcessingReducerFile(file)
   const sf = getProgram().getSourceFile(file)!;
   const printer = ts.createPrinter();
   const newSf = ts.transform(sf, [reducerTransformer]).transformed[0];
-  const content = `
+  const transformedContent = printer.printFile(newSf)
+  let imports = ""
+  if (!transformedContent.includes(EMPTY_REDUCER_TRANFORM_MESSAGE)) {
+    imports = `import { ReducerGroup,FetchVariants } from "@typesafe-store/reducer"`
+  }
+  const output = `
      ${dontModifyMessage()}
-     import { ReducerGroup,FetchVariants } from "@typesafe-store/reducer"
+     ${imports}
      ${printer.printFile(newSf)}
     `;
-  const outFile = file
-    .replace("/reducers/", "/reducers/generated/")
-    .replace(".ts", `${GEN_SUFFIX}.ts`);
+  const outFile = getOutputPathForReducerSourceFile(file)
   console.log("******* writing to out file : ", outFile);
   console.log("outFile : ", outFile);
-  writeFileSync(outFile, content, {
-    encoding: "utf8"
-  });
+  writeFileE(outFile, output);
   const t1 = performance.now();
   console.log("time : ", t1 - t0, " ms");
 }

@@ -23,7 +23,7 @@ export type Action = Readonly<{
   name: any;
   group: string;
   extensions?: Record<string, unknown>;
-  _internal?: { processed?: boolean };
+  _internal?: { processed?: boolean, data?: any };
 }>;
 
 export type Reducer<S extends any, A extends Action> = (
@@ -78,14 +78,14 @@ export const enum FetchVariants {
 
 // type FetchVariants = "GET" | "POST" | "PATCH" | "DELETE" | "PUT"
 
-export type FetchAsyncData<D, U extends FUrl, B, FV extends FetchVariants, E> = Readonly<{
+export type FetchAsyncData<D, U extends FUrl, B extends (Json | null), FV extends FetchVariants, E> = Readonly<{
   loading?: boolean;
   error?: E;
   data?: D;
   _fmeta?: FetchMeta<FV, U, B>
 }>;
 
-export type FetchMeta<FV extends FetchVariants, U extends FUrl, B> = { type: FV, url: U, body: B }
+export type FetchMeta<FV extends FetchVariants, U extends FUrl, B extends (Json | null)> = { type: FV, url: U, body?: B }
 
 /**
  *
@@ -117,7 +117,7 @@ export type Fetch<
   U extends FUrl,
   R extends Record<string, any>,
   E,
-  > = FetchAsyncData<R, U, {}, FetchVariants.GET, E>;
+  > = FetchAsyncData<R, U, null, FetchVariants.GET, E>;
 
 /**
  *  U: url string static/dynamic
@@ -126,7 +126,7 @@ export type Fetch<
  */
 export type FetchPost<
   U extends FUrl,
-  B extends Json,
+  B extends (Json | null),
   R extends Record<string, any>,
   E,
   > = FetchAsyncData<R, U, B, FetchVariants.POST, E>;
