@@ -707,7 +707,8 @@ export function dontModifyMessage() {
 export function getPrefixPathForReducerGroup(file: string) {
   const dir = dirname(file)
   const reducersPath = config.reducersPath
-  return dir.replace(reducersPath, "").split(sep).join("/")
+  const result = dir.replace(reducersPath, "").split(sep).join("/")
+  return result === "" ? result : `${result}/`
 }
 
 /**
@@ -719,3 +720,4 @@ export function getOutputPathForReducerSourceFile(file: string) {
   const genReducers = `${reducers}${GENERATED_FOLDER}${sep}`
   return file.replace(reducers, genReducers).replace(".ts", `${GEN_SUFFIX}.ts`)
 }
+

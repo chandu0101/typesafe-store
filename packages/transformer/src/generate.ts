@@ -37,7 +37,7 @@ export const createReducerFunction = (cd: ts.ClassDeclaration) => {
     if (asyncActionType === "") {
       asyncActionType = "undefined"
     }
-    const meta = `{aa:undefined,${asyncMeta}}`
+    const meta = `{async:undefined,${asyncMeta}}`
     result = ts.createIdentifier(
       `
            export type ${typeName}State = ${getStateType()}

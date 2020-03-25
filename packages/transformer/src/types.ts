@@ -67,7 +67,7 @@ export const enum MetaType {
 
 
 export type GlobalMeta = {
-    restApis:,
+    restApis: string,
     reducers: Map<string, ReducersMeta>
 }
 

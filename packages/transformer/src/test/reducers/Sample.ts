@@ -2,7 +2,7 @@ import { Fetch } from "@typesafe-store/reducer";
 
 type Book = { name: string; year: number };
 type Todo = { id: string; completed?: boolean; text: string };
-type GetBooks = Fetch<{ path: "books" }, string[]>;
+type GetBooks = Fetch<{ path: "books" }, string[], unknown>;
 class Sample {
   name = "First";
   count = 1;
@@ -24,7 +24,7 @@ class Sample {
 
   getBooks: GetBooks = {};
 
-  getTwoBooks: Fetch<{ path: "", queryParams: { limit: 2 } }, Book[]> = {}
+  getTwoBooks: Fetch<{ path: "", queryParams: { limit: 2 } }, Book[], unknown> = {}
 
   changeName(name: string) {
     this.name = name;

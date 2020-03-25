@@ -1,0 +1,17 @@
+{
+  "name": "sync-reducers",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "chandu0101",
+  "license": "MIT",
+  "scripts": {
+    "start": "tstore"
+  },
+  "devDependencies": {
+    "ts-utils": "^6.0.7",
+    "typescript": "^3.8.3"
+  },
+  "dependencies": {
+    "@typesafe-store/transformer": "file:../.."
+  }
+}

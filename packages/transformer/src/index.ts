@@ -39,7 +39,7 @@ async function isValidConfig(obj: Record<string, string>): Promise<[boolean, str
     try {
         const validJson = typeSafeStoreConfigDecoder.run(obj)
         if (!validJson.ok) {
-            result = [false, `not a valid config : ${validJson.error}`]
+            result = [false, `not a valid config : ${JSON.stringify(validJson.error)}`]
         } else {
             const config: TypeSafeStoreConfig = obj as any
             if (!fs.lstatSync(resolve(config.storePath)).isDirectory()) {
