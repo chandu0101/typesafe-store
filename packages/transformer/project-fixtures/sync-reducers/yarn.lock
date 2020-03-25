@@ -84,10 +84,20 @@
   resolved "https://registry.yarnpkg.com/@types/color-name/-/color-name-1.1.1.tgz#1c1261bbeaa10a8055bbc5d8ab84b7b2afc846a0"
   integrity sha512-rr+OQyAjxze7GgWrSaJwydHStIhHq2lvY3BOC2Mj7KnzI7XK0Uw1TOOdI9lDoajEbSWLiYgoo4f1R51erQfhPQ==
 
-"@typesafe-store/reducer@^0.1.1":
+"@types/uuid@^7.0.2":
+  version "7.0.2"
+  resolved "https://registry.yarnpkg.com/@types/uuid/-/uuid-7.0.2.tgz#d680a9c596ef84abf5c4c07a32ffd66d582526f8"
+  integrity sha512-8Ly3zIPTnT0/8RCU6Kg/G3uTICf9sRwYOpUzSIM3503tLIKcnJPRuinHhXngJUy2MntrEf6dlpOHXJju90Qh5w==
+
+"@typesafe-store/reducer@^0.1.0", "@typesafe-store/reducer@^0.1.1":
   version "0.1.1"
   resolved "https://registry.yarnpkg.com/@typesafe-store/reducer/-/reducer-0.1.1.tgz#fa5e5951d2ba1f6f8429ecd262a94c1f078cf2a0"
   integrity sha512-jBlaf27ENVswWXA1rQjhTF3m56+VCzm5nmPQJFc2ACzRPi4QgAZ1W+rcvbUG8HnDxYGsjDEbxMtrv/YKcW9r0w==
+
+"@typesafe-store/store@file:../../../store":
+  version "0.1.0"
+  dependencies:
+    "@typesafe-store/reducer" "^0.1.0"
 
 "@typesafe-store/transformer@file:../..":
   version "0.1.0"
@@ -2109,6 +2119,11 @@ use@^3.1.0:
   version "3.1.1"
   resolved "https://registry.yarnpkg.com/use/-/use-3.1.1.tgz#d50c8cac79a19fbc20f2911f56eb973f4e10070f"
   integrity sha512-cwESVXlO3url9YWlFW/TA9cshCEhtu7IKJ/p5soJ/gGpj7vbvFrAY/eIioQ6Dw23KjZhYgiIo8HOs1nQ2vr/oQ==
+
+uuid@^7.0.2:
+  version "7.0.2"
+  resolved "https://registry.yarnpkg.com/uuid/-/uuid-7.0.2.tgz#7ff5c203467e91f5e0d85cfcbaaf7d2ebbca9be6"
+  integrity sha512-vy9V/+pKG+5ZTYKf+VcphF5Oc6EFiu3W8Nv3P3zIh0EqVI80ZxOzuPfe9EHjkFNvf8+xuTHVeei4Drydlx4zjw==
 
 validator@^11.0.0:
   version "11.1.0"

@@ -28,7 +28,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@typesafe-store/reducer": "0.1.0"
+    "@typesafe-store/reducer": "^0.1.0"
   },
   "devDependencies": {
     "@types/jest": "^24.0.20",

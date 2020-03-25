@@ -8,10 +8,13 @@
     "start": "tstore"
   },
   "devDependencies": {
+    "@types/uuid": "^7.0.2",
     "ts-utils": "^6.0.7",
     "typescript": "^3.8.3"
   },
   "dependencies": {
-    "@typesafe-store/transformer": "file:../.."
+    "@typesafe-store/store": "file:///Users/chandu0101/Desktop/kode/programming/typescript_projects/typesafe-store/packages/store/",
+    "@typesafe-store/transformer": "file:../..",
+    "uuid": "^7.0.2"
   }
 }

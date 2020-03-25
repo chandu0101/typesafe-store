@@ -471,18 +471,17 @@ const invalidateObject = ({
               break;
             }
             case "splice": {
-              const a = args.split(",");
+              const a = args.split(",").map(a => a.trim());
+              const startParsed = parseInt(a[0], 10)
+              const start = isNaN(startParsed) ? a[0] : startParsed
+              const deleteCountParsed = parseInt(a[1], 10)
+              const deleteCount = isNaN(deleteCountParsed) ? a[1] : deleteCountParsed
               if (a.length === 1) {
-                result = `[...${v}.slice(0,${a[0]})]`;
+                result = `[...${v}.slice(0,${start})]`;
               } else if (a.length == 2) {
-                result = `[...${v}.slice(0,${a[0]}),...${v}.slice(${parseInt(
-                  a[0],
-                  10
-                ) + parseInt(a[1], 10)})]`;
+                result = `[...${v}.slice(0,${start}),...${v}.slice(${start} + ${deleteCount})]`;
               } else {
-                result = `[...${v}.slice(0,${a[0]}),${[
-                  "..." + a[2]
-                ]},...${v}.slice(${parseInt(a[0], 10) + parseInt(a[1], 10)})]`;
+                result = `[...${v}.slice(0,${a[0]}),...[${a.slice(2)}],...${v}.slice(${start} + ${deleteCount})]`;
               }
               break;
             }

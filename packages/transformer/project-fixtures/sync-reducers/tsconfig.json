@@ -58,10 +58,11 @@
     "forceConsistentCasingInFileNames": true /* Disallow inconsistently-cased references to the same file. */
   },
   "include": [
-    "src"
+    "src/**/*"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "../../../../node_modules"
   ],
   "typesafe-store": {
     "storePath": "./src/store",
