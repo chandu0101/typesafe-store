@@ -3,7 +3,9 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "build",
-    "plugins": []
+    "plugins": [],
+    "composite": true,
+    "declarationMap": true
   },
   "references": []
 }

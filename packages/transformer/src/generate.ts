@@ -176,7 +176,10 @@ const getSwitchClauses = () => {
             addOrUpdateParentGroup(result, newValue);
             generalStatements.push(s.getText().replace("this.", PREFIX));
           }
-        } else {
+        } else if (ts.isExpressionStatement(s) && ts.isDeleteExpression(s.expression)) {
+          throw new Error("delete expression not supported,  instead assign value to property")
+        }
+        else {
           otherThanMutationStatements = true;
           // other than straight mutations handle forEach/if else/tenary operator
           if (

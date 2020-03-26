@@ -5,7 +5,8 @@
   "author": "chandu0101",
   "license": "MIT",
   "scripts": {
-    "start": "tstore"
+    "start": "nodemon src/index.ts",
+    "dev": "tstore"
   },
   "devDependencies": {
     "@types/uuid": "^7.0.2",
@@ -13,7 +14,7 @@
     "typescript": "^3.8.3"
   },
   "dependencies": {
-    "@typesafe-store/store": "file:///Users/chandu0101/Desktop/kode/programming/typescript_projects/typesafe-store/packages/store/",
+    "@typesafe-store/store": "file:../../../store",
     "@typesafe-store/transformer": "file:../..",
     "uuid": "^7.0.2"
   }

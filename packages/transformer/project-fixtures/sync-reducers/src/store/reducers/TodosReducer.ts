@@ -6,18 +6,18 @@ type Todo = { text: string, id: string, completed: boolean }
 
 class TodosReducer {
 
-    todos: Todo[] = []
+    list: Todo[] = []
 
     createTodo(text: string) {
-        this.todos.push({ id: uuid(), text, completed: false })
+        this.list.push({ id: uuid(), text, completed: false })
     }
 
     markFirstTodoComplete() {
-        this.todos[0].completed = true
+        this.list[0].completed = true
     }
 
     deleteTodoAtIndex(index: number) {
-        this.todos.splice(index, 1)
+        this.list.splice(index, 1)
     }
 
 }

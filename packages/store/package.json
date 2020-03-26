@@ -2,7 +2,8 @@
   "name": "@typesafe-store/store",
   "description": "type safe store reducer transformer",
   "version": "0.1.0",
-  "main": "src/index.ts",
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/chandu0101/typesafe-store",
@@ -19,16 +20,14 @@
     "transformers"
   ],
   "publishConfig": {
-    "access": "public",
-    "main": "build/index.js",
-    "types": "build/index.d.ts"
+    "access": "public"
   },
   "scripts": {
     "test": "jest",
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@typesafe-store/reducer": "^0.1.0"
+    "@typesafe-store/reducer": "^0.1.5"
   },
   "devDependencies": {
     "@types/jest": "^24.0.20",

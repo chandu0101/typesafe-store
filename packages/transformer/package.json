@@ -5,7 +5,8 @@
   "bin": {
     "tstore": "bin/tstore"
   },
-  "main": "src/index.ts",
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/chandu0101/typesafe-store",
@@ -22,9 +23,7 @@
     "transformers"
   ],
   "publishConfig": {
-    "access": "public",
-    "main": "build/index.js",
-    "types": "build/index.d.ts"
+    "access": "public"
   },
   "scripts": {
     "test": "jest",

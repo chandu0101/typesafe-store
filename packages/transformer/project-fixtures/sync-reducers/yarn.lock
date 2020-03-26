@@ -89,15 +89,15 @@
   resolved "https://registry.yarnpkg.com/@types/uuid/-/uuid-7.0.2.tgz#d680a9c596ef84abf5c4c07a32ffd66d582526f8"
   integrity sha512-8Ly3zIPTnT0/8RCU6Kg/G3uTICf9sRwYOpUzSIM3503tLIKcnJPRuinHhXngJUy2MntrEf6dlpOHXJju90Qh5w==
 
-"@typesafe-store/reducer@^0.1.0", "@typesafe-store/reducer@^0.1.1":
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/@typesafe-store/reducer/-/reducer-0.1.1.tgz#fa5e5951d2ba1f6f8429ecd262a94c1f078cf2a0"
-  integrity sha512-jBlaf27ENVswWXA1rQjhTF3m56+VCzm5nmPQJFc2ACzRPi4QgAZ1W+rcvbUG8HnDxYGsjDEbxMtrv/YKcW9r0w==
+"@typesafe-store/reducer@^0.1.1", "@typesafe-store/reducer@^0.1.5":
+  version "0.1.5"
+  resolved "https://registry.yarnpkg.com/@typesafe-store/reducer/-/reducer-0.1.5.tgz#49cf1c5f1a69a48f1661787dc10c9e5a28ecacf0"
+  integrity sha512-NEGPfxsu/9a6m+UhEwm+YfpMKToRkIyO4218HjWm88DYK7Ra/ZXWxhW9u8kkqwriJfBDvR/wWFk9hPq5RNYAKw==
 
 "@typesafe-store/store@file:../../../store":
   version "0.1.0"
   dependencies:
-    "@typesafe-store/reducer" "^0.1.0"
+    "@typesafe-store/reducer" "^0.1.5"
 
 "@typesafe-store/transformer@file:../..":
   version "0.1.0"

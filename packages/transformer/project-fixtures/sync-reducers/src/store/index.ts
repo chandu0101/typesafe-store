@@ -1,10 +1,13 @@
 import { TodosReducerReducerGroup } from "./reducers/generated/TodosReducer-gen";
-import { TypeSafeStore } from "@typesafe-store/store"
+import { TypeSafeStore, GetActionFromReducers } from "@typesafe-store/store"
 
 
 
 
 const reducers = { todos: TodosReducerReducerGroup }
 
-const store = new TypeSafeStore({ reducers, middleWares: [] })
+export const store = new TypeSafeStore({ reducers, middleWares: [] })
 
+export type AppState = typeof store.state
+
+export type AppAction = GetActionFromReducers<typeof reducers>
