@@ -2,9 +2,12 @@ import * as fs from "fs";
 import * as ts from "typescript";
 import { transformFiles } from "./util";
 import { setProgram, setTypeSafeStoreConfig, getTypeSafeStoreConfig, setStorePath } from "./helpers";
-import { typeSafeStoreConfigDecoder, TypeSafeStoreConfig, RestApiConfig } from "./types";
-import { TYPESAFE_STORE_CONFIG_KEY } from "./constants";
+import { typeSafeStoreConfigDecoder, TypeSafeStoreConfig, RestApiConfig, GraphqlApiConfig, TypescriptCompilerOptions, TypescriptPlugin, TsGraphqlPluginConfig } from "./types";
+import { TYPESAFE_STORE_CONFIG_KEY, TS_GRAPHQL_PLUGIN_NAME } from "./constants";
 import { resolve } from "path";
+import { generateTypesForRestApiConfig } from "./open-api-import";
+import { Result } from "@mojotech/json-type-validation";
+import { strict } from "assert";
 
 
 let filesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
@@ -19,6 +22,76 @@ const formatHost: ts.FormatDiagnosticsHost = {
 };
 
 
+/**
+ *  converts ts-graphql-plugin  config to tstore GraphqlApi config 
+ * @param tsconfig 
+ */
+function getGraphqlApiFromTsGraphqlPlugin(tsconfig: Record<string, any>): GraphqlApiConfig | undefined {
+    let result = undefined
+    const compilerOptions: TypescriptCompilerOptions = tsconfig["compilerOptions"]
+    if (compilerOptions) {
+        const plugins: TypescriptPlugin[] = compilerOptions.plugins
+        if (plugins && Array.isArray(plugins)) {
+            const tsGraphqlPlugin = plugins.find(p => p.name === TS_GRAPHQL_PLUGIN_NAME)
+            if (tsGraphqlPlugin) {
+                const gp: TsGraphqlPluginConfig = tsGraphqlPlugin as any;
+                if (gp.schema && gp.tag) {
+                    let schemaObject: { file?: string, http?: { url: string, headers?: Record<string, string> } } = {}
+                    if (typeof gp.schema === "string") {
+                        const path = gp.schema;
+                        if (/https?/.test(path)) {
+                            schemaObject.http = {
+                                url: path,
+                            }
+                        } else {
+                            schemaObject.file = path
+                        }
+                    } else {
+                        schemaObject = gp.schema as any
+                    }
+                    if (schemaObject.file && schemaObject.http) {
+                        throw new Error("You should provide either schema file or graphql end point not both")
+                    }
+                    if (schemaObject.file) {
+                        result = { file: schemaObject.file, tag: gp.tag, name: TS_GRAPHQL_PLUGIN_NAME }
+                    }
+                    if (schemaObject.http) {
+                        result = { url: { path: schemaObject.http.url, headers: schemaObject.http.headers }, tag: gp.tag, name: TS_GRAPHQL_PLUGIN_NAME }
+                    }
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+
+async function isValidGraphqlConfig(tsConfig: Record<string, any>, tstoreGraphqlApis?: GraphqlApiConfig[]) {
+    let result: [boolean, string] = [true, ""]
+    const graphqlApis: GraphqlApiConfig[] = []
+    const tsGraphqPluginCOnfig = getGraphqlApiFromTsGraphqlPlugin(tsConfig)
+    if (tsGraphqPluginCOnfig) {
+        graphqlApis.push(tsGraphqPluginCOnfig)
+    }
+    if (tstoreGraphqlApis) {
+        graphqlApis.push(...graphqlApis)
+    }
+    if (graphqlApis.length > 0) {
+        const al = graphqlApis.length
+        const sl = new Set(graphqlApis.map(ra => ra.name)).values.length
+        if (al !== sl) {
+            result = [false, "graphqlApis config names should be unique"]
+        } else {
+            result = await generateTypesForRestApiConfig(restApis)
+        }
+    }
+
+
+    return result
+}
+
+
 async function isValidRestAPisConfig(restApis?: RestApiConfig[]): Promise<[boolean, string]> {
     let result: [boolean, string] = [true, ""]
     if (restApis && restApis.length > 0) {
@@ -27,28 +100,32 @@ async function isValidRestAPisConfig(restApis?: RestApiConfig[]): Promise<[boole
         if (al !== sl) {
             result = [false, "restApis config names should be unique"]
         } else {
-
+            result = await generateTypesForRestApiConfig(restApis)
         }
     }
     return result
 }
 
-
-async function isValidConfig(obj: Record<string, string>): Promise<[boolean, string]> {
+/**
+ * 
+ * @param tsConfig 
+ */
+async function isValidConfig(tsConfig: Record<string, any>): Promise<[boolean, string]> {
     let result: [boolean, string] = [true, ""]
     try {
-        const validJson = typeSafeStoreConfigDecoder.run(obj)
+        const tStoreObj = tsConfig[TYPESAFE_STORE_CONFIG_KEY]
+        const validJson = typeSafeStoreConfigDecoder.run(tStoreObj)
         if (!validJson.ok) {
             result = [false, `not a valid config : ${JSON.stringify(validJson.error)}`]
         } else {
-            const config: TypeSafeStoreConfig = obj as any
-            if (!fs.lstatSync(resolve(config.storePath)).isDirectory()) {
+            const tStoreConfig: TypeSafeStoreConfig = tStoreObj as any
+            if (!fs.lstatSync(resolve(tStoreConfig.storePath)).isDirectory()) {
                 result = [false, "you should provide a valid storePath folder"]
             } else {
-                setStorePath(resolve(config.storePath))
-                result = await isValidRestAPisConfig(config.restApis)
-                if (result[0]) {
-
+                setStorePath(resolve(tStoreConfig.storePath))
+                result = await isValidRestAPisConfig(tStoreConfig.restApis)
+                if (result[0]) { // valid restApis config 
+                    result = await isValidGraphqlConfig(tStoreConfig.graphqlApis, tsconfig)
                 }
             }
         }
@@ -82,7 +159,7 @@ async function watchMain() {
     }
 
     //populate config
-    setTypeSafeStoreConfig(tsConfig[TYPESAFE_STORE_CONFIG_KEY])
+    setTypeSafeStoreConfig(tsConfig)
 
     // TypeScript can use several different program creation "strategies":
     //  * ts.createEmitAndSemanticDiagnosticsBuilderProgram,

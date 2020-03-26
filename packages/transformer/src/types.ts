@@ -125,6 +125,7 @@ export type OpenApiSpecFormat = "yaml" | "json"
  */
 export type GraphqlApiConfig = {
     name: string, file?: string,
+    tag: string,
     url?: ConfigUrl
 }
 
@@ -167,6 +168,7 @@ export const typeSafeStoreConfigDecoder: Decoder<TypeSafeStoreConfig> = object({
     }))),
     graphqlApis: optional(array(object({
         name: string(),
+        tag: string(),
         file: optional(string()),
         url: optional(object({
             path: string(),
@@ -186,7 +188,23 @@ export type TypeSafeStoreConfigExtra = {
     typesPath: string,
     restApiTypesPath: string,
     graphqlApiTypesPath: string
+    graphqlQueriesPath: string
 }
 
 
+/**
+ *  Users can also define graphq endpoints in https://github.com/Quramy/ts-graphql-plugin
+ */
+export type TsGraphqlPluginConfig = {
+    name: string, schema: TsGraphqlPluginSchemaConfig,
+    tag: string
+}
 
+export type TsGraphqlPluginSchemaConfig = string | { file: { path: string } }
+    | { http: { url: string, headers?: Record<string, string> } }
+
+
+
+export type TypescriptCompilerOptions = { plugins: TypescriptPlugin[] }
+
+export type TypescriptPlugin = { name: string, }

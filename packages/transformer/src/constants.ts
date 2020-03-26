@@ -31,12 +31,16 @@ export const SELECTORS_FOLDER = "selectors"
 
 export const REST_API_TYPES_FOLDER = "rest"
 
+export const GRAPHQL_QUERIES_FOLDER = "graphql"
+
 export const GRAPHQL_API_TYPES_FOLDER = "graphql"
 
 export const STORE_TYPES_FOLDER = "types"
 
 
 export const GEN_SUFFIX = "-gen"
+
+export const TS_GRAPHQL_PLUGIN_NAME = "ts-graphql-plugin"
 
 
 export const EMPTY_REDUCER_TRANFORM_MESSAGE = "//define some methods or async properties in class"
