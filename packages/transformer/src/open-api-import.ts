@@ -20,10 +20,10 @@ import swagger2openapi from "swagger2openapi";
 import { readFileSync, existsSync } from "fs";
 import groupBy from "lodash/groupBy"
 import YAML from "yamljs"
-import { dontModifyMessage, getTypeSafeStoreConfig, writeFileE } from "./helpers";
-import { join } from "path";
-import { GENERATED_FOLDER } from "./constants";
+import { dontModifyMessage } from "./helpers";
 import chalk from "chalk"
+import { ConfigUtils } from "./utils/config-utils";
+import { FileUtils } from "./utils/file-utils";
 
 // credits https://github.com/contiamo/restful-react/blob/master/src/scripts/import-open-api.ts
 
@@ -507,10 +507,10 @@ export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): 
              ${responses}
              ${pathTypes}
          }
-        
         `
-        const outFile = join(getTypeSafeStoreConfig().restApiTypesPath, GENERATED_FOLDER, rApi.name + ".ts")
-        writeFileE(outFile, output)
+
+        const outFile = ConfigUtils.getOutPutPathForRestApiTypes(rApi.name)
+        FileUtils.writeFileSync(outFile, output)
         chalk.yellow(`Successfully generated types for ${rApi.name}.`)
 
     })

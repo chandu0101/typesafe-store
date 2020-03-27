@@ -1,12 +1,13 @@
 import * as fs from "fs";
 import * as ts from "typescript";
 import { transformFiles } from "./util";
-import { setProgram, setTypeSafeStoreConfig, getTypeSafeStoreConfig, setStorePath } from "./helpers";
+import { setProgram, setStorePath } from "./helpers";
 import { typeSafeStoreConfigDecoder, TypeSafeStoreConfig, RestApiConfig, GraphqlApiConfig, TypescriptCompilerOptions, TypescriptPlugin, TsGraphqlPluginConfig } from "./types";
 import { TYPESAFE_STORE_CONFIG_KEY, TS_GRAPHQL_PLUGIN_NAME } from "./constants";
 import { resolve } from "path";
 import { generateTypesForRestApiConfig } from "./open-api-import";
 import { generateTypesForGraphqlQueriesInApp } from "./graphql-typegen";
+import { ConfigUtils } from "./utils/config-utils";
 
 
 let filesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
@@ -122,7 +123,7 @@ async function isValidConfig(tsConfig: Record<string, any>): Promise<[boolean, s
                 result = [false, "you should provide a valid storePath folder"]
             } else {
                 // setStorePath(resolve(tStoreConfig.storePath))
-                setTypeSafeStoreConfig(tStoreConfig)
+                ConfigUtils.setConfig(tStoreConfig)
                 result = await isValidRestAPisConfig(tStoreConfig.restApis)
                 if (result[0]) { // valid restApis config 
                     result = await isValidGraphqlConfig(tsConfig, tStoreConfig.graphqlApis)
@@ -216,7 +217,7 @@ async function watchMain() {
 
     const origWatchFile = host.watchFile
     host.watchFile = (path, cb) => {
-        if (path.includes(getTypeSafeStoreConfig().reducersPath)) {
+        if (path.includes(ConfigUtils.getConfig().reducersPath)) {
             initialFiles.push(path)
         }
         return origWatchFile(path, (f, e) => {
@@ -276,7 +277,8 @@ function processFiles(diagnostic: ts.Diagnostic) {
 }
 
 function handleFileChange(f: string, e: ts.FileWatcherEventKind) {
-    if (f.includes(getTypeSafeStoreConfig().reducersPath) && !f.includes(getTypeSafeStoreConfig().reducersGeneratedPath)) {
+    const config = ConfigUtils.getConfig()
+    if (f.includes(config.reducersPath) && !f.includes(config.reducersGeneratedPath)) {
         if (e == ts.FileWatcherEventKind.Deleted) {
             //handle deleted files
 

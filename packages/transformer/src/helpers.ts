@@ -3,6 +3,7 @@ import * as fs from "fs";
 import { LocalPropertyDecls, EAccess, MetaType, ProcessThisResult, MetaValue, Meta, ReducersMeta, AsyncTypes, TypeSafeStoreConfig, TypeSafeStoreConfigExtra, HttpUrlConfig } from "./types";
 import { T_STORE_ASYNC_TYPE, REDUCERS_FOLDER, GENERATED_FOLDER, STORE_TYPES_FOLDER, REST_API_TYPES_FOLDER, GRAPHQL_API_TYPES_FOLDER, GEN_SUFFIX, GRAPHQL_QUERIES_FOLDER } from "./constants";
 import { resolve, join, dirname, sep } from "path";
+import { ConfigUtils } from "./utils/config-utils";
 
 
 let wcp: ts.WatchOfConfigFile<ts.SemanticDiagnosticsBuilderProgram> = null as any;
@@ -36,7 +37,7 @@ let arrayMutableMethods = [
 
 let storePath: string = null as any
 
-let config: TypeSafeStoreConfigExtra = null as any
+// let config: TypeSafeStoreConfigExtra = null as any
 
 
 export function setCurrentProcessingReducerFile(file: string) {
@@ -69,32 +70,32 @@ export function setStorePath(path: string) {
 //   return join(getStoreTypesPath(), REST_API_TYPES_FOLDER)
 // }
 
-export function setTypeSafeStoreConfig(c: TypeSafeStoreConfig) {
-  config = {
-    ...c, reducersPath: "", reducersGeneratedPath: "",
-    typesPath: "",
-    restApiTypesPath: "",
-    graphqlApiTypesPath: "",
-    graphqlQueriesPath: ""
-  };
-  config.storePath = resolve(config.storePath)
-  config.reducersPath = join(config.storePath, REDUCERS_FOLDER)
+// export function setTypeSafeStoreConfig(c: TypeSafeStoreConfig) {
+//   config = {
+//     ...c, reducersPath: "", reducersGeneratedPath: "",
+//     typesPath: "",
+//     restApiTypesPath: "",
+//     graphqlApiTypesPath: "",
+//     graphqlQueriesPath: ""
+//   };
+//   config.storePath = resolve(config.storePath)
+//   config.reducersPath = join(config.storePath, REDUCERS_FOLDER)
 
-  config.reducersGeneratedPath = join(config.reducersPath, GENERATED_FOLDER)
+//   config.reducersGeneratedPath = join(config.reducersPath, GENERATED_FOLDER)
 
-  config.typesPath = join(config.storePath, STORE_TYPES_FOLDER)
+//   config.typesPath = join(config.storePath, STORE_TYPES_FOLDER)
 
-  config.restApiTypesPath = join(config.typesPath, REST_API_TYPES_FOLDER)
+//   config.restApiTypesPath = join(config.typesPath, REST_API_TYPES_FOLDER)
 
-  config.graphqlApiTypesPath = join(config.typesPath, GRAPHQL_API_TYPES_FOLDER)
+//   config.graphqlApiTypesPath = join(config.typesPath, GRAPHQL_API_TYPES_FOLDER)
 
-  config.graphqlQueriesPath = join(config.storePath, GRAPHQL_QUERIES_FOLDER)
+//   config.graphqlQueriesPath = join(config.storePath, GRAPHQL_QUERIES_FOLDER)
 
-}
+// }
 
-export function getTypeSafeStoreConfig() {
-  return config;
-}
+// export function getTypeSafeStoreConfig() {
+//   return config;
+// }
 
 export function setProgram(p: ts.Program) {
   program = p;
@@ -156,7 +157,7 @@ export function generateFetchActionType(lpd: LocalPropertyDecls): string {
  *  All async actions of a class
  */
 export const getAsyncActionTypeAndMeta = (): [string, string] => {
-  const group = `${getPrefixPathForReducerGroup(currentProcessingReducerFile)}${getTypeName()}`;
+  const group = `${ConfigUtils.getPrefixPathForReducerGroup(currentProcessingReducerFile)}${getTypeName()}`;
   const fetchProps: string[] = []
   const gqlProps: string[] = []
   const asyncType = propDecls
@@ -189,7 +190,7 @@ export const getAsyncActionTypeAndMeta = (): [string, string] => {
 
 export const getActionType = () => {
   const methods = getMethodsFromTypeMembers();
-  const group = `${getPrefixPathForReducerGroup(currentProcessingReducerFile)}${getTypeName()}`;
+  const group = `${ConfigUtils.getPrefixPathForReducerGroup(currentProcessingReducerFile)}${getTypeName()}`;
   const generalMethods = methods.map(m => {
     const n = m.name.getText();
     const pl = m.parameters.length;
@@ -683,18 +684,7 @@ export function getGeneratedFilePath(sourcePath: string) {
   //  const 
 }
 
-/**
- *  Writes the content to file(if directory doesn't exist it will create directory) 
- * @param path 
- * @param content 
- */
-export function writeFileE(path: string, content: string) {
-  const dir = dirname(path)
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir)
-  }
-  fs.writeFileSync(path, content)
-}
+
 
 /**
  *  header message for generated files
@@ -703,17 +693,7 @@ export function dontModifyMessage() {
   return `// this file is auto generated on ${new Date().toISOString()}, don't modify it`
 }
 
-/**
- *  if reducer defined in subfolders of reducers folder then get subfolders path as prefix
- *   (Example : reducers/one/Sample.ts  group = ${PREFIX}/Sample = one/Sample )
- * @param file 
- */
-export function getPrefixPathForReducerGroup(file: string) {
-  const dir = dirname(file)
-  const reducersPath = config.reducersPath
-  const result = dir.replace(reducersPath, "").split(sep).join("/")
-  return result === "" ? result : `${result}/`
-}
+
 
 /**
  *   

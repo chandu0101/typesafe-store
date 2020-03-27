@@ -3,8 +3,9 @@ import { promises as fs, writeFileSync, readFileSync } from "fs";
 
 import { performance } from "perf_hooks";
 import { createReducerFunction } from "./generate";
-import { getProgram, dontModifyMessage, setCurrentProcessingReducerFile, getOutputPathForReducerSourceFile, writeFileE } from "./helpers";
-import { GEN_SUFFIX, EMPTY_REDUCER_TRANFORM_MESSAGE } from "./constants";
+import { getProgram, dontModifyMessage, setCurrentProcessingReducerFile, getOutputPathForReducerSourceFile } from "./helpers";
+import { EMPTY_REDUCER_TRANFORM_MESSAGE } from "./constants";
+import { FileUtils } from "./utils/file-utils";
 
 const reducerTransformer: ts.TransformerFactory<ts.SourceFile> = context => {
   const visit: ts.Visitor = node => {
@@ -44,7 +45,7 @@ function transformFile(file: string) {
   const outFile = getOutputPathForReducerSourceFile(file)
   console.log("******* writing to out file : ", outFile);
   console.log("outFile : ", outFile);
-  writeFileE(outFile, output);
+  FileUtils.writeFileSync(outFile, output);
   const t1 = performance.now();
   console.log("time : ", t1 - t0, " ms");
 }
