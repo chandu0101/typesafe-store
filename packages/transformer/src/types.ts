@@ -101,8 +101,8 @@ export type NewValue = { name: string; op: string; value: string };
  *  headers : optional http headers 
  *  body : optional http body ,provide it if method is not GET
  */
-export type ConfigUrl = {
-    path: string, method?: string, headers?: Record<string, string>,
+export type HttpUrlConfig = {
+    url: string, method?: string, headers?: Record<string, string>,
     body?: Record<string, string>
 }
 
@@ -113,7 +113,7 @@ export type ConfigUrl = {
  */
 export type RestApiConfig = {
     name: string, file?: string,
-    url?: ConfigUrl
+    http?: HttpUrlConfig
 }
 
 export type OpenApiSpecFormat = "yaml" | "json"
@@ -126,7 +126,7 @@ export type OpenApiSpecFormat = "yaml" | "json"
 export type GraphqlApiConfig = {
     name: string, file?: string,
     tag: string,
-    url?: ConfigUrl
+    http?: HttpUrlConfig
 }
 
 /**
@@ -159,8 +159,8 @@ export const typeSafeStoreConfigDecoder: Decoder<TypeSafeStoreConfig> = object({
     restApis: optional(array(object({
         name: string(),
         file: optional(string()),
-        url: optional(object({
-            path: string(),
+        http: optional(object({
+            url: string(),
             method: optional(string()),
             headers: optional(anyJson()),
             body: optional(anyJson()),
@@ -170,8 +170,8 @@ export const typeSafeStoreConfigDecoder: Decoder<TypeSafeStoreConfig> = object({
         name: string(),
         tag: string(),
         file: optional(string()),
-        url: optional(object({
-            path: string(),
+        http: optional(object({
+            url: string(),
             method: optional(string()),
             headers: optional(anyJson()),
             body: optional(anyJson()),

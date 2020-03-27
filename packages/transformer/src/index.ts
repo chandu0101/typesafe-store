@@ -6,8 +6,7 @@ import { typeSafeStoreConfigDecoder, TypeSafeStoreConfig, RestApiConfig, Graphql
 import { TYPESAFE_STORE_CONFIG_KEY, TS_GRAPHQL_PLUGIN_NAME } from "./constants";
 import { resolve } from "path";
 import { generateTypesForRestApiConfig } from "./open-api-import";
-import { Result } from "@mojotech/json-type-validation";
-import { strict } from "assert";
+import { generateTypesForGraphqlQueriesInApp } from "./graphql-typegen";
 
 
 let filesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
@@ -56,7 +55,7 @@ function getGraphqlApiFromTsGraphqlPlugin(tsconfig: Record<string, any>): Graphq
                         result = { file: schemaObject.file, tag: gp.tag, name: TS_GRAPHQL_PLUGIN_NAME }
                     }
                     if (schemaObject.http) {
-                        result = { url: { path: schemaObject.http.url, headers: schemaObject.http.headers }, tag: gp.tag, name: TS_GRAPHQL_PLUGIN_NAME }
+                        result = { http: { url: schemaObject.http.url, headers: schemaObject.http.headers }, tag: gp.tag, name: TS_GRAPHQL_PLUGIN_NAME }
                     }
                 }
             }
@@ -83,7 +82,7 @@ async function isValidGraphqlConfig(tsConfig: Record<string, any>, tstoreGraphql
         if (al !== sl) {
             result = [false, "graphqlApis config names should be unique"]
         } else {
-            result = await generateTypesForRestApiConfig(restApis)
+            result = await generateTypesForGraphqlQueriesInApp(graphqlApis)
         }
     }
 
@@ -122,10 +121,11 @@ async function isValidConfig(tsConfig: Record<string, any>): Promise<[boolean, s
             if (!fs.lstatSync(resolve(tStoreConfig.storePath)).isDirectory()) {
                 result = [false, "you should provide a valid storePath folder"]
             } else {
-                setStorePath(resolve(tStoreConfig.storePath))
+                // setStorePath(resolve(tStoreConfig.storePath))
+                setTypeSafeStoreConfig(tStoreConfig)
                 result = await isValidRestAPisConfig(tStoreConfig.restApis)
                 if (result[0]) { // valid restApis config 
-                    result = await isValidGraphqlConfig(tStoreConfig.graphqlApis, tsconfig)
+                    result = await isValidGraphqlConfig(tsConfig, tStoreConfig.graphqlApis)
                 }
             }
         }
@@ -159,7 +159,7 @@ async function watchMain() {
     }
 
     //populate config
-    setTypeSafeStoreConfig(tsConfig)
+    // setTypeSafeStoreConfig(tsConfig)
 
     // TypeScript can use several different program creation "strategies":
     //  * ts.createEmitAndSemanticDiagnosticsBuilderProgram,

@@ -47,5 +47,8 @@
     "@types/lodash": "^4.14.149",
     "@types/node-fetch": "^2.5.5",
     "@types/yamljs": "^0.2.30"
+  },
+  "peerDependencies": {
+    "graphql": "^14.6.0"
   }
 }

@@ -1,7 +1,7 @@
 import * as ts from "typescript";
 import * as fs from "fs";
-import { LocalPropertyDecls, EAccess, MetaType, ProcessThisResult, MetaValue, Meta, ReducersMeta, AsyncTypes, TypeSafeStoreConfig, TypeSafeStoreConfigExtra, ConfigUrl } from "./types";
-import { T_STORE_ASYNC_TYPE, REDUCERS_FOLDER, GENERATED_FOLDER, STORE_TYPES_FOLDER, REST_API_TYPES_FOLDER, GRAPHQL_API_TYPES_FOLDER, GEN_SUFFIX } from "./constants";
+import { LocalPropertyDecls, EAccess, MetaType, ProcessThisResult, MetaValue, Meta, ReducersMeta, AsyncTypes, TypeSafeStoreConfig, TypeSafeStoreConfigExtra, HttpUrlConfig } from "./types";
+import { T_STORE_ASYNC_TYPE, REDUCERS_FOLDER, GENERATED_FOLDER, STORE_TYPES_FOLDER, REST_API_TYPES_FOLDER, GRAPHQL_API_TYPES_FOLDER, GEN_SUFFIX, GRAPHQL_QUERIES_FOLDER } from "./constants";
 import { resolve, join, dirname, sep } from "path";
 
 
@@ -61,31 +61,35 @@ export function setStorePath(path: string) {
   storePath = path
 }
 
-export function getStoreTypesPath() {
-  return join(config.storePath, STORE_TYPES_FOLDER)
-}
+// export function getStoreTypesPath() {
+//   return join(config.storePath, STORE_TYPES_FOLDER)
+// }
 
-export function getRestApisPath() {
-  return join(getStoreTypesPath(), REST_API_TYPES_FOLDER)
-}
+// export function getRestApisPath() {
+//   return join(getStoreTypesPath(), REST_API_TYPES_FOLDER)
+// }
 
 export function setTypeSafeStoreConfig(c: TypeSafeStoreConfig) {
   config = {
     ...c, reducersPath: "", reducersGeneratedPath: "",
     typesPath: "",
     restApiTypesPath: "",
-    graphqlApiTypesPath: ""
+    graphqlApiTypesPath: "",
+    graphqlQueriesPath: ""
   };
   config.storePath = resolve(config.storePath)
   config.reducersPath = join(config.storePath, REDUCERS_FOLDER)
 
   config.reducersGeneratedPath = join(config.reducersPath, GENERATED_FOLDER)
 
-  config.typesPath = getStoreTypesPath()
+  config.typesPath = join(config.storePath, STORE_TYPES_FOLDER)
 
-  config.restApiTypesPath = getRestApisPath()
+  config.restApiTypesPath = join(config.typesPath, REST_API_TYPES_FOLDER)
 
   config.graphqlApiTypesPath = join(config.typesPath, GRAPHQL_API_TYPES_FOLDER)
+
+  config.graphqlQueriesPath = join(config.storePath, GRAPHQL_QUERIES_FOLDER)
+
 }
 
 export function getTypeSafeStoreConfig() {

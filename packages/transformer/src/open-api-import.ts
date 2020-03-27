@@ -1,4 +1,4 @@
-import { RestApiConfig, ConfigUrl, OpenApiSpecFormat, ContentType } from "./types";
+import { RestApiConfig, HttpUrlConfig, OpenApiSpecFormat, ContentType } from "./types";
 import set from "lodash/set"
 import { pascal } from "case"
 import isEmpty from "lodash/isEmpty"
@@ -14,15 +14,13 @@ import {
     RequestBodyObject,
     ResponseObject,
     SchemaObject,
-    PathsObject,
-    ServerObject,
 } from "openapi3-ts";
 
 import swagger2openapi from "swagger2openapi";
 import { readFileSync, existsSync } from "fs";
 import groupBy from "lodash/groupBy"
 import YAML from "yamljs"
-import { dontModifyMessage, getRestApisPath, writeFileE } from "./helpers";
+import { dontModifyMessage, getTypeSafeStoreConfig, writeFileE } from "./helpers";
 import { join } from "path";
 import { GENERATED_FOLDER } from "./constants";
 import chalk from "chalk"
@@ -89,7 +87,7 @@ async function importSpec({ data, format }: { data: string, format: OpenApiSpecF
     return specs
 }
 
-async function requestRestApiConfigUrl(url: ConfigUrl): Promise<{ data: string, format: OpenApiSpecFormat }> {
+async function requestRestApiConfigUrl(url: HttpUrlConfig): Promise<{ data: string, format: OpenApiSpecFormat }> {
     const options: Record<string, any> = {}
     if (url.method) {
         options.method = url.method;
@@ -100,13 +98,13 @@ async function requestRestApiConfigUrl(url: ConfigUrl): Promise<{ data: string, 
     if (url.body) {
         options.body = JSON.stringify(url.body)
     }
-    const resp = await fetch(url.path, options)
+    const resp = await fetch(url.url, options)
     if (!resp.ok) {
-        throw new Error(`Request to ${url.path} failed with error : ${resp.statusText}`)
+        throw new Error(`Request to ${url.url} failed with error : ${resp.statusText}`)
     }
 
     let format: OpenApiSpecFormat = "yaml"
-    if (url.path.endsWith(".json") || resp.headers.get("Content-Type") === ContentType.APPLICATION_JSON) {
+    if (url.url.endsWith(".json") || resp.headers.get("Content-Type") === ContentType.APPLICATION_JSON) {
         format = "json"
     }
     const data = await resp.text()
@@ -445,10 +443,10 @@ function generatePathTypes(spec: OpenAPIObject): string {
 export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): Promise<[boolean, string]> {
     let result: [boolean, string] = [true, ""]
     await Promise.all(restApis.map(async (rApi) => {
-        if (!rApi.file && !rApi.url) {
+        if (!rApi.file && !rApi.http) {
             throw new Error(`restApis config  ${rApi.name} : you should provide either file or url.`)
         }
-        if (rApi.file && rApi.url) {
+        if (rApi.file && rApi.http) {
             throw new Error(`restApis config  ${rApi.name} : you should provide either file or url not both.`)
         }
         let spec: OpenAPIObject = null as any
@@ -462,8 +460,8 @@ export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): 
             spec = await importSpec({ data, format })
         }
 
-        if (rApi.url) {
-            const url = rApi.url
+        if (rApi.http) {
+            const url = rApi.http
             const { data, format } = await requestRestApiConfigUrl(url)
             spec = await importSpec({ data, format })
         }
@@ -511,7 +509,7 @@ export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): 
          }
         
         `
-        const outFile = join(getRestApisPath(), GENERATED_FOLDER, rApi.name + ".ts")
+        const outFile = join(getTypeSafeStoreConfig().restApiTypesPath, GENERATED_FOLDER, rApi.name + ".ts")
         writeFileE(outFile, output)
         chalk.yellow(`Successfully generated types for ${rApi.name}.`)
 
