@@ -1,13 +1,13 @@
 import * as fs from "fs";
 import * as ts from "typescript";
-import { transformFiles } from "./util";
-import { setProgram, setStorePath } from "./helpers";
 import { typeSafeStoreConfigDecoder, TypeSafeStoreConfig, RestApiConfig, GraphqlApiConfig, TypescriptCompilerOptions, TypescriptPlugin, TsGraphqlPluginConfig } from "./types";
 import { TYPESAFE_STORE_CONFIG_KEY, TS_GRAPHQL_PLUGIN_NAME } from "./constants";
 import { resolve } from "path";
-import { generateTypesForRestApiConfig } from "./open-api-import";
-import { generateTypesForGraphqlQueriesInApp } from "./graphql-typegen";
+import { generateTypesForRestApiConfig } from "./rest/open-api-import";
 import { ConfigUtils } from "./utils/config-utils";
+import { transformReducerFiles } from "./transformers/reducer-transformer";
+import { AstUtils } from "./utils/ast-utils";
+import { generateTypesForGraphqlQueriesInApp } from "./graphql";
 
 
 let filesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
@@ -209,7 +209,7 @@ async function watchMain() {
     const origPostProgramCreate = host.afterProgramCreate;
 
     host.afterProgramCreate = program => {
-        setProgram(program.getProgram())
+        AstUtils.setProgram(program.getProgram())
         // console.log("** We finished making the program! **");
         origPostProgramCreate!(program);
     };
@@ -231,7 +231,7 @@ async function watchMain() {
     // the program over time.
     const wp = ts.createWatchProgram(host);
     // setWatchCompilerHost(wp)
-    setProgram(wp.getProgram().getProgram())
+    AstUtils.setProgram(wp.getProgram().getProgram())
 }
 
 function reportDiagnostic(diagnostic: ts.Diagnostic) {
@@ -270,7 +270,7 @@ function processFiles(diagnostic: ts.Diagnostic) {
         && (msg.includes("Found 0 errors") || !msg.includes("error"))
         && filesChanged.length > 0) {
         filesChanged.forEach(f => {
-            transformFiles([f.path])
+            transformReducerFiles([f.path])
         })
         filesChanged = []
     }

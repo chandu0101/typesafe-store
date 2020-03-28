@@ -1,4 +1,4 @@
-import { GraphqlApiConfig, HttpUrlConfig, ContentType } from "./types";
+import { GraphqlApiConfig, HttpUrlConfig, ContentType } from "../types";
 import { GraphQLSchema, buildClientSchema, buildSchema } from "graphql"
 import { introspectionQuery } from "graphql/utilities"
 import { existsSync, promises as fsp } from "fs";

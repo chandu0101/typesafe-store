@@ -1,4 +1,4 @@
-import { RestApiConfig, HttpUrlConfig, OpenApiSpecFormat, ContentType } from "./types";
+import { RestApiConfig, HttpUrlConfig, OpenApiSpecFormat, ContentType } from "../types";
 import set from "lodash/set"
 import { pascal } from "case"
 import isEmpty from "lodash/isEmpty"
@@ -20,10 +20,10 @@ import swagger2openapi from "swagger2openapi";
 import { readFileSync, existsSync } from "fs";
 import groupBy from "lodash/groupBy"
 import YAML from "yamljs"
-import { dontModifyMessage } from "./helpers";
 import chalk from "chalk"
-import { ConfigUtils } from "./utils/config-utils";
-import { FileUtils } from "./utils/file-utils";
+import { ConfigUtils } from "../utils/config-utils";
+import { FileUtils } from "../utils/file-utils";
+import { CommonUtils } from "../utils/common-utils";
 
 // credits https://github.com/contiamo/restful-react/blob/master/src/scripts/import-open-api.ts
 
@@ -498,7 +498,7 @@ export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): 
             reducerImports.push("FetchPatch")
         }
         const output = `
-         ${dontModifyMessage()} 
+         ${CommonUtils.dontModifyMessage()} 
          import {${reducerImports.join(",")}}  fomr "@typsafe-store/reducer"
 
          namespace ${rApi.name} {
