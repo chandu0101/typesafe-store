@@ -9,7 +9,7 @@ const INTRO_SPECTION_QUERY = { query: introspectionQuery }
 export class HttpSchemaManager extends SchemaManager {
 
     constructor(public http: HttpUrlConfig, public readonly tag: string) {
-        super(tag)
+        super(tag, http.url)
     }
 
     private _schema?: GraphQLSchema

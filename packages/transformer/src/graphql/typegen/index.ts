@@ -93,43 +93,35 @@ export class GraphqlTypGen {
      */
     static isValidQueryDocument(document: DocumentNode): DocumentNodeValidationResult {
         let result: DocumentNodeValidationResult = {}
-        let isQuery = false
-        let isMutation = false
-        let isSubscription = false
         visit(document, {
             enter(node) {
                 if (node.kind === "OperationDefinition") {
+                    const op = result.operation
                     if (node.operation === "query") {
-                        if (isMutation || isSubscription) {
+                        if (op === GraphqlOperation.MUTATION || op === GraphqlOperation.SUBSCRIPTION) {
                             result = { errorMessage: "You canot combine query with mutation/subscription" }
                             return BREAK
                         }
-                        isQuery = true
+                        result.operation = GraphqlOperation.QUERY
                     } else if (node.operation === "mutation") {
-                        if (isQuery || isSubscription) {
+                        if (op === GraphqlOperation.QUERY || op === GraphqlOperation.SUBSCRIPTION) {
                             result = { errorMessage: "You canot combine mutation with query/subscription" }
                             return BREAK
                         }
-                        isMutation = true
+                        result.operation = GraphqlOperation.MUTATION
                     } else if (node.operation === "subscription") {
-                        if (isMutation || isQuery) {
+                        if (op === GraphqlOperation.MUTATION || op === GraphqlOperation.QUERY) {
                             result = { errorMessage: "You canot combine subscription with query/mutation" }
                             return BREAK
                         }
-                        isSubscription = true
+                        result.operation = GraphqlOperation.SUBSCRIPTION
                     }
                 }
             }
         })
         if (!result.errorMessage) {
-            if (!isQuery || !isMutation || !isSubscription) {
+            if (!result.operation) {
                 result = { isFragment: true }
-            } else if (isQuery) {
-                result = { operation: GraphqlOperation.QUERY }
-            } else if (isMutation) {
-                result = { operation: GraphqlOperation.MUTATION }
-            } else if (isSubscription) {
-                result = { operation: GraphqlOperation.SUBSCRIPTION }
             }
         }
         return result

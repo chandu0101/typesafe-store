@@ -2,12 +2,14 @@ import { SchemaManager } from "./schema-manager"
 import { GraphQLSchema, buildClientSchema, buildSchema } from "graphql"
 import { existsSync, promises as fsp } from "fs";
 import { parse } from "path"
+import { GraphqlApiConfig } from "../../types";
+import { FileUtils } from "../../utils/file-utils";
 
 
 export class FileSchemaManager extends SchemaManager {
 
-    constructor(public readonly file: string, public readonly tag: string) {
-        super(tag)
+    constructor(public readonly file: { path: string, url: string }, public readonly tag: string) {
+        super(tag, file.url)
     }
 
     private _schema?: GraphQLSchema
@@ -24,11 +26,11 @@ export class FileSchemaManager extends SchemaManager {
 
     async readSchema() {
         try {
-            const { ext } = parse(this.file)
-            if (!existsSync(this.file) && !(ext === ".json" || ext === ".graphql" || ext === ".gql")) {
+            const { ext } = parse(this.file.path)
+            if (!existsSync(this.file.path) && !(ext === ".json" || ext === ".graphql" || ext === ".gql")) {
                 this._error = `you should provide a valid graphqlSchema file with extension .json/.graphql/.gql`
             } else {
-                const content = await fsp.readFile(this.file, { encoding: "utf-8" })
+                const content = await FileUtils.readFile(this.file.path)
                 if (ext === ".json") {
                     let json = JSON.parse(content)
                     if (json.data) {

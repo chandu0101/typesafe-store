@@ -108,4 +108,8 @@ export class ConfigUtils {
         return buildInfo!.program.fileInfos[file].version
     }
 
+    static getGraphqlTypesOutputPath(apiName: string) {
+        return join(config.graphqlApiTypesPath, apiName, "index.ts")
+    }
+
 }

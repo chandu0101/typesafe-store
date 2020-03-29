@@ -1,5 +1,5 @@
 import { dirname } from "path"
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from "fs"
+import { existsSync, mkdirSync, writeFileSync, readFileSync, promises as fsp } from "fs"
 
 
 
@@ -20,5 +20,9 @@ export class FileUtils {
 
     static readFileSync(path: string) {
         return readFileSync(path, { encoding: "utf-8" })
+    }
+
+    static async readFile(path: string) {
+        return fsp.readFile(path, { encoding: "utf-8" })
     }
 }

@@ -4,12 +4,18 @@ import { FileSchemaManager } from "./schema-manager/file-schema-manager";
 import { HttpSchemaManager } from "./schema-manager/http-schema-manager";
 import * as ts from "typescript"
 import { AstUtils } from "../utils/ast-utils";
-import { ApiMeta } from "./type";
+import { ApiMeta, GraphqlOperation } from "./type";
 import { ConfigUtils } from "../utils/config-utils";
 import chalk from "chalk"
 import { validate } from "graphql/validation"
-import { parse, GraphQLSchema } from "graphql"
+import { parse, GraphQLSchema, } from "graphql"
 import { GraphqlTypGen } from "./typegen"
+import { pascal } from "case"
+import { FileUtils } from "../utils/file-utils";
+import isEmpty from "lodash/isEmpty"
+
+
+
 const apiMetaMap: Map<string, ApiMeta> = new Map()
 let initialStart: boolean = false
 
@@ -43,7 +49,7 @@ function validateQuery(queryString: string, schema: GraphQLSchema) {
 function processFile(file: string, ) {
     try {
         const apiName = ConfigUtils.getGraphqlApiNameFromGraphqlOperationsPath(file)
-        const operationNamePrefix = ConfigUtils.getGraphqlOperationVariableNamePrefix(file)
+        const namespaceName = ConfigUtils.getGraphqlOperationVariableNamePrefix(file)
         const meta = apiMetaMap.get(apiName)!
         if (!meta.schemaManager.schema) {
             throw new Error(`Graphql Schema Error : ${meta.schemaManager.error}`)
@@ -65,7 +71,39 @@ function processFile(file: string, ) {
             if (operation) { // discard fragment only nodes 
                 const variableName = node.parent.parent.getText()
                 const { types, operations } = GraphqlTypGen.generateType(document, meta.schemaManager.schema!)
-
+                let responseType = ""
+                let bodyType = ""
+                let isMultipleOp = false
+                if (operations.length > 1) {
+                    isMultipleOp = true
+                    responseType = `[${operations.map(o => o.name).join(",")}]`
+                    bodyType = `[${operations.map(op => `{
+                        query: "${gqlString}",
+                        ${op.variables === "undefined" ? "" : `variables:${op.variables}`}
+                    }`).join(", ")}]`
+                } else {
+                    responseType = `${operations[0].name}`
+                    const op = operations[0]
+                    bodyType = `{
+                        query: "${gqlString}",
+                        ${op.variables === "undefined" ? "" : `variables:${op.variables}`}
+                    }`
+                }
+                //TODO subscription type , subscriptions should be handled via websockets
+                const fType = `FetchPost<"${meta.schemaManager.url}",${bodyType},${responseType},"GraphqlError[]">`
+                const output = `
+                 ${types}
+                 export type ${pascal(variableName)} =  ${fType}
+                `
+                const operationValue = { text: output, isMultipleOp }
+                if (operation === GraphqlOperation.QUERY) {
+                    meta.operations.queries[namespaceName] = operationValue
+                } else if (operation === GraphqlOperation.MUTATION) {
+                    meta.operations.mutations[namespaceName] = operationValue
+                } else {
+                    meta.operations.subscriptions[namespaceName] = operationValue
+                }
+                writeGraphqlTypesToFile(apiName, meta)
             }
 
 
@@ -77,17 +115,66 @@ function processFile(file: string, ) {
 
 }
 
-
-namespace Hello {
-
-    export namespace hello {
-        export type X = string
+function writeGraphqlTypesToFile(apiName: string, meta: ApiMeta) {
+    const outputPath = ConfigUtils.getGraphqlTypesOutputPath(apiName)
+    const operations = meta.operations
+    let queries = ""
+    let mutations = ""
+    let subscriptions = ""
+    if (!isEmpty(operations.queries)) {
+        const qt = Object.entries(operations.queries).map(([n, ov]) => {
+            return `
+             export namespace ${n} {
+                ${ov.text}
+             }
+           `
+        }).join("\n ")
+        queries = `
+         export namespace queries {
+             ${qt}
+         }
+       `
     }
+
+    if (!isEmpty(operations.mutations)) {
+        const mt = Object.entries(operations.mutations).map(([n, ov]) => {
+            return `
+             export namespace ${n} {
+                ${ov.text}
+             }
+           `
+        }).join("\n ")
+        queries = `
+         export namespace mutations {
+             ${mt}
+         }
+       `
+    }
+
+    if (!isEmpty(operations.mutations)) {
+        const st = Object.entries(operations.subscriptions).map(([n, ov]) => {
+            return `
+             export namespace ${n} {
+                ${ov.text}
+             }
+           `
+        }).join("\n ")
+        queries = `
+         export namespace subscriptions {
+             ${st}
+         }
+       `
+    }
+
+    const output = `
+    export default namespace ${apiName} {
+        ${queries}
+        ${mutations}
+        ${subscriptions}
+    }
+   `
+    FileUtils.writeFileSync(outputPath, output)
 }
-
-
-const s: Hello.hello.X = ""
-
 
 
 function getTextFromTaggedLiteral(node: ts.TemplateExpression | ts.TaggedTemplateExpression | ts.NoSubstitutionTemplateLiteral, file: string, apiMeta: ApiMeta): string {
@@ -262,7 +349,10 @@ export async function generateTypesForGraphqlQueriesInApp(graphqlApis: GraphqlAp
         if (schemaManager.error) {
             throw new Error(schemaManager.error)
         }
-        apiMetaMap.set(gApi.name, { schemaManager, resultCache: new Map(), spanNodeCache: new Map() })
+        apiMetaMap.set(gApi.name, {
+            schemaManager, resultCache: new Map(),
+            spanNodeCache: new Map(), operations: { queries: {}, mutations: {}, subscriptions: {} }
+        })
 
     }))
     initialStart = false

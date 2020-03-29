@@ -124,7 +124,7 @@ export type OpenApiSpecFormat = "yaml" | "json"
  *   url : url to get graphql schema 
  */
 export type GraphqlApiConfig = {
-    name: string, file?: string,
+    name: string, file?: { path: string, url: string },
     tag: string,
     http?: HttpUrlConfig
 }
@@ -169,7 +169,7 @@ export const typeSafeStoreConfigDecoder: Decoder<TypeSafeStoreConfig> = object({
     graphqlApis: optional(array(object({
         name: string(),
         tag: string(),
-        file: optional(string()),
+        file: optional(object({ path: string(), url: string() })),
         http: optional(object({
             url: string(),
             method: optional(string()),

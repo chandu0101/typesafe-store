@@ -53,7 +53,7 @@ function getGraphqlApiFromTsGraphqlPlugin(tsconfig: Record<string, any>): Graphq
                         throw new Error("You should provide either schema file or graphql end point not both")
                     }
                     if (schemaObject.file) {
-                        result = { file: schemaObject.file, tag: gp.tag, name: TS_GRAPHQL_PLUGIN_NAME }
+                        result = { file: { path: schemaObject.file, url: "" }, tag: gp.tag, name: TS_GRAPHQL_PLUGIN_NAME }
                     }
                     if (schemaObject.http) {
                         result = { http: { url: schemaObject.http.url, headers: schemaObject.http.headers }, tag: gp.tag, name: TS_GRAPHQL_PLUGIN_NAME }
