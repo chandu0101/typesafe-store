@@ -4,7 +4,7 @@ import { FileSchemaManager } from "./schema-manager/file-schema-manager";
 import { HttpSchemaManager } from "./schema-manager/http-schema-manager";
 import * as ts from "typescript"
 import { AstUtils } from "../utils/ast-utils";
-import { ResultOfProcessedGqlNode, ApiMeta } from "./type";
+import { ApiMeta } from "./type";
 import { ConfigUtils } from "../utils/config-utils";
 import chalk from "chalk"
 import { validate } from "graphql/validation"
@@ -42,11 +42,11 @@ function validateQuery(queryString: string, schema: GraphQLSchema) {
 
 function processFile(file: string, ) {
     try {
-        const apiName = ConfigUtils.getGraphqlApiNameFromGraphqlQueriesPath(file)
+        const apiName = ConfigUtils.getGraphqlApiNameFromGraphqlOperationsPath(file)
+        const operationNamePrefix = ConfigUtils.getGraphqlOperationVariableNamePrefix(file)
         const meta = apiMetaMap.get(apiName)!
         if (!meta.schemaManager.schema) {
-            chalk.yellow(`Graphql Schema Error : ${meta.schemaManager.error}`)
-            return
+            throw new Error(`Graphql Schema Error : ${meta.schemaManager.error}`)
         }
         const tag = meta.schemaManager.tag;
         const nodes = AstUtils.getAllNodes(file, isTemplateExpression)
@@ -58,11 +58,13 @@ function processFile(file: string, ) {
             if (errors) {
                 throw new Error(`query : ${gqlString} is not valid, ${JSON.stringify(errors)}`)
             }
-            const [validQueryDocument, message] = GraphqlTypGen.isValidQueryDocument(document)
-            if (!validQueryDocument && message !== "fragment") {
-                throw new Error(`query :${gqlString} is not valid , ${message}`)
+            const { isFragment, operation, errorMessage } = GraphqlTypGen.isValidQueryDocument(document)
+            if (errorMessage) {
+                throw new Error(`query :${gqlString} is not valid , ${errorMessage}`)
             }
-            if (validQueryDocument) { // discard fragment only nodes 
+            if (operation) { // discard fragment only nodes 
+                const variableName = node.parent.parent.getText()
+                const { types, operations } = GraphqlTypGen.generateType(document, meta.schemaManager.schema!)
 
             }
 

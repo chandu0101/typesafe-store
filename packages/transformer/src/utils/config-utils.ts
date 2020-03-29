@@ -21,7 +21,7 @@ export class ConfigUtils {
             typesPath: "",
             restApiTypesPath: "",
             graphqlApiTypesPath: "",
-            graphqlQueriesPath: "",
+            graphqlOperationsPath: "",
         };
         config.storePath = resolve(config.storePath)
         config.reducersPath = join(config.storePath, REDUCERS_FOLDER)
@@ -34,7 +34,7 @@ export class ConfigUtils {
 
         config.graphqlApiTypesPath = join(config.typesPath, GRAPHQL_API_TYPES_FOLDER)
 
-        config.graphqlQueriesPath = join(config.storePath, GRAPHQL_QUERIES_FOLDER)
+        config.graphqlOperationsPath = join(config.storePath, GRAPHQL_QUERIES_FOLDER)
 
         config.tsBuildInfoPath = ts.getTsBuildInfoEmitOutputFilePath(compilerOptions)
     }
@@ -81,8 +81,18 @@ export class ConfigUtils {
     }
 
 
-    static getGraphqlApiNameFromGraphqlQueriesPath(file: string) {
-        return file.replace(config.graphqlQueriesPath, "").split(sep)[0]
+    static getGraphqlApiNameFromGraphqlOperationsPath(file: string) {
+        return file.replace(config.graphqlOperationsPath, "").split(sep)[1]
+    }
+
+    static getGraphqlOperationVariableNamePrefix(file: string) {
+        let p = file.replace(config.graphqlOperationsPath, "").split(sep).slice(2)
+        const f = p[0]
+        if (f === "queries" || f === "mutations" || f === "subscriptions") {
+            p = p.slice(1)
+        }
+        p.pop()
+        return p.join("_")
     }
 
     static getFileVersion(file: string, reuseBuildInfo?: boolean) {

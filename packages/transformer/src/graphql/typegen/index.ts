@@ -23,6 +23,7 @@ import {
     BREAK,
     GraphQLOutputType,
 } from 'graphql';
+import { GraphqlOperation } from "../type";
 
 type ListTypeKind = 'none' | 'nullableList' | 'strictList';
 
@@ -62,6 +63,9 @@ class Stack<T> {
     }
 
     get current() {
+        if (!this.array.length) {
+            throw new Error("No Elements Stack Error")
+        }
         return this.array[this.array.length - 1]
     }
 
@@ -77,6 +81,9 @@ class Stack<T> {
 
 }
 
+type DocumentNodeValidationResult = { operation?: GraphqlOperation, errorMessage?: string, isFragment?: boolean }
+
+type GenTypeResult = { types: string, operations: { name: string, variables: string }[] }
 
 export class GraphqlTypGen {
 
@@ -84,8 +91,8 @@ export class GraphqlTypGen {
      *  verifies whether given document node only contains query/mutation/subscription
      * @param document 
      */
-    static isValidQueryDocument(document: DocumentNode): [boolean, string] {
-        let result: [boolean, string] = [true, ""]
+    static isValidQueryDocument(document: DocumentNode): DocumentNodeValidationResult {
+        let result: DocumentNodeValidationResult = {}
         let isQuery = false
         let isMutation = false
         let isSubscription = false
@@ -94,19 +101,19 @@ export class GraphqlTypGen {
                 if (node.kind === "OperationDefinition") {
                     if (node.operation === "query") {
                         if (isMutation || isSubscription) {
-                            result = [false, "You canot combine query with mutation/subscription"]
+                            result = { errorMessage: "You canot combine query with mutation/subscription" }
                             return BREAK
                         }
                         isQuery = true
                     } else if (node.operation === "mutation") {
                         if (isQuery || isSubscription) {
-                            result = [false, "You canot combine mutation with query/subscription"]
+                            result = { errorMessage: "You canot combine mutation with query/subscription" }
                             return BREAK
                         }
                         isMutation = true
                     } else if (node.operation === "subscription") {
                         if (isMutation || isQuery) {
-                            result = [false, "You canot combine subscription with query/mutation"]
+                            result = { errorMessage: "You canot combine subscription with query/mutation" }
                             return BREAK
                         }
                         isSubscription = true
@@ -114,16 +121,22 @@ export class GraphqlTypGen {
                 }
             }
         })
-        if (result[0]) {
+        if (!result.errorMessage) {
             if (!isQuery || !isMutation || !isSubscription) {
-                result = [false, "fragment"]
+                result = { isFragment: true }
+            } else if (isQuery) {
+                result = { operation: GraphqlOperation.QUERY }
+            } else if (isMutation) {
+                result = { operation: GraphqlOperation.MUTATION }
+            } else if (isSubscription) {
+                result = { operation: GraphqlOperation.SUBSCRIPTION }
             }
         }
         return result
     }
 
-    static generateType(documentNode: DocumentNode, schema: GraphQLSchema): string {
-        let result = ""
+    static generateType(documentNode: DocumentNode, schema: GraphQLSchema): GenTypeResult {
+        let result: GenTypeResult = {} as any
         const statements: string[] = [];
         const parentTypeStack = new Stack<GraphQLFragmentTypeConditionNamedType>();
         const resultFieldElementStack = new Stack<FieldTypeElement>(() => ({
@@ -141,6 +154,9 @@ export class GraphqlTypGen {
                 fragmentMap.set(def.name.value, def);
             }
         });
+
+        const operations: GenTypeResult["operations"] = []
+
         visit(documentNode, {
             OperationDefinition: {
                 enter: node => {
@@ -160,18 +176,21 @@ export class GraphqlTypGen {
                     variableElementStack.stack();
                 },
                 leave: node => {
+                    const op = node.name ? node.name.value : 'QueryResult'
                     statements.push(
                         this.createTsTypeDeclaration(
-                            node.name ? node.name.value : 'QueryResult',
+                            op,
                             resultFieldElementStack.consume(),
                         ),
                     );
+                    const v = node.name ? node.name.value + 'Variables' : 'QueryVariables'
                     statements.push(
                         this.createTsTypeDeclaration(
-                            node.name ? node.name.value + 'Variables' : 'QueryVariables',
+                            v,
                             variableElementStack.consume(),
                         ),
                     );
+                    operations.push({ name: op, variables: v })
                     parentTypeStack.consume();
                 },
             },
@@ -217,32 +236,115 @@ export class GraphqlTypGen {
                 },
             },
             FragmentDefinition: {
-                enter(node) {
-
+                enter: node => {
+                    const conditionNamedType = schema.getType(
+                        node.typeCondition.name.value,
+                    )! as GraphQLFragmentTypeConditionNamedType;
+                    parentTypeStack.stack(conditionNamedType);
+                    resultFieldElementStack.stack();
                 },
-                leave(node) {
-
-                }
+                leave: node => {
+                    statements.push(this.createTsTypeDeclaration(node.name.value, resultFieldElementStack.consume()));
+                    parentTypeStack.consume();
+                },
             },
             FragmentSpread: {
-                leave(node) {
-
-                }
+                leave: node => {
+                    const fragmentDefNode = fragmentMap.get(node.name.value)!;
+                    const isUnionCondition = this.isConcreteTypeOfParentUnionType(
+                        fragmentDefNode.typeCondition,
+                        parentTypeStack.current,
+                    );
+                    resultFieldElementStack.current.typeFragments.push({
+                        isUnionCondition,
+                        typeNode: node.name.value,
+                    });
+                },
             },
             InlineFragment: {
-                enter(node) {
-
+                enter: node => {
+                    if (!node.typeCondition) return;
+                    const conditionNamedType = schema.getType(
+                        node.typeCondition.name.value,
+                    )! as GraphQLFragmentTypeConditionNamedType;
+                    parentTypeStack.stack(conditionNamedType);
+                    resultFieldElementStack.stack();
                 },
-                leave(node) {
-
-                }
+                leave: node => {
+                    if (!node.typeCondition) return;
+                    parentTypeStack.consume();
+                    const typeNode = this.createTsFieldTypeNode(resultFieldElementStack.consume());
+                    const isUnionCondition = this.isConcreteTypeOfParentUnionType(node.typeCondition, parentTypeStack.current);
+                    resultFieldElementStack.current.typeFragments.push({
+                        isUnionCondition,
+                        typeNode,
+                    });
+                },
             },
             Field: {
+                enter: node => {
+                    if (node.name.value === '__typename') return;
 
-            }
+                    const field = (parentTypeStack.current as any).getFields()[node.name.value];
+
+                    const fieldMetadata = this.getFieldMetadataFromFieldTypeInstance(field!);
+                    if (
+                        fieldMetadata.fieldType instanceof GraphQLObjectType ||
+                        fieldMetadata.fieldType instanceof GraphQLInterfaceType ||
+                        fieldMetadata.fieldType instanceof GraphQLUnionType
+                    ) {
+                        parentTypeStack.stack(fieldMetadata.fieldType);
+                        resultFieldElementStack.stack();
+                    }
+                    fieldMetadataMap.set(node, fieldMetadata as any);
+                },
+                leave: node => {
+                    if (node.name.value === '__typename') {
+                        resultFieldElementStack.current.members.push(
+                            this.createTsDoubleUnderscoreTypenameFieldType(parentTypeStack.current),
+                        );
+                        return;
+                    }
+                    const { fieldType, strict, list } = fieldMetadataMap.get(node)!;
+                    let typeNode: string | undefined;
+                    if (fieldType instanceof GraphQLScalarType) {
+                        typeNode = this.createTsTypeNodeFromScalar(fieldType);
+                    } else if (fieldType instanceof GraphQLEnumType) {
+                        typeNode = this.createTsTypeNodeFromEnum(fieldType);
+                    } else if (
+                        fieldType instanceof GraphQLObjectType ||
+                        fieldType instanceof GraphQLInterfaceType ||
+                        fieldType instanceof GraphQLUnionType
+                    ) {
+                        typeNode = this.createTsFieldTypeNode(resultFieldElementStack.consume());
+                        parentTypeStack.consume();
+                    }
+                    if (!typeNode) {
+                        throw new Error('Unknown field output type. ' + fieldType.toJSON());
+                    }
+                    typeNode = this.wrapTsTypeNodeWithModifiers(typeNode, list, strict);
+                    resultFieldElementStack.current.members.push(
+                        { name: node.name.value, type: typeNode! }
+                    );
+                    fieldMetadataMap.delete(node);
+                },
+            },
         })
-
+        result.types = `${statements.join("\n")}`
+        result.operations = operations
         return result
+    }
+
+    private static isConcreteTypeOfParentUnionType(
+        typeCondition: NamedTypeNode,
+        parentType: GraphQLFragmentTypeConditionNamedType,
+    ) {
+        if (parentType instanceof GraphQLUnionType) {
+            const unionElementTypes = parentType.getTypes();
+            return unionElementTypes.some(ut => ut.name === typeCondition.name.value);
+        } else {
+            return false;
+        }
     }
 
     private static getFieldMetadataFromTypeNode(node: TypeNode) {
@@ -356,7 +458,7 @@ export class GraphqlTypGen {
             }
         });
         if (toUnionElements.length) {
-            toIntersectionElements.push(toUnionElements.join(" | "));
+            toIntersectionElements.push(`(${toUnionElements.join(" | ")})`);
         }
         if (members.length) {
             toIntersectionElements.unshift(`Readonly<{${members.map(m => `${m.name}${m.optional ? "?" : ""} :${m.type}`).join(", ")}}>`);
@@ -375,10 +477,22 @@ export class GraphqlTypGen {
         if (list === 'strictList' || list === 'nullableList') {
             typeNode = `${typeNode}[]`;
             if (list === 'nullableList') {
-                typeNode = `${typeNode} | null`;
+                typeNode = `(${typeNode} | null)`;
             }
         }
         return typeNode;
+    }
+
+
+
+    private static createTsDoubleUnderscoreTypenameFieldType(parentType: GraphQLFragmentTypeConditionNamedType) {
+        if (parentType instanceof GraphQLObjectType) {
+            return { name: '__typename', type: parentType.name }
+        } else if (parentType instanceof GraphQLUnionType) {
+            return { name: '__typename', type: `${parentType.getTypes().map(t => t.name).join(" | ")}` }
+        } else {
+            return { name: '__typename', type: "string" }
+        }
     }
 
 } 

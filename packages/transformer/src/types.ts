@@ -185,7 +185,7 @@ export type TypeSafeStoreConfigExtra = TypeSafeStoreConfig & {
     typesPath: string,
     restApiTypesPath: string,
     graphqlApiTypesPath: string,
-    graphqlQueriesPath: string,
+    graphqlOperationsPath: string,
     tsBuildInfoPath?: string
 }
 

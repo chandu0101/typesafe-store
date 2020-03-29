@@ -12,3 +12,9 @@ export type ApiMeta = {
     schemaManager: SchemaManager, resultCache: Map<ts.Node, NodeResultCacheValue>,
     spanNodeCache: Map<ts.Node, NodeResultCacheValue>
 }
+
+export const enum GraphqlOperation {
+    QUERY = "query",
+    MUTATION = "mutation",
+    SUBSCRIPTION = "subscription"
+}
