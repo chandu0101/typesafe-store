@@ -1,5 +1,5 @@
 import { dirname } from "path"
-import { existsSync, mkdirSync, writeFileSync } from "fs"
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from "fs"
 
 
 
@@ -16,5 +16,9 @@ export class FileUtils {
             mkdirSync(dir)
         }
         writeFileSync(path, content)
+    }
+
+    static readFileSync(path: string) {
+        return readFileSync(path, { encoding: "utf-8" })
     }
 }

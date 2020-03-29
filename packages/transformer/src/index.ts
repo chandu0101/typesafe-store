@@ -123,7 +123,7 @@ async function isValidConfig(tsConfig: Record<string, any>): Promise<[boolean, s
                 result = [false, "you should provide a valid storePath folder"]
             } else {
                 // setStorePath(resolve(tStoreConfig.storePath))
-                ConfigUtils.setConfig(tStoreConfig)
+                ConfigUtils.setConfig(tStoreConfig, tsConfig["compilerOptions"])
                 result = await isValidRestAPisConfig(tStoreConfig.restApis)
                 if (result[0]) { // valid restApis config 
                     result = await isValidGraphqlConfig(tsConfig, tStoreConfig.graphqlApis)

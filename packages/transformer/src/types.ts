@@ -179,16 +179,14 @@ export const typeSafeStoreConfigDecoder: Decoder<TypeSafeStoreConfig> = object({
     }))),
 })
 
-export type TypeSafeStoreConfigExtra = {
-    storePath: string,
-    framework: SupportedFrameworks,
-    restApis?: RestApiConfig[],
+export type TypeSafeStoreConfigExtra = TypeSafeStoreConfig & {
     reducersPath: string,
     reducersGeneratedPath: string,
     typesPath: string,
     restApiTypesPath: string,
-    graphqlApiTypesPath: string
-    graphqlQueriesPath: string
+    graphqlApiTypesPath: string,
+    graphqlQueriesPath: string,
+    tsBuildInfoPath?: string
 }
 
 
@@ -208,3 +206,11 @@ export type TsGraphqlPluginSchemaConfig = string | { file: { path: string } }
 export type TypescriptCompilerOptions = { plugins: TypescriptPlugin[] }
 
 export type TypescriptPlugin = { name: string, }
+
+
+/**
+ * 
+ */
+export type TsBuildInfo = {
+    program: { fileInfos: Record<string, { version: string, signature: string }> }
+}
