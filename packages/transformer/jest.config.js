@@ -8,5 +8,5 @@ module.exports = {
     roots: [
         `<rootDir>/packages/${packageName}`,
     ],
-    testMatch: [`<rootDir>/packages/${packageName}/src/test/testcases/*.ts`]
+    testMatch: [`<rootDir>/packages/${packageName}/src/test/testcases/**/*.ts`]
 }

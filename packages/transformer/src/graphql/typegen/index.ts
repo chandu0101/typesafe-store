@@ -25,6 +25,59 @@ import {
 } from 'graphql';
 
 type ListTypeKind = 'none' | 'nullableList' | 'strictList';
+
+type GraphQLFragmentTypeConditionNamedType = GraphQLObjectType | GraphQLUnionType | GraphQLInterfaceType;
+
+interface FieldModifier {
+    list: ListTypeKind;
+    strict: boolean;
+}
+
+interface FieldMetadata extends FieldModifier {
+    fieldType: GraphQLOutputType;
+}
+
+interface FieldTypeElement {
+    members: { name: string, type: string, optional?: boolean }[];
+    typeFragments: {
+        isUnionCondition: boolean;
+        typeNode: string;
+    }[];
+}
+
+class Stack<T> {
+
+    private readonly array: T[] = []
+
+    constructor(private readonly initializer?: () => T) {
+
+    }
+
+    stack(value?: T) {
+        if (!value && this.initializer) {
+            this.array.push(this.initializer())
+        } else if (value) {
+            this.array.push(value)
+        }
+    }
+
+    get current() {
+        return this.array[this.array.length - 1]
+    }
+
+    consume() {
+        const c = this.current
+        this.array.pop()
+        return c;
+    }
+
+    isEmpty() {
+        return this.array.length === 0;
+    }
+
+}
+
+
 export class GraphqlTypGen {
 
     /**
@@ -69,23 +122,99 @@ export class GraphqlTypGen {
         return result
     }
 
-    static generateType(document: DocumentNode): string {
+    static generateType(documentNode: DocumentNode, schema: GraphQLSchema): string {
         let result = ""
-        const parentNodes = []
-        const fragmentMap = new Map<string, FragmentDefinitionNode>()
-        document.definitions.forEach(def => {
-            if (def.kind === "FragmentDefinition") {
-                fragmentMap.set(def.name.value, def)
+        const statements: string[] = [];
+        const parentTypeStack = new Stack<GraphQLFragmentTypeConditionNamedType>();
+        const resultFieldElementStack = new Stack<FieldTypeElement>(() => ({
+            members: [],
+            typeFragments: [],
+        }));
+        const variableElementStack = new Stack<FieldTypeElement>(() => ({
+            members: [],
+            typeFragments: [],
+        }));
+        const fieldMetadataMap = new Map<FieldNode, FieldMetadata>();
+        const fragmentMap = new Map<string, FragmentDefinitionNode>();
+        documentNode.definitions.forEach(def => {
+            if (def.kind === 'FragmentDefinition') {
+                fragmentMap.set(def.name.value, def);
             }
-        })
-        visit(document, {
+        });
+        visit(documentNode, {
             OperationDefinition: {
-                enter(node) {
-
+                enter: node => {
+                    if (node.operation === 'query') {
+                        const queryType = schema.getQueryType()!;
+                        parentTypeStack.stack(queryType);
+                        resultFieldElementStack.stack();
+                    } else if (node.operation === 'mutation') {
+                        const mutationType = schema.getMutationType()!;
+                        parentTypeStack.stack(mutationType);
+                        resultFieldElementStack.stack();
+                    } else if (node.operation === 'subscription') {
+                        const subscriptionType = schema.getSubscriptionType()!;
+                        parentTypeStack.stack(subscriptionType);
+                        resultFieldElementStack.stack();
+                    }
+                    variableElementStack.stack();
                 },
-                leave(node) {
-
-                }
+                leave: node => {
+                    statements.push(
+                        this.createTsTypeDeclaration(
+                            node.name ? node.name.value : 'QueryResult',
+                            resultFieldElementStack.consume(),
+                        ),
+                    );
+                    statements.push(
+                        this.createTsTypeDeclaration(
+                            node.name ? node.name.value + 'Variables' : 'QueryVariables',
+                            variableElementStack.consume(),
+                        ),
+                    );
+                    parentTypeStack.consume();
+                },
+            },
+            VariableDefinition: {
+                leave: node => {
+                    const {
+                        typeNode: {
+                            name: { value: inputTypeName },
+                        },
+                        list,
+                        strict,
+                    } = this.getFieldMetadataFromTypeNode(node.type);
+                    const variableType = schema.getType(inputTypeName)! as GraphQLInputType;
+                    const visitVariableType = (
+                        name: string,
+                        variableType: GraphQLInputType,
+                        list: ListTypeKind,
+                        strict: boolean,
+                        optional: boolean,
+                    ) => {
+                        let typeNode: string | undefined;
+                        if (variableType instanceof GraphQLScalarType) {
+                            typeNode = this.createTsTypeNodeFromScalar(variableType);
+                        } else if (variableType instanceof GraphQLEnumType) {
+                            typeNode = this.createTsTypeNodeFromEnum(variableType);
+                        } else if (variableType instanceof GraphQLInputObjectType) {
+                            variableElementStack.stack();
+                            Object.entries(variableType.getFields()).forEach(([fieldName, v]) => {
+                                const { fieldType, list, strict } = this.getFieldMetadataFromFieldTypeInstance(v);
+                                visitVariableType(fieldName, fieldType, list, strict, false);
+                            });
+                            typeNode = this.createTsFieldTypeNode(variableElementStack.consume());
+                        }
+                        if (!typeNode) {
+                            throw new Error('Unknown variable input type. ' + variableType.toJSON());
+                        }
+                        typeNode = this.wrapTsTypeNodeWithModifiers(typeNode, list, strict);
+                        variableElementStack.current.members.push(
+                            { name, optional, type: typeNode }
+                        );
+                    };
+                    visitVariableType(node.variable.name.value, variableType, list, strict, !!node.defaultValue);
+                },
             },
             FragmentDefinition: {
                 enter(node) {
@@ -104,11 +233,6 @@ export class GraphqlTypGen {
                 enter(node) {
 
                 },
-                leave(node) {
-
-                }
-            },
-            VariableDefinition: {
                 leave(node) {
 
                 }
@@ -155,4 +279,106 @@ export class GraphqlTypGen {
         }
         return { typeNode: typeNode as NamedTypeNode, list: listTypeKind, strict: isStrict };
     }
+
+    private static createTsTypeDeclaration(alias: string, fieldElement: FieldTypeElement) {
+        return `export type ${alias} = ${this.createTsFieldTypeNode(fieldElement)}`
+    }
+
+    private static createTsTypeNodeFromScalar(fieldType: GraphQLScalarType): string {
+        switch (fieldType.name) {
+            case 'Boolean':
+                return "boolean";
+            case 'String':
+            case 'ID':
+                return "string";
+            case 'Int':
+            case 'Float':
+                return "number";
+            default:
+                return "any";
+        }
+    }
+
+    private static getFieldMetadataFromFieldTypeInstance<T extends GraphQLField<any, any> | GraphQLInputField>(field: T) {
+        let fieldType = field!.type;
+        let listTypeKind: ListTypeKind | undefined;
+        let isStrict: boolean | undefined;
+        if (fieldType instanceof GraphQLNonNull) {
+            fieldType = fieldType.ofType;
+            if (fieldType instanceof GraphQLList) {
+                fieldType = fieldType.ofType;
+                listTypeKind = 'strictList';
+                if (fieldType instanceof GraphQLNonNull) {
+                    fieldType = fieldType.ofType;
+                    isStrict = true;
+                } else {
+                    isStrict = false;
+                }
+            } else {
+                isStrict = true;
+                listTypeKind = 'none';
+            }
+        } else if (fieldType instanceof GraphQLList) {
+            fieldType = fieldType.ofType;
+            listTypeKind = 'nullableList';
+            if (fieldType instanceof GraphQLNonNull) {
+                fieldType = fieldType.ofType;
+                isStrict = true;
+            } else {
+                isStrict = false;
+            }
+        } else {
+            listTypeKind = 'none';
+            isStrict = false;
+        }
+        return {
+            fieldType: fieldType as T extends GraphQLField<any, any>
+                ? GraphQLOutputType
+                : T extends GraphQLInputField
+                ? GraphQLInputType
+                : never,
+            list: listTypeKind,
+            strict: isStrict,
+        };
+    }
+
+    private static createTsFieldTypeNode({ members, typeFragments }: FieldTypeElement): string {
+        if (!members.length && !typeFragments.length) {
+            return "undefined"
+        }
+        const toUnionElements: string[] = [];
+        const toIntersectionElements: string[] = [];
+        typeFragments.forEach(({ isUnionCondition, typeNode }) => {
+            if (isUnionCondition) {
+                toUnionElements.push(typeNode);
+            } else {
+                toIntersectionElements.push(typeNode);
+            }
+        });
+        if (toUnionElements.length) {
+            toIntersectionElements.push(toUnionElements.join(" | "));
+        }
+        if (members.length) {
+            toIntersectionElements.unshift(`Readonly<{${members.map(m => `${m.name}${m.optional ? "?" : ""} :${m.type}`).join(", ")}}>`);
+        }
+        return `${toIntersectionElements.join(" & ")}`;
+    }
+
+    private static createTsTypeNodeFromEnum(fieldType: GraphQLEnumType) {
+        return `${fieldType.getValues().map(ft => ft.value).join(" | ")}`
+    }
+
+    private static wrapTsTypeNodeWithModifiers(typeNode: string, list: ListTypeKind, strict: boolean) {
+        if (!strict) {
+            typeNode = `${typeNode} | null`
+        }
+        if (list === 'strictList' || list === 'nullableList') {
+            typeNode = `${typeNode}[]`;
+            if (list === 'nullableList') {
+                typeNode = `${typeNode} | null`;
+            }
+        }
+        return typeNode;
+    }
+
 } 
