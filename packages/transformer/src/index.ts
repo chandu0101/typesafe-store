@@ -1,19 +1,17 @@
 import * as fs from "fs";
 import * as ts from "typescript";
-import { typeSafeStoreConfigDecoder, TypeSafeStoreConfig, RestApiConfig, GraphqlApiConfig, TypescriptCompilerOptions, TypescriptPlugin, TsGraphqlPluginConfig } from "./types";
-import { TYPESAFE_STORE_CONFIG_KEY, TS_GRAPHQL_PLUGIN_NAME } from "./constants";
-import { resolve } from "path";
-import { generateTypesForRestApiConfig } from "./rest/open-api-import";
 import { ConfigUtils } from "./utils/config-utils";
 import { transformReducerFiles } from "./transformers/reducer-transformer";
 import { AstUtils } from "./utils/ast-utils";
-import { generateTypesForGraphqlQueriesInApp } from "./graphql";
+import { GraphqlUtils } from "./graphql";
+import { MetaUtils } from "./utils/meta-utils";
 
 
-let filesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
+
+
+let reducerFilesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
+let graphqlOperationFilesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
 let initialFiles: string[] = []
-
-
 
 const formatHost: ts.FormatDiagnosticsHost = {
     getCanonicalFileName: path => path,
@@ -22,122 +20,8 @@ const formatHost: ts.FormatDiagnosticsHost = {
 };
 
 
-/**
- *  converts ts-graphql-plugin  config to tstore GraphqlApi config 
- * @param tsconfig 
- */
-function getGraphqlApiFromTsGraphqlPlugin(tsconfig: Record<string, any>): GraphqlApiConfig | undefined {
-    let result = undefined
-    const compilerOptions: TypescriptCompilerOptions = tsconfig["compilerOptions"]
-    if (compilerOptions) {
-        const plugins: TypescriptPlugin[] = compilerOptions.plugins
-        if (plugins && Array.isArray(plugins)) {
-            const tsGraphqlPlugin = plugins.find(p => p.name === TS_GRAPHQL_PLUGIN_NAME)
-            if (tsGraphqlPlugin) {
-                const gp: TsGraphqlPluginConfig = tsGraphqlPlugin as any;
-                if (gp.schema && gp.tag) {
-                    let schemaObject: { file?: string, http?: { url: string, headers?: Record<string, string> } } = {}
-                    if (typeof gp.schema === "string") {
-                        const path = gp.schema;
-                        if (/https?/.test(path)) {
-                            schemaObject.http = {
-                                url: path,
-                            }
-                        } else {
-                            schemaObject.file = path
-                        }
-                    } else {
-                        schemaObject = gp.schema as any
-                    }
-                    if (schemaObject.file && schemaObject.http) {
-                        throw new Error("You should provide either schema file or graphql end point not both")
-                    }
-                    if (schemaObject.file) {
-                        result = { file: { path: schemaObject.file, url: "" }, tag: gp.tag, name: TS_GRAPHQL_PLUGIN_NAME }
-                    }
-                    if (schemaObject.http) {
-                        result = { http: { url: schemaObject.http.url, headers: schemaObject.http.headers }, tag: gp.tag, name: TS_GRAPHQL_PLUGIN_NAME }
-                    }
-                }
-            }
-        }
-    }
 
-    return result;
-}
-
-
-async function isValidGraphqlConfig(tsConfig: Record<string, any>, tstoreGraphqlApis?: GraphqlApiConfig[]) {
-    let result: [boolean, string] = [true, ""]
-    const graphqlApis: GraphqlApiConfig[] = []
-    const tsGraphqPluginCOnfig = getGraphqlApiFromTsGraphqlPlugin(tsConfig)
-    if (tsGraphqPluginCOnfig) {
-        graphqlApis.push(tsGraphqPluginCOnfig)
-    }
-    if (tstoreGraphqlApis) {
-        graphqlApis.push(...graphqlApis)
-    }
-    if (graphqlApis.length > 0) {
-        const al = graphqlApis.length
-        const sl = new Set(graphqlApis.map(ra => ra.name)).values.length
-        if (al !== sl) {
-            result = [false, "graphqlApis config names should be unique"]
-        } else {
-            result = await generateTypesForGraphqlQueriesInApp(graphqlApis)
-        }
-    }
-
-
-    return result
-}
-
-
-async function isValidRestAPisConfig(restApis?: RestApiConfig[]): Promise<[boolean, string]> {
-    let result: [boolean, string] = [true, ""]
-    if (restApis && restApis.length > 0) {
-        const al = restApis.length
-        const sl = new Set(restApis.map(ra => ra.name)).values.length
-        if (al !== sl) {
-            result = [false, "restApis config names should be unique"]
-        } else {
-            result = await generateTypesForRestApiConfig(restApis)
-        }
-    }
-    return result
-}
-
-/**
- * 
- * @param tsConfig 
- */
-async function isValidConfig(tsConfig: Record<string, any>): Promise<[boolean, string]> {
-    let result: [boolean, string] = [true, ""]
-    try {
-        const tStoreObj = tsConfig[TYPESAFE_STORE_CONFIG_KEY]
-        const validJson = typeSafeStoreConfigDecoder.run(tStoreObj)
-        if (!validJson.ok) {
-            result = [false, `not a valid config : ${JSON.stringify(validJson.error)}`]
-        } else {
-            const tStoreConfig: TypeSafeStoreConfig = tStoreObj as any
-            if (!fs.lstatSync(resolve(tStoreConfig.storePath)).isDirectory()) {
-                result = [false, "you should provide a valid storePath folder"]
-            } else {
-                // setStorePath(resolve(tStoreConfig.storePath))
-                ConfigUtils.setConfig(tStoreConfig, tsConfig["compilerOptions"])
-                result = await isValidRestAPisConfig(tStoreConfig.restApis)
-                if (result[0]) { // valid restApis config 
-                    result = await isValidGraphqlConfig(tsConfig, tStoreConfig.graphqlApis)
-                }
-            }
-        }
-    } catch (error) {
-        result = [false, error]
-    }
-
-    return result;
-}
-
-async function watchMain() {
+export async function watchMain() {
     const configPath = ts.findConfigFile(
     /*searchPath*/ "./",
         ts.sys.fileExists,
@@ -151,10 +35,9 @@ async function watchMain() {
 
     const tsConfig = ts.parseConfigFileTextToJson(configPath, fs.readFileSync(configPath, "utf-8")).config
 
-    if (!tsConfig[TYPESAFE_STORE_CONFIG_KEY]) {
-        throw new Error("You didn't provided valid typesafe-store config ,please follow the documentation link : TODO ")
-    }
-    const [validConfig, message] = await isValidConfig(tsConfig[TYPESAFE_STORE_CONFIG_KEY])
+    MetaUtils.setUpMeta()
+
+    const [validConfig, message] = await ConfigUtils.isValidConfig(tsConfig)
     if (!validConfig) {
         throw new Error(`You didn't provided valid typesafe-store config : ${message},please follow the documentation link : TODO `)
     }
@@ -232,6 +115,9 @@ async function watchMain() {
     const wp = ts.createWatchProgram(host);
     // setWatchCompilerHost(wp)
     AstUtils.setProgram(wp.getProgram().getProgram())
+
+
+
 }
 
 function reportDiagnostic(diagnostic: ts.Diagnostic) {
@@ -265,28 +151,44 @@ function reportWatchStatusChanged(diagnostic: ts.Diagnostic) {
 
 function processFiles(diagnostic: ts.Diagnostic) {
     const msg = diagnostic.messageText.toString()
+    // console.log("Diag : ", diagnostic, "msg :", msg);
     if (diagnostic.code !== 6032 &&
         diagnostic.category !== ts.DiagnosticCategory.Error
         && (msg.includes("Found 0 errors") || !msg.includes("error"))
-        && filesChanged.length > 0) {
-        filesChanged.forEach(f => {
-            transformReducerFiles([f.path])
-        })
-        filesChanged = []
+    ) {
+        console.log("All Success : ", reducerFilesChanged, graphqlOperationFilesChanged);
+        if (reducerFilesChanged.length > 0) {
+            transformReducerFiles(reducerFilesChanged.map(rf => rf.path))
+            reducerFilesChanged = []
+        }
+        if (graphqlOperationFilesChanged.length > 0) {
+            GraphqlUtils.processFiles(graphqlOperationFilesChanged.map(go => go.path))
+            graphqlOperationFilesChanged = []
+        }
     }
 }
 
 function handleFileChange(f: string, e: ts.FileWatcherEventKind) {
-    const config = ConfigUtils.getConfig()
-    if (f.includes(config.reducersPath) && !f.includes(config.reducersGeneratedPath)) {
+    console.log(`handle FileChange : ${f} , event : ${e} `);
+    if (ConfigUtils.isReducersSourceFile(f)) {
         if (e == ts.FileWatcherEventKind.Deleted) {
             //handle deleted files
 
         } else {
-            filesChanged.push({ path: f, event: e })
+            reducerFilesChanged.push({ path: f, event: e })
+        }
+    } else if (ConfigUtils.isGraphqlOperationsSourceFile(f)) {
+        if (e == ts.FileWatcherEventKind.Deleted) {
+            //handle deleted files
+
+        } else {
+            graphqlOperationFilesChanged.push({ path: f, event: e })
         }
     }
 
 }
 
-watchMain();
+watchMain().catch(error => {
+    console.error(error)
+    process.exit()
+})

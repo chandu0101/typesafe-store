@@ -1,8 +1,8 @@
 import { SchemaManager } from "./schema-manager"
 import { HttpUrlConfig, ContentType } from "../../types"
-import { GraphQLSchema, buildSchema } from "graphql"
+import { GraphQLSchema, buildClientSchema } from "graphql"
 import { introspectionQuery } from "graphql/utilities"
-
+import fetch from "node-fetch"
 const INTRO_SPECTION_QUERY = { query: introspectionQuery }
 
 
@@ -35,13 +35,13 @@ export class HttpSchemaManager extends SchemaManager {
 
             options.body = JSON.stringify(INTRO_SPECTION_QUERY)
 
-            const resp = await fetch(this.http.url, options)
+            const resp = await fetch(this.http.url, options as any)
 
             if (!resp.ok) {
                 this._error = `Request to ${this.http.url} failed with error : ${resp.statusText}`
             } else {
                 const json = await resp.json()
-                this._schema = buildSchema(json.data)
+                this._schema = buildClientSchema(json.data)
             }
 
         } catch (error) {

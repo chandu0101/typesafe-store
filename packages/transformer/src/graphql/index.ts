@@ -1,10 +1,10 @@
-import { GraphqlApiConfig } from "../types";
+import { GraphqlApiConfig, BooleanStringTuple } from "../types";
 import { SchemaManager } from "./schema-manager/schema-manager";
 import { FileSchemaManager } from "./schema-manager/file-schema-manager";
 import { HttpSchemaManager } from "./schema-manager/http-schema-manager";
 import * as ts from "typescript"
 import { AstUtils } from "../utils/ast-utils";
-import { ApiMeta, GraphqlOperation } from "./type";
+import { GraphqlApiMeta, GraphqlOperation } from "./types";
 import { ConfigUtils } from "../utils/config-utils";
 import chalk from "chalk"
 import { validate } from "graphql/validation"
@@ -13,12 +13,12 @@ import { GraphqlTypGen } from "./typegen"
 import { pascal } from "case"
 import { FileUtils } from "../utils/file-utils";
 import isEmpty from "lodash/isEmpty"
+import { MetaUtils } from "../utils/meta-utils";
+import { CommonUtils } from "../utils/common-utils";
 
 
 
-const apiMetaMap: Map<string, ApiMeta> = new Map()
-let initialStart: boolean = false
-
+// let apiMetaMap = new Map<string, GraphqlApiMeta>()
 
 
 /**
@@ -30,67 +30,107 @@ function isTaggedNode(node: ts.Node, tag: string): boolean {
     if (!node || !node.parent) return false;
     if (!ts.isTaggedTemplateExpression(node.parent)) return false;
     const target = node.parent
-    return target.getText() === tag
+    return target.tag.getText() === tag // target.getText() returning invalid string
 }
 
 function isTemplateExpression(node: ts.Node) {
     return ts.isTemplateExpression(node) || ts.isNoSubstitutionTemplateLiteral(node)
 }
 
-function processFiles(files: string[], ) {
 
+export class GraphqlUtils {
+
+    static getGraphqlApiMeta(apiName: string) {
+        return MetaUtils.getGraphqlMeta().get(apiName)
+    }
+
+    static setGraphqlApiMetaValue(key: string, value: GraphqlApiMeta) {
+        const meta = MetaUtils.getGraphqlMeta()
+        meta.set(key, value)
+    }
+
+    static isValidGraphqlOperationSourceFile(file: string): BooleanStringTuple {
+        let result: BooleanStringTuple = [true, ""]
+        const graplApis = ConfigUtils.getConfig().graphqlApis
+        if (!graplApis || graplApis.length < 1) {
+            result = [false, "looks like you didnt configured graplApis in type-safe store config  "]
+        } else {
+            const apiName = ConfigUtils.getGraphqlApiNameFromGraphqlOperationsPath(file)
+            if (graplApis.find(ga => ga.name === apiName)) {
+                result = [true, apiName]
+            } else {
+                result = [false, `apiName : ${apiName} doesn't have valid config in type-safe store config file,please note that name is caseSensitive`]
+            }
+        }
+        return result
+    }
+
+    static processFiles(files: string[]) {
+        files.forEach(f => {
+            processFile(f)
+        })
+    }
 }
 
-function validateQuery(queryString: string, schema: GraphQLSchema) {
-    const ast = parse(queryString)
-    return validate(schema, ast)
-}
-
-function processFile(file: string, ) {
+const processFile = (file: string, ) => {
     try {
-        const apiName = ConfigUtils.getGraphqlApiNameFromGraphqlOperationsPath(file)
+        console.log("Graphql Processing file : ", file);
+        const [valid, msg] = GraphqlUtils.isValidGraphqlOperationSourceFile(file)
+        if (!valid) {
+            throw new Error(msg)
+        }
+        const apiName = msg;
         const namespaceName = ConfigUtils.getGraphqlOperationVariableNamePrefix(file)
-        const meta = apiMetaMap.get(apiName)!
+        console.log("nameSpace :", namespaceName);
+        const meta = GraphqlUtils.getGraphqlApiMeta(apiName)
+        console.log("meta: ", meta);
+        if (!meta) {
+            throw new Error(`You should create a folder with api name sepcified in config`)
+        }
         if (!meta.schemaManager.schema) {
             throw new Error(`Graphql Schema Error : ${meta.schemaManager.error}`)
         }
         const tag = meta.schemaManager.tag;
-        const nodes = AstUtils.getAllNodes(file, isTemplateExpression)
-            .filter(node => isTaggedNode(node, tag)) as (ts.TemplateExpression | ts.NoSubstitutionTemplateLiteral)[]
+        console.log("tag : ", tag, "meta: ", meta);
+        const templateNodes = AstUtils.findAllNodesFromFile(file, isTemplateExpression)
+        const tnp = templateNodes[0].parent
+        console.log("tnp : ", tnp);
+        const nodes = templateNodes.filter(node => isTaggedNode(node, tag)) as (ts.TemplateExpression | ts.NoSubstitutionTemplateLiteral)[]
+        console.log("Tagged Nodes : ", nodes)
+        let hasChanges = false
         nodes.forEach(node => {
             const gqlString = getTextFromTaggedLiteral(node, file, meta)
+            console.log("gqlString : ", gqlString);
             const document = parse(gqlString)
+            const { isFragment, operation, errorMessage } = GraphqlTypGen.isValidQueryDocument(document)
+            if (isFragment) { // if its fragment only node then skip
+                return
+            }
             const errors = validate(meta.schemaManager.schema!, document)
-            if (errors) {
+            if (errors.length > 0) {
                 throw new Error(`query : ${gqlString} is not valid, ${JSON.stringify(errors)}`)
             }
-            const { isFragment, operation, errorMessage } = GraphqlTypGen.isValidQueryDocument(document)
             if (errorMessage) {
                 throw new Error(`query :${gqlString} is not valid , ${errorMessage}`)
             }
-            if (operation) { // discard fragment only nodes 
-                const variableName = node.parent.parent.getText()
+            if (operation) {
+                const variableName = (node.parent.parent as ts.VariableDeclaration).name.getText() // Todo Check for other than VariableDeclaration(is it possible ?)
                 const { types, operations } = GraphqlTypGen.generateType(document, meta.schemaManager.schema!)
                 let responseType = ""
                 let bodyType = ""
                 let isMultipleOp = false
+
                 if (operations.length > 1) {
                     isMultipleOp = true
                     responseType = `[${operations.map(o => o.name).join(",")}]`
-                    bodyType = `[${operations.map(op => `{
-                        query: "${gqlString}",
-                        ${op.variables === "undefined" ? "" : `variables:${op.variables}`}
-                    }`).join(", ")}]`
+                    bodyType = `[${operations.map(op => `{query: \`${gqlString}\`,${op.variables ? `variables:${op.variables}` : ""}}`).join(", ")}]`
                 } else {
                     responseType = `${operations[0].name}`
                     const op = operations[0]
-                    bodyType = `{
-                        query: "${gqlString}",
-                        ${op.variables === "undefined" ? "" : `variables:${op.variables}`}
-                    }`
+                    bodyType = `{query: \`${gqlString}\`,${op.variables ? `variables:${op.variables}` : ""}}`
                 }
                 //TODO subscription type , subscriptions should be handled via websockets
-                const fType = `FetchPost<"${meta.schemaManager.url}",${bodyType},${responseType},"GraphqlError[]">`
+                const fType = `FetchPost<{path: "${meta.schemaManager.url}"},${bodyType},${responseType},GraphqlError[]>`
                 const output = `
                  ${types}
                  export type ${pascal(variableName)} =  ${fType}
@@ -103,19 +143,20 @@ function processFile(file: string, ) {
                 } else {
                     meta.operations.subscriptions[namespaceName] = operationValue
                 }
-                writeGraphqlTypesToFile(apiName, meta)
+                hasChanges = true
             }
-
-
         })
+        if (hasChanges) {
+            writeGraphqlTypesToFile(apiName, meta)
+        }
     } catch (error) {
-        chalk.red(`Error processing file ${file}: ${error}`)
+        console.log(chalk.red(`Error processing file ${file}: ${error}`))
         return
     }
 
 }
 
-function writeGraphqlTypesToFile(apiName: string, meta: ApiMeta) {
+function writeGraphqlTypesToFile(apiName: string, meta: GraphqlApiMeta) {
     const outputPath = ConfigUtils.getGraphqlTypesOutputPath(apiName)
     const operations = meta.operations
     let queries = ""
@@ -166,8 +207,14 @@ function writeGraphqlTypesToFile(apiName: string, meta: ApiMeta) {
        `
     }
 
+    const imports: string[] = []
+    if (queries || mutations) {
+        imports.push(`import { FetchPost } from "@typesafe-store/reducer"`)
+    }
     const output = `
-    export default namespace ${apiName} {
+    ${CommonUtils.dontModifyMessage()}
+    ${imports.join(";\n")}
+    export namespace ${apiName} {
         ${queries}
         ${mutations}
         ${subscriptions}
@@ -177,21 +224,26 @@ function writeGraphqlTypesToFile(apiName: string, meta: ApiMeta) {
 }
 
 
-function getTextFromTaggedLiteral(node: ts.TemplateExpression | ts.TaggedTemplateExpression | ts.NoSubstitutionTemplateLiteral, file: string, apiMeta: ApiMeta): string {
+function getTextFromTaggedLiteral(node: ts.TemplateExpression | ts.TaggedTemplateExpression | ts.NoSubstitutionTemplateLiteral, file: string, apiMeta: GraphqlApiMeta): string {
     const cache = apiMeta.resultCache
-    const cachedValue = cache.get(node)
+    const buildInfoExist = ConfigUtils.isTsBuildInfoExist()
+    if (buildInfoExist) {
+        const cachedValue = cache.get(node)
 
-    if (cachedValue) {
-        if (cachedValue.dependencyVersions.every(dep => ConfigUtils.getFileVersion(dep.fileName, true) === dep.version)) {
-            return cachedValue.gqlText
-        } else {
-            cache.delete(node)
+        if (cachedValue) {
+            if (cachedValue.dependencyVersions.every(dep => ConfigUtils.getFileVersion(dep.fileName, true) === dep.version)) {
+                return cachedValue.gqlText
+            } else {
+                cache.delete(node)
+            }
         }
     }
 
     const setToCache = (gqlText: string, deps = [file]) => {
-        const dependencyVersions = [...new Set(file)].map(d => ({ fileName: d, version: ConfigUtils.getFileVersion(d) }))
-        cache.set(node, { gqlText, dependencyVersions })
+        if (buildInfoExist) {
+            const dependencyVersions = [...new Set(file)].map(d => ({ fileName: d, version: ConfigUtils.getFileVersion(d) }))
+            cache.set(node, { gqlText, dependencyVersions })
+        }
         return gqlText
     }
 
@@ -236,25 +288,30 @@ function getTextFromTaggedLiteral(node: ts.TemplateExpression | ts.TaggedTemplat
 
 }
 
-function getTextFromTemplateSpans(file: string, node: ts.Node, apiMeta: ApiMeta, dependencies = [file]): { text: string, dependencies: string[] } {
+function getTextFromTemplateSpans(file: string, node: ts.Node, apiMeta: GraphqlApiMeta, dependencies = [file]): { text: string, dependencies: string[] } {
     const cache = apiMeta.spanNodeCache
-    const cacheValue = cache.get(node);
-    if (cacheValue) {
-        if (cacheValue.dependencyVersions.every(dep => ConfigUtils.getFileVersion(dep.fileName) === dep.version)) {
-            return { text: cacheValue.gqlText, dependencies }
-        } else {
-            cache.delete(node);
+    const buildInfoExist = ConfigUtils.isTsBuildInfoExist()
+    if (buildInfoExist) {
+        const cacheValue = cache.get(node);
+        if (cacheValue) {
+            if (cacheValue.dependencyVersions.every(dep => ConfigUtils.getFileVersion(dep.fileName) === dep.version)) {
+                return { text: cacheValue.gqlText, dependencies }
+            } else {
+                cache.delete(node);
+            }
         }
     }
 
     const setValueToCache = ({ text, dependencies }: { text: string; dependencies: string[] }) => {
-        cache.set(node, {
-            gqlText: text,
-            dependencyVersions: [...new Set(dependencies)].map(fileName => ({
-                fileName,
-                version: ConfigUtils.getFileVersion(file),
-            })),
-        });
+        if (buildInfoExist) {
+            cache.set(node, {
+                gqlText: text,
+                dependencyVersions: [...new Set(dependencies)].map(fileName => ({
+                    fileName,
+                    version: ConfigUtils.getFileVersion(file),
+                })),
+            });
+        }
         return { text, dependencies };
     };
 
@@ -329,9 +386,9 @@ function getTextFromTemplateSpans(file: string, node: ts.Node, apiMeta: ApiMeta,
 /**
  *  
  */
-export async function generateTypesForGraphqlQueriesInApp(graphqlApis: GraphqlApiConfig[]): Promise<[boolean, string]> {
+export const initializeGraphqlConfig = async (graphqlApis: GraphqlApiConfig[]): Promise<[boolean, string]> => {
+    console.log("initializeGraphqlConfig :", graphqlApis);
     let result: [boolean, string] = [true, ""]
-    initialStart = true
     await Promise.all(graphqlApis.map(async (gApi) => {
         if (!gApi.file && !gApi.http) {
             throw new Error(`graphqlAPis config  ${gApi.name} : you should provide either file or url.`)
@@ -349,13 +406,13 @@ export async function generateTypesForGraphqlQueriesInApp(graphqlApis: GraphqlAp
         if (schemaManager.error) {
             throw new Error(schemaManager.error)
         }
-        apiMetaMap.set(gApi.name, {
+        console.log("setting apiName: ", gApi.name);
+        GraphqlUtils.setGraphqlApiMetaValue(gApi.name, {
             schemaManager, resultCache: new Map(),
             spanNodeCache: new Map(), operations: { queries: {}, mutations: {}, subscriptions: {} }
         })
 
     }))
-    initialStart = false
     return result;
 }
 

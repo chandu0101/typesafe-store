@@ -1,6 +1,7 @@
 
 import * as ts from "typescript";
 import { Decoder, string, object, array, oneOf, constant, optional, anyJson } from "@mojotech/json-type-validation"
+import { GraphqlApiMeta } from "./graphql/types";
 
 
 // enums 
@@ -67,8 +68,12 @@ export const enum MetaType {
 
 
 export type GlobalMeta = {
-    restApis: string,
-    reducers: Map<string, ReducersMeta>
+    restApis: Map<string, GraphqlApiMeta>,
+    graphqlApis: Map<string, GraphqlApiMeta>,
+    reducers: Map<string, ReducersMeta>,
+    config: TypeSafeStoreConfigExtra,
+    program: ts.Program,
+    tempBuildInfo?: TsBuildInfo
 }
 
 /**
@@ -214,3 +219,6 @@ export type TypescriptPlugin = { name: string, }
 export type TsBuildInfo = {
     program: { fileInfos: Record<string, { version: string, signature: string }> }
 }
+
+
+export type BooleanStringTuple = [boolean, string]

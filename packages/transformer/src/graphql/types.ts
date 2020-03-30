@@ -1,5 +1,6 @@
 import { SchemaManager } from "./schema-manager/schema-manager"
 import * as ts from "typescript"
+import { GraphqlApiConfig } from "../types"
 
 
 export type ResolveError = { message: string, }
@@ -8,9 +9,9 @@ export type ResultOfProcessedGqlNode = { gqlText: string, error?: string }
 
 export type NodeResultCacheValue = { gqlText: string, dependencyVersions: { fileName: string, version: string }[] }
 
-type OperationValue = { text: string, isMultipleOp: boolean }
+export type OperationValue = { text: string, isMultipleOp: boolean }
 
-export type ApiMeta = {
+export type GraphqlApiMeta = {
     schemaManager: SchemaManager, resultCache: Map<ts.Node, NodeResultCacheValue>,
     spanNodeCache: Map<ts.Node, NodeResultCacheValue>,
     operations: {

@@ -76,13 +76,8 @@ const reducerTransformer: ts.TransformerFactory<ts.SourceFile> = context => {
         node = ts.visitEachChild(node, visit, context);
         if (ts.isClassDeclaration(node)) {
             console.log("class found and processing");
-            const name = node.name?.text || "default";
-            // fs.writeFileSync(f.replace("reducer.test.ts", "reducer.generated.ts"), c, { encoding: "utf8" })
             return createReducerFunction(node);
         }
-        // if (ts.isTypeAliasDeclaration(node)) {
-        //   return null as any;
-        // }
         return node;
     };
 

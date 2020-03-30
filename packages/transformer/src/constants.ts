@@ -31,7 +31,7 @@ export const SELECTORS_FOLDER = "selectors"
 
 export const REST_API_TYPES_FOLDER = "rest"
 
-export const GRAPHQL_QUERIES_FOLDER = "graphql"
+export const GRAPHQL_OPERATIONS_FOLDER = "graphql"
 
 export const GRAPHQL_API_TYPES_FOLDER = "graphql"
 

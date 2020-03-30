@@ -23,7 +23,8 @@ import {
     BREAK,
     GraphQLOutputType,
 } from 'graphql';
-import { GraphqlOperation } from "../type";
+import { GraphqlOperation } from "../types";
+import { string } from "@mojotech/json-type-validation";
 
 type ListTypeKind = 'none' | 'nullableList' | 'strictList';
 
@@ -83,7 +84,7 @@ class Stack<T> {
 
 type DocumentNodeValidationResult = { operation?: GraphqlOperation, errorMessage?: string, isFragment?: boolean }
 
-type GenTypeResult = { types: string, operations: { name: string, variables: string }[] }
+type GenTypeResult = { types: string, operations: { name: string, variables?: string }[] }
 
 export class GraphqlTypGen {
 
@@ -168,21 +169,21 @@ export class GraphqlTypGen {
                     variableElementStack.stack();
                 },
                 leave: node => {
-                    const op = node.name ? node.name.value : 'QueryResult'
+                    const opType = node.name ? node.name.value : 'QueryResult'
                     statements.push(
                         this.createTsTypeDeclaration(
-                            op,
+                            opType,
                             resultFieldElementStack.consume(),
                         ),
                     );
-                    const v = node.name ? node.name.value + 'Variables' : 'QueryVariables'
-                    statements.push(
-                        this.createTsTypeDeclaration(
-                            v,
-                            variableElementStack.consume(),
-                        ),
-                    );
-                    operations.push({ name: op, variables: v })
+                    const vn = node.name ? node.name.value + 'Variables' : 'QueryVariables'
+                    const vt = this.createTsFieldTypeNode(variableElementStack.consume())
+                    if (vt.trim() === "undefined") {
+                        operations.push({ name: opType })
+                    } else {
+                        statements.push(`type ${vn} = ${vt}`)
+                        operations.push({ name: opType, variables: vn })
+                    }
                     parentTypeStack.consume();
                 },
             },
@@ -322,7 +323,7 @@ export class GraphqlTypGen {
                 },
             },
         })
-        result.types = `${statements.join("\n")}`
+        result.types = `${statements.join("\n\n")}`
         result.operations = operations
         return result
     }
@@ -375,7 +376,7 @@ export class GraphqlTypGen {
     }
 
     private static createTsTypeDeclaration(alias: string, fieldElement: FieldTypeElement) {
-        return `export type ${alias} = ${this.createTsFieldTypeNode(fieldElement)}`
+        return `type ${alias} = ${this.createTsFieldTypeNode(fieldElement)}`
     }
 
     private static createTsTypeNodeFromScalar(fieldType: GraphQLScalarType): string {

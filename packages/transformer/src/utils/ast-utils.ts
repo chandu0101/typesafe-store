@@ -1,9 +1,6 @@
 
 import * as ts from "typescript"
-
-
-let program: ts.Program = null as any;
-let typeChecker: ts.TypeChecker = null as any;
+import { MetaUtils } from "./meta-utils";
 
 
 /**
@@ -12,20 +9,19 @@ let typeChecker: ts.TypeChecker = null as any;
 export class AstUtils {
 
     static setProgram(p: ts.Program) {
-        program = p
-        typeChecker = p.getTypeChecker()
+        MetaUtils.setProgram(p)
     }
 
     static getProgram() {
-        return program;
+        return MetaUtils.getProgram();
     }
 
     static getTypeChecker() {
-        return typeChecker
+        return this.getProgram().getTypeChecker()
     }
 
     static getSourceFile(file: string): ts.SourceFile | undefined {
-        return program.getSourceFile(file)
+        return this.getProgram().getSourceFile(file)
     }
 
     static isMethod(input: ts.Symbol) {
@@ -40,6 +36,7 @@ export class AstUtils {
     }
 
     static getMembersOfType(type: ts.Type, node: ts.Node) {
+        const typeChecker = this.getTypeChecker()
         return typeChecker.getPropertiesOfType(type).map(s => {
             return {
                 type: typeChecker.getNonNullableType(
@@ -62,7 +59,7 @@ export class AstUtils {
      * @param type 
      */
     static typeToString(type: ts.Type) {
-        return typeChecker.typeToString(type, undefined, ts.TypeFormatFlags.NoTruncation)
+        return this.getTypeChecker().typeToString(type, undefined, ts.TypeFormatFlags.NoTruncation)
     }
 
 
@@ -70,28 +67,36 @@ export class AstUtils {
         // console.log("Checking array for type2 : ", input.flags, "toString : ", typeChecker.typeToString(input),
         // "Node :");
         // const s = input.symbol.valueDeclaration
-        return ts.isArrayTypeNode(typeChecker.typeToTypeNode(input)!);
+        return ts.isArrayTypeNode(this.getTypeChecker().typeToTypeNode(input)!);
     }
 
+    static findAllNodes(sf: ts.SourceFile, cond: (node: ts.Node) => boolean) {
+        const result: ts.Node[] = [];
+        function find(node: ts.Node) {
+            if (cond(node)) {
+                result.push(node);
+                return;
+            } else {
+                ts.forEachChild(node, find);
+            }
+        }
+        find(sf);
+        return result;
+    }
     /**
      *  
      * @param file 
      * @param cond 
      */
-    static getAllNodes(file: string, cond: (node: ts.Node) => boolean): ts.Node[] {
+    static findAllNodesFromFile(file: string, cond: (node: ts.Node) => boolean): ts.Node[] {
         const sf = this.getSourceFile(file)
-        let result: ts.Node[] = []
-        if (!sf) return result
-        function find(node: ts.Node) {
-            if (cond(node)) {
-                result.push(node)
-                return
-            } else {
-                ts.forEachChild(node, find)
-            }
+        if (!sf) {
+            return []
         }
-        find(sf)
-        return result
+        else {
+            return this.findAllNodes(sf, cond)
+        }
+
     }
 
     static findNode(file: string, position: number): ts.Node | undefined {
@@ -111,7 +116,7 @@ export class AstUtils {
      * @param node 
      */
     static getDefnitionOfIdentifierNode(file: string, node: ts.Node): { fileName: string, textSpan: any } {
-
+        const decl = this.getTypeChecker().getSymbolAtLocation(node)
         return null as any
     }
 

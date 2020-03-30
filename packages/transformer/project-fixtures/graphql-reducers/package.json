@@ -1,0 +1,24 @@
+{
+  "name": "sync-reducers",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "chandu0101",
+  "license": "MIT",
+  "scripts": {
+    "start": "nodemon src/index.ts",
+    "dev": "tstore",
+    "startjs": "node build/index.js",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/uuid": "^7.0.2",
+    "graphql": "^14.6.0",
+    "ts-utils": "^6.0.7",
+    "typescript": "^3.8.3"
+  },
+  "dependencies": {
+    "@typesafe-store/store": "file:../../../store",
+    "@typesafe-store/transformer": "file:../..",
+    "uuid": "^7.0.2"
+  }
+}

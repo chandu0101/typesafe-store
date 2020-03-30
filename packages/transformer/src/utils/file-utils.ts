@@ -13,7 +13,7 @@ export class FileUtils {
     static writeFileSync(path: string, content: string) {
         const dir = dirname(path)
         if (!existsSync(dir)) {
-            mkdirSync(dir)
+            mkdirSync(dir, { recursive: true })
         }
         writeFileSync(path, content)
     }
