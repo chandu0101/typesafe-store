@@ -1,7 +1,7 @@
 {
   "name": "@typesafe-store/store",
   "description": "type safe store reducer transformer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "./build/index.js",
   "types": "./build/index.d.ts",
   "repository": {
@@ -26,9 +26,7 @@
     "test": "jest",
     "build": "tsc -p tsconfig.json"
   },
-  "dependencies": {
-    "@typesafe-store/reducer": "^0.1.5"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/jest": "^24.0.20",
     "jest": "^24.9.0",

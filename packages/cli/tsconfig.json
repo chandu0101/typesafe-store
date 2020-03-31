@@ -3,10 +3,18 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "build",
+    "plugins": [],
     "sourceMap": true,
-    "composite": true,
-    "plugins": []
+    "esModuleInterop": true,
+    "composite": true
   },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "../../node_modules"
+  ],
   "references": [
     {
       "path": "../store"

@@ -29,7 +29,7 @@
   },
   "dependencies": {},
   "peerDependencies": {
-    "@typesafe-store/store": "0.1.0"
+    "@typesafe-store/store": "^0.1.0"
   },
   "devDependencies": {
     "@types/jest": "^24.0.20",

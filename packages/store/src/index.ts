@@ -1,7 +1,12 @@
 
-import { ReducerGroup, Action, RMeta } from "@typesafe-store/reducer"
 import compose from "./compose"
+import { ReducerGroup, Action } from "./reducer"
 
+export * from "./fetch"
+
+export * from "./reducer"
+
+export * from "./graphql"
 
 export type GetStateFromReducers<T extends Record<string, ReducerGroup<any, any, any, any>>> = {
     [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? S : any }
@@ -121,11 +126,7 @@ export interface PersistanceStorage<S> {
 
 type Callback = () => any
 
-
 export type Dispatch<A extends Action> = (action: A) => any
-
-// export type Meta = Record<string, RMeta>
-
 
 export type MiddleWareInfo<S = any> = Readonly<{
     state: () => S,
@@ -135,37 +136,7 @@ export type MiddleWareInfo<S = any> = Readonly<{
 export type MiddleWare<R extends Record<string, ReducerGroup<any, any, any, any>>> = (store: TypeSafeStore<R>) =>
     (next: Dispatch<GetActionFromReducers<R>>) => (action: GetActionFromReducers<R>) => any
 
-// export interface MiddleWare<S = any> {
-//     (info: MiddleWareInfo): (
-//         next: any
-//     ) => (action: Action) => any
-// }
-
-const g1: ReducerGroup<"", Readonly<{ name: "test", group: "Hello" }>, "Hello", undefined> = { r: <A>(s: "", a: A) => "", g: "Hello", ds: "", m: {} }
-const g2: ReducerGroup<4, Readonly<{ name: "test", group: "Hello2" }>, "Hello2", undefined> = { r: <A>(s: 4, a: A) => 4, g: "Hello2", ds: 4, m: {} }
-
-const reducers = { g1, g2 }
-
-const store = new TypeSafeStore({ reducers, middleWares: [] })
-store.dipatch({ group: "Hello", name: "test" })
 
 
-// type A = GetActionFromReducers<typeof reducers>
 
-const s = { "Hello": "" }
-
-// const ts = new TypeSafeStore({
-//     [g1.g]: g1,
-//     [g2.g]: g2
-// }, [])
-
-// ts.subscribe([{ "Hello": [] }], () => { })
-// const s2 = ts.state[g1.g]
-// const s3 = ts.state.Hello2
-
-
-const a1 = { name: "Hello", g: "One" } as const
-const a2 = { name: "Hello", g: "Two" }
-
-const a3 = { [a1.g]: a1 }
 

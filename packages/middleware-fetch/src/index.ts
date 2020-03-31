@@ -1,7 +1,6 @@
 
 
-import { ReducerGroup, Action, FetchMeta, FetchVariants, FUrl, Json, FetchAsyncData } from "@typesafe-store/reducer"
-import { MiddleWare, TypeSafeStore, Dispatch, GetActionFromReducers } from "@typesafe-store/store"
+import { MiddleWare, TypeSafeStore, Dispatch, GetActionFromReducers, ReducerGroup, Action, FetchMeta, FetchVariants, FUrl, Json, FetchAsyncData } from "@typesafe-store/store"
 
 
 function isFetchAction(rg: ReducerGroup<any, any, any, any>, action: Action) {
@@ -19,7 +18,9 @@ function getUrl(url: FUrl): string {
     if (url.queryParams) {
         const query = Object.entries(url.queryParams)
             .map(([key, value]) => `${key}=${value}`).join("&")
-        path = `${path}?${query}`
+        if (query !== "") {
+            path = `${path}?${query}`
+        }
     }
     return path
 }
