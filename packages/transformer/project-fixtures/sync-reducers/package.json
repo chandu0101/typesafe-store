@@ -6,7 +6,8 @@
   "license": "MIT",
   "scripts": {
     "start": "nodemon src/index.ts",
-    "dev": "tstore"
+    "dev": "tstore",
+    "build": "tsc -p tsconfig.json"
   },
   "devDependencies": {
     "@types/uuid": "^7.0.2",

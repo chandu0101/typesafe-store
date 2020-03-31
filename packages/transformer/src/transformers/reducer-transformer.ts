@@ -7,12 +7,12 @@ import {
     T_STORE_ASYNC_TYPE, REDUCERS_FOLDER, GENERATED_FOLDER,
     TSTORE_TEMP_V, EMPTY_REDUCER_TRANFORM_MESSAGE, GEN_SUFFIX
 } from "../constants";
-import { resolve, join, dirname, sep } from "path";
+import { sep } from "path";
 import { ConfigUtils } from "../utils/config-utils";
 import { AstUtils } from "../utils/ast-utils";
 import { FileUtils } from "../utils/file-utils";
 import { CommonUtils } from "../utils/common-utils";
-import { boolean } from "@mojotech/json-type-validation";
+import { performance } from "perf_hooks"
 
 let wcp: ts.WatchOfConfigFile<ts.SemanticDiagnosticsBuilderProgram> = null as any;
 
@@ -94,14 +94,24 @@ export const createReducerFunction = (cd: ts.ClassDeclaration) => {
     const propDecls = getPropDeclsFromTypeMembers();
     const defaultState = getDefaultState(propDecls);
     const typeName = getTypeName();
-    const caseClauses = getSwitchClauses();
+    const actionTypes = getActionTypes()
+    const caseClauses = getSwitchClauses(actionTypes);
     let [asyncActionType, asyncMeta] = getAsyncActionTypeAndMeta();
     let result = ts.createIdentifier("")
     if (caseClauses.length === 0 && asyncActionType === "") { // If no async properties and methods then return empty node
         result = ts.createIdentifier(EMPTY_REDUCER_TRANFORM_MESSAGE)
     } else {
         const f = buildFunction({ caseClauses: caseClauses, group: typeName });
-        let actionType = getActionType()
+
+        let actionType = actionTypes.map(at => {
+            let result = ""
+            if (at.payload) {
+                result = `{name: "${at.name}" ,group :"${at.group}",payload:${at.payload}}`
+            } else {
+                result = `{name: "${at.name}" ,group :"${at.group}"}`
+            }
+            return result
+        }).join(" | ")
         if (actionType === "") {
             actionType = "undefined"
         }
@@ -113,7 +123,7 @@ export const createReducerFunction = (cd: ts.ClassDeclaration) => {
             `
            export type ${typeName}State = ${getStateType()}
            
-           export type ${typeName}Action = ${actionType}
+           export type ${typeName}Action = ${actionTypes}
   
            export type ${typeName}AsyncAction = ${asyncActionType}
   
@@ -143,7 +153,7 @@ type TerinaryStatementResult = { kind: "TerinaryStatement", statement: ts.Expres
 type StatementResult = GeneralStatementResult | MutationStatementResult
     | IfStatementResult | IfElseStatementResult | ForEachStatementResult | TerinaryStatementResult
 
-const getSwitchClauses = () => {
+const getSwitchClauses = (actionTypes: ActionType[]) => {
 
     const methods = getMethodsFromTypeMembers();
 
@@ -175,15 +185,15 @@ const getSwitchClauses = () => {
                 }
             };
             const paramsLenth = m.parameters.length;
-
             if (paramsLenth > 0) {
+                const payloadType = actionTypes.find(at => at.name === name)!.payload
                 let v = "";
                 if (paramsLenth === 1) {
-                    v = `const ${m.parameters[0].name.getText()} = (action as any).payload`;
+                    v = `const ${m.parameters[0].name.getText()} = (action as any).payload as (${payloadType})`;
                 } else {
                     v = `const { ${m.parameters
                         .map(p => p.name.getText())
-                        .join(",")} } = (action as any).payload`;
+                        .join(",")} } = (action as any).payload as (${payloadType})`;
                 }
                 reservedStatements.push(v);
             }
@@ -321,9 +331,9 @@ const getSwitchClauses = () => {
             const processForEachStatement = (s: ts.ExpressionStatement): ForEachStatementResult => {
                 let result: ForEachStatementResult = { kind: "ForEachStatement" } as any
                 result.statement = s
-                const statments = getForEachStatements((s as any).expression as any)
-                if (Array.isArray(statments)) {
-                    result.statementResults = processStatements(statements)
+                const forachStatement = getForEachStatements(s.expression as any)
+                if (Array.isArray(forachStatement)) {
+                    result.statementResults = processStatements(forachStatement)
                 } else {
                     result.statementResults = [processMutationStatement(ts.createExpressionStatement(statements as any))]
                 }
@@ -554,7 +564,6 @@ const getSwitchClauses = () => {
             }
 
 
-
             const getStringVersionOfForEachStatementResult = (fsr: ForEachStatementResult): string => {
 
                 const ce = fsr.statement.expression as ts.CallExpression
@@ -577,7 +586,7 @@ const getSwitchClauses = () => {
                     `
                 }
                 const result = `
-                   ${v}.(${functionBody})
+                   ${v}(${functionBody})
                 `
                 return result;
             }
@@ -662,108 +671,6 @@ const getSwitchClauses = () => {
                 return { ...state, ${propertyAssigments.join(",")} }
             }`;
         });
-};
-
-const invalidateObjectWithList2 = ({
-    input,
-    traversed = [],
-    parent = "state"
-}: {
-    input: Map<string, [ProcessThisResult["values"], NewValue]>;
-    traversed?: string[];
-    parent?: string;
-}): string => {
-    const entries = Array.from(input.entries());
-    if (input.size === 1) {
-        const [key, values] = entries[0];
-        const v =
-            traversed.length > 0 ? `${parent}.${traversed.join(".")}` : `${parent}`;
-        return invalidateObject2({
-            map: { input: key.split("."), values: values[0], newValue: values[1] },
-            parent: v
-        });
-    } else {
-        //TODO multiple
-        return "TODO multiple entires of same object";
-        // const v1 = entries[0][0].split(".")[0]
-        // const props = groupByValue(input.filter(s => s.split(".").length > 1).map(s => {
-        //     const a = s.split(".")
-        //     return { key: a[1], value: a.slice(1).join(".") }
-        // }), "key")
-        // const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}.${v1}` : `${parent}.${v1}`
-        // return ts.createObjectLiteral([
-        //     ts.createSpreadAssignment(ts.createIdentifier(v)),
-        //     ...Object.keys(props).map(k =>
-        //         ts.createPropertyAssignment(
-        //             ts.createIdentifier(k),
-        //             invalidateObjectWithList({ input: props[k], traversed: traversed.concat([v1]) })
-        //         ))
-        // ])
-    }
-};
-
-const invalidateObject2 = ({
-    map: { input, values, newValue },
-    traversed = [],
-    parent = "state"
-}: {
-    map: {
-        input: string[];
-        values: ProcessThisResult["values"];
-        newValue: NewValue;
-    };
-    traversed?: string[];
-    parent?: string;
-}): string => {
-    console.log(
-        "Invalidatin object : input:  ",
-        input,
-        "traversed : ",
-        traversed,
-        "values: ",
-        values,
-        "aprent : ",
-        parent
-    );
-    const v1 = input[0];
-    const vv1 = traversed.length > 0 ? `${traversed.join(".")}.${v1}` : `${v1}`;
-    const v =
-        traversed.length > 0
-            ? `${parent}.${traversed.join(".")}.${v1}`
-            : `${parent}.${v1}`;
-    const v1t = values.find(v => v.name === vv1)!;
-    // const v1t: ProcessThisResult["values"][0] = { name: "", meta: { isOptional: false, isArray: false } }
-    if (input.length === 1) {
-        if (v1t.meta.type === MetaType.ARRAY) {
-            if (v1t.meta.access && v1t.meta.access.length > 1) {
-                // multiple argument access
-                console.log("****** numberAcess found2 ");
-                return `[...${v}.map((v,index) => index === ${v1t.meta.access[0].name} ? {...v} : v)]`;
-            } else if (v1t.meta.access) {
-                // single argument access
-            }
-            return `[...${v}]`;
-        } else {
-            return `{...${v}}`;
-        }
-    } else {
-        const v2 = input[1];
-        const vv2 = `${vv1}.${v2}`;
-        const v2t = values.find(v => v.name === vv2)!;
-        const v2exapnd = invalidateObject2({
-            map: { input: input.slice(1), values, newValue },
-            traversed: traversed.concat([v1])
-        });
-        const expand =
-            v1t.meta.type === MetaType.ARRAY
-                ? `[...${v}.map((v,index) => index === ${v1t.meta.access?.[0].name} ? {...v,${v2}:${v2exapnd}} : v)]`
-                : `{ ...${v},${v2}:${v2exapnd} }`;
-
-        if (v2t.meta.isOptional) {
-            return `${v} ? ${expand} : ${v}`;
-        }
-        return expand;
-    }
 };
 
 const invalidateObjectWithList = ({
@@ -1102,14 +1009,16 @@ export const getAsyncActionTypeAndMeta = (): [string, string] => {
     return [asyncType, meta]
 };
 
-export const getActionType = () => {
+type ActionType = { name: string, group: string, payload?: string }
+
+export const getActionTypes = (): ActionType[] => {
     const methods = getMethodsFromTypeMembers();
     const group = `${ConfigUtils.getPrefixPathForReducerGroup(currentProcessingReducerFile)}${getTypeName()}`;
-    const generalMethods = methods.map(m => {
+    return methods.map(m => {
         const n = m.name.getText();
         const pl = m.parameters.length;
         if (pl === 0) {
-            return `{name :"${n}",group:"${group}"}`;
+            return { name: n, group: n }
         }
         const t = AstUtils.typeToString(
             memberTypes.find(mt => mt.name === n)!.type
@@ -1125,12 +1034,10 @@ export const getActionType = () => {
         } else {
             p = `{${pt}}`;
         }
-        return `{name :"${n}",group:"${group}",payload:${p}}`;
-    });
+        return { name: n, group, payload: p };
+    })
 
-    // Asynchronus actions
 
-    return generalMethods.join(" | ");
 };
 
 
