@@ -136,9 +136,9 @@ type ForEachStatementResult = { kind: "ForEachStatement", statement: ts.Expressi
 
 type IfStatementResult = { kind: "IfStatement", statement: ts.IfStatement, statementResults: StatementResult[] }
 
-type IfElseStatementResult = { kind: "IfElseStatement", statement: ts.Statement, ifStatementResults: StatementResult[], elseStatementResults: StatementResult[] }
+type IfElseStatementResult = { kind: "IfElseStatement", statement: ts.IfStatement, ifStatementResults: StatementResult[], elseStatementResults: StatementResult[] }
 
-type TerinaryStatementResult = { kind: "TerinaryStatement", statement: ts.Statement, trueExp: MutationStatementResult, falseExp: MutationStatementResult }
+type TerinaryStatementResult = { kind: "TerinaryStatement", statement: ts.ExpressionStatement, trueExp: MutationStatementResult, falseExp: MutationStatementResult }
 
 type StatementResult = GeneralStatementResult | MutationStatementResult
     | IfStatementResult | IfElseStatementResult | ForEachStatementResult | TerinaryStatementResult
@@ -152,7 +152,6 @@ const getSwitchClauses = () => {
         .map(m => {
             const name = m.name.getText();
             const reservedStatements: string[] = [];
-            const generalStatements: GS[] = [];
             const parentGroups: Map<
                 string,
                 Map<string, [ProcessThisResult["values"], NewValue]>
@@ -160,8 +159,6 @@ const getSwitchClauses = () => {
             const PREFIX = "_tr_";
             const propertyAssigments: string[] = [];
             let duplicateExists = false;
-            let otherThanMutationStatements = false;
-
             const addOrUpdateParentGroup = (
                 { g, v, values }: ProcessThisResult,
                 newValue: NewValue
@@ -192,8 +189,6 @@ const getSwitchClauses = () => {
             }
 
             const statements = m.body!.statements;
-
-            const statementResults: StatementResult[] = []
 
             const isSupportedMutationExpression = (exp: ts.Expression) => {
                 return ((ts.isPostfixUnaryExpression(exp)
@@ -430,7 +425,6 @@ const getSwitchClauses = () => {
             const processStatements = (statements: ts.NodeArray<ts.Statement>): StatementResult[] => {
                 let results: StatementResult[] = []
                 statements.forEach(s => {
-                    // const text = s.getText().trim();
                     if (isSupportedMutationStatement(s)) {
                         results.push(processMutationStatement(s))
                     } else if (ts.isExpressionStatement(s) &&
@@ -462,8 +456,55 @@ const getSwitchClauses = () => {
             }
 
 
+            const statementsResults = processStatements(statements)
+            let otherThanStraightOnlyMutationExist = false
+            const mutationOnlyStatementResults = (input: StatementResult[]): MutationStatementResult[] => {
+                let results: MutationStatementResult[] = []
+                input.forEach(sr => {
+                    if (sr.kind === "MutationStatement") {
+                        results.push(sr)
+                    } else if (sr.kind === "ForEachStatement") {
+                        otherThanStraightOnlyMutationExist = true
+                        const fr = mutationOnlyStatementResults(sr.statementResults)
+                        results.push(...fr)
+                    } else if (sr.kind === "IfStatement") {
+                        otherThanStraightOnlyMutationExist = true
+                        const ifr = mutationOnlyStatementResults(sr.statementResults)
+                        results.push(...ifr)
+                    } else if (sr.kind === "IfElseStatement") {
+                        otherThanStraightOnlyMutationExist = true
+                        const ifr = mutationOnlyStatementResults(sr.ifStatementResults)
+                        const er = mutationOnlyStatementResults(sr.elseStatementResults)
+                        results.push(...ifr)
+                        results.push(...er)
+                    } else if (sr.kind === "TerinaryStatement") {
+                        otherThanStraightOnlyMutationExist = true
+                        if (sr.trueExp.kind === "MutationStatement") {
+                            results.push(sr.trueExp)
+                        }
+                        if (sr.falseExp.kind === "MutationStatement") {
+                            results.push(sr.falseExp)
+                        }
+                    } else {
+                        otherThanStraightOnlyMutationExist = true
+                    }
+                })
 
-            if (!duplicateExists && !otherThanMutationStatements) {
+                return results
+            }
+
+            const straightMutationStatementResults = mutationOnlyStatementResults(statementsResults)
+
+            if (straightMutationStatementResults.length === 0) {
+                throw new Error(`Every method of class must contain atleaset one mutation statement`)
+            }
+
+            straightMutationStatementResults.forEach(msr => {
+                addOrUpdateParentGroup(msr.thisResult, msr.newValue)
+            })
+
+
+            if (!duplicateExists && !otherThanStraightOnlyMutationExist) {
                 parentGroups.forEach((value, group) => {
                     propertyAssigments.push(
                         `${group}:${invalidateObjectWithList({ input: value })}`
@@ -474,7 +515,8 @@ const getSwitchClauses = () => {
                     return { ...state, ${propertyAssigments.join(",")} }
                 }`;
             }
-            //
+            // TODO Big One 
+
             parentGroups.forEach((value, group) => {
                 console.log("parent Group Entries: ", group, "Values : ", value);
                 const key = Array.from(value.keys())[0];
@@ -501,9 +543,122 @@ const getSwitchClauses = () => {
                 propertyAssigments.push(`${group}:${PREFIX}${group}`);
             });
 
+
+            // Todo cross check 
+            const replaceThisWithState = (node: ts.Node) => {
+                let result = node.getText()
+                if (result.startsWith("this.")) {
+                    result = result.replace("this.", "state.")
+                }
+                return result
+            }
+
+
+
+            const getStringVersionOfForEachStatementResult = (fsr: ForEachStatementResult): string => {
+
+                const ce = fsr.statement.expression as ts.CallExpression
+                const v = replaceThisWithState(ce.expression)
+                let functionBody = ""
+                const arg = ce.arguments[0]
+                if (ts.isArrowFunction(arg)) {
+                    const af = arg
+                    const params = af.parameters.map(p => p.getText()).join(" ,")
+                    functionBody = `(${params}) => {
+                       ${getOutputStatements(fsr.statementResults).join("\n")}
+                    }`
+                } else if (ts.isFunctionExpression(arg)) {
+                    const fe = arg
+                    const params = fe.parameters.map(p => p.getText()).join(" ,")
+                    functionBody = `
+                      function (${params}) {
+                        ${getOutputStatements(fsr.statementResults).join("\n")}
+                      }
+                    `
+                }
+                const result = `
+                   ${v}.(${functionBody})
+                `
+                return result;
+            }
+
+            const getStringVersionOfIfStatementResult = (isr: IfStatementResult) => {
+                const is = isr.statement
+                let body = ""
+                if (ts.isBlock(is.thenStatement)) {
+                    body = `{  
+                        ${getOutputStatements(isr.statementResults).join("\n")}
+                    }`
+                } else {
+                    body = `${getOutputStatements(isr.statementResults).join("\n")}`
+                }
+                const result = `
+                  if(${replaceThisWithState(is.expression)}) ${body}
+                `
+                return result;
+            }
+
+            const getStringVersionOfIfElseStatementResult = (iesr: IfElseStatementResult): string => {
+                const ies = iesr.statement
+
+                const ifCond = replaceThisWithState(ies.expression)
+                let ifBody = ""
+                if (ts.isBlock(ies.thenStatement)) {
+                    ifBody = `{  
+                        ${getOutputStatements(iesr.ifStatementResults).join("\n")}
+                    }`
+                } else {
+                    ifBody = `${getOutputStatements(iesr.ifStatementResults).join("\n")}`
+                }
+                const elseS = ies.elseStatement!
+                let else_str = ""
+                if (ts.isBlock(elseS) || isSupportedMutationStatement(elseS)) {
+                    else_str = `else {
+                         ${getOutputStatements(iesr.elseStatementResults).join("\n")}
+                     }`
+                } else if (isIfStatementOnly(elseS)) {
+                    else_str = `else ${getStringVersionOfForEachStatementResult(iesr.elseStatementResults[0] as any)}`
+                } else if (isIfElseStatement(elseS)) {
+                    else_str = `else ${getStringVersionOfIfElseStatementResult(iesr.elseStatementResults[0] as any)}`
+                }
+                const result = `
+                  if(${ifCond}) ${ifBody}
+                  ${else_str}
+                `
+                return result
+            }
+
+            const getOutputStatements = (input: StatementResult[]): string[] => {
+                const results: string[] = []
+                input.forEach(sr => {
+                    if (sr.kind === "MutationStatement") {
+                        results.push(sr.newStatement)
+                    } else if (sr.kind === "GeneralStatement") {
+                        results.push(sr.value)
+                    } else if (sr.kind === "TerinaryStatement") {
+                        const ts = sr.statement
+                        const ce = ts.expression as ts.ConditionalExpression
+                        const ts_string = `${replaceThisWithState(ce.condition)} ? ${sr.trueExp.newStatement} : ${sr.falseExp.newStatement}`
+                        results.push(ts_string)
+                    } else if (sr.kind === "ForEachStatement") {
+                        const fs_string = getStringVersionOfForEachStatementResult(sr)
+                        results.push(fs_string)
+                    } else if (sr.kind === "IfStatement") {
+                        const is_string = getStringVersionOfIfStatementResult(sr)
+                        results.push(is_string)
+                    } else if (sr.kind === "IfElseStatement") {
+                        const ies_string = getStringVersionOfIfElseStatementResult(sr)
+                        results.push(ies_string)
+                    }
+                })
+                return results
+            }
+
+            const outputStatements = getOutputStatements(statementsResults)
+
             return `case "${name}" : {
                 ${reservedStatements.join("\n")}
-                ${generalStatements.join("\n")}
+                ${outputStatements.join("\n")}
                 return { ...state, ${propertyAssigments.join(",")} }
             }`;
         });

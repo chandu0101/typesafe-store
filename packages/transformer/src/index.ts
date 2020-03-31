@@ -184,6 +184,18 @@ function handleFileChange(f: string, e: ts.FileWatcherEventKind) {
         } else {
             graphqlOperationFilesChanged.push({ path: f, event: e })
         }
+    } else if (f.endsWith("tsnodes")) {
+        const nodes = AstUtils.findAllNodesFromFile(f, (n: ts.Node) => ts.isExpressionStatement(n))
+        console.log("Nodes : ", nodes);
+        nodes.forEach(n => {
+            console.log("Node : ", n);
+            if (ts.isExpressionStatement(n)) {
+                if (ts.isCallExpression(n.expression)) {
+                    console.log("Exp :",
+                        n.expression.expression.getText(), "ft : ", n.expression.expression.getFullText());
+                }
+            }
+        })
     }
 
 }
@@ -192,3 +204,4 @@ watchMain().catch(error => {
     console.error(error)
     process.exit()
 })
+
