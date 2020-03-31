@@ -103,48 +103,48 @@ const processFile = (file: string, ) => {
             console.log("gqlString : ", gqlString);
             const document = parse(gqlString)
             const { isFragment, operation, errorMessage } = GraphqlTypGen.isValidQueryDocument(document)
-            if (isFragment) { // if its fragment only node then skip
-                return
-            }
-            const errors = validate(meta.schemaManager.schema!, document)
-            if (errors.length > 0) {
-                throw new Error(`query : ${gqlString} is not valid, ${JSON.stringify(errors)}`)
-            }
-            if (errorMessage) {
-                throw new Error(`query :${gqlString} is not valid , ${errorMessage}`)
-            }
-            if (operation) {
-                const variableName = (node.parent.parent as ts.VariableDeclaration).name.getText() // Todo Check for other than VariableDeclaration(is it possible ?)
-                const { types, operations } = GraphqlTypGen.generateType(document, meta.schemaManager.schema!)
-                let responseType = ""
-                let bodyType = ""
-                let isMultipleOp = false
+            if (!isFragment) {// if its fragment only node then skip
+                const errors = validate(meta.schemaManager.schema!, document)
+                if (errors.length > 0) {
+                    throw new Error(`query : ${gqlString} is not valid, ${JSON.stringify(errors)}`)
+                }
+                if (errorMessage) {
+                    throw new Error(`query :${gqlString} is not valid , ${errorMessage}`)
+                }
+                if (operation) {
+                    const variableName = (node.parent.parent as ts.VariableDeclaration).name.getText() // Todo Check for other than VariableDeclaration(is it possible ?)
+                    const { types, operations } = GraphqlTypGen.generateType(document, meta.schemaManager.schema!)
+                    let responseType = ""
+                    let bodyType = ""
+                    let isMultipleOp = false
 
-                if (operations.length > 1) {
-                    isMultipleOp = true
-                    responseType = `[${operations.map(o => o.name).join(",")}]`
-                    bodyType = `[${operations.map(op => `{query: \`${gqlString}\`,${op.variables ? `variables:${op.variables}` : ""}}`).join(", ")}]`
-                } else {
-                    responseType = `${operations[0].name}`
-                    const op = operations[0]
-                    bodyType = `{query: \`${gqlString}\`,${op.variables ? `variables:${op.variables}` : ""}}`
+                    if (operations.length > 1) {
+                        isMultipleOp = true
+                        responseType = `[${operations.map(o => o.name).join(",")}]`
+                        bodyType = `[${operations.map(op => `{query: \`${gqlString}\`,${op.variables ? `variables:${op.variables}` : ""}}`).join(", ")}]`
+                    } else {
+                        responseType = `${operations[0].name}`
+                        const op = operations[0]
+                        bodyType = `{query: \`${gqlString}\`,${op.variables ? `variables:${op.variables}` : ""}}`
+                    }
+                    //TODO subscription type , subscriptions should be handled via websockets
+                    const fType = `FetchPost<{path: "${meta.schemaManager.url}"},${bodyType},${responseType},GraphqlError[]>`
+                    const output = `
+                     ${types}
+                     export type ${pascal(variableName)} =  ${fType}
+                    `
+                    const operationValue = { text: output, isMultipleOp }
+                    if (operation === GraphqlOperation.QUERY) {
+                        meta.operations.queries[namespaceName] = operationValue
+                    } else if (operation === GraphqlOperation.MUTATION) {
+                        meta.operations.mutations[namespaceName] = operationValue
+                    } else {
+                        meta.operations.subscriptions[namespaceName] = operationValue
+                    }
+                    hasChanges = true
                 }
-                //TODO subscription type , subscriptions should be handled via websockets
-                const fType = `FetchPost<{path: "${meta.schemaManager.url}"},${bodyType},${responseType},GraphqlError[]>`
-                const output = `
-                 ${types}
-                 export type ${pascal(variableName)} =  ${fType}
-                `
-                const operationValue = { text: output, isMultipleOp }
-                if (operation === GraphqlOperation.QUERY) {
-                    meta.operations.queries[namespaceName] = operationValue
-                } else if (operation === GraphqlOperation.MUTATION) {
-                    meta.operations.mutations[namespaceName] = operationValue
-                } else {
-                    meta.operations.subscriptions[namespaceName] = operationValue
-                }
-                hasChanges = true
             }
+
         })
         if (hasChanges) {
             writeGraphqlTypesToFile(apiName, meta)
@@ -210,6 +210,7 @@ function writeGraphqlTypesToFile(apiName: string, meta: GraphqlApiMeta) {
     const imports: string[] = []
     if (queries || mutations) {
         imports.push(`import { FetchPost } from "@typesafe-store/reducer"`)
+        imports.push(`import { GraphqlError } from "@typesafe-store/rducer/graphql"`)
     }
     const output = `
     ${CommonUtils.dontModifyMessage()}
@@ -340,26 +341,18 @@ function getTextFromTemplateSpans(file: string, node: ts.Node, apiMeta: GraphqlA
         let currentFileName = file;
         let currentNode: ts.Node = node;
         while (true) {
-            // const defs = this._langService.getDefinitionAtPosition(currentFileName, currentNode.getStart());
-            // if (!defs || !defs[0]) return { dependencies };
-            // const def = defs[0];
-            // const src = this._langService.getProgram()!.getSourceFile(def.fileName);
-            // if (!src) return { dependencies };
-            const def = AstUtils.getDefnitionOfIdentifierNode(currentFileName, currentNode)
-            // const src = AstUtils.getSourceFile(filePath)!
-            const found = AstUtils.findNode(def.fileName, def.textSpan.start); //def.textSpan.start
-            if (!found || !found.parent) return { text: "", dependencies };
-            currentFileName = def.fileName;
-            if (ts.isVariableDeclaration(found.parent) && found.parent.initializer) {
-                currentNode = found.parent.initializer;
-            } else if (ts.isPropertyDeclaration(found.parent) && found.parent.initializer) {
-                currentNode = found.parent.initializer;
-            } else if (ts.isPropertyAssignment(found.parent)) {
-                currentNode = found.parent.initializer;
-            } else if (ts.isShorthandPropertyAssignment(found.parent)) {
+            const found = AstUtils.getDeclarationOfIdentifierNode(currentNode)
+            currentFileName = found.getSourceFile().fileName;
+            if (ts.isVariableDeclaration(found) && found.initializer) {
+                currentNode = found.initializer;
+            } else if (ts.isPropertyDeclaration(found) && found.initializer) {
+                currentNode = found.initializer;
+            } else if (ts.isPropertyAssignment(found)) {
+                currentNode = found.initializer;
+            } else if (ts.isShorthandPropertyAssignment(found)) {
                 currentNode = found;
             } else {
-                return { text: "", dependencies };
+                throw new Error(`template literal substitution of type ${found.kind} is not supported`);
             }
             if (ts.isIdentifier(currentNode)) {
                 continue;

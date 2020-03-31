@@ -115,9 +115,20 @@ export class AstUtils {
      * @param file 
      * @param node 
      */
-    static getDefnitionOfIdentifierNode(file: string, node: ts.Node): { fileName: string, textSpan: any } {
-        const decl = this.getTypeChecker().getSymbolAtLocation(node)
-        return null as any
+    static getDeclarationOfIdentifierNode(node: ts.Node): ts.Node {
+        const symbol = this.getTypeChecker().getSymbolAtLocation(node)
+        const decls = symbol!.declarations
+        decls.forEach(decl => {
+            if (ts.isVariableDeclaration(decl)) {
+                console.log("Its variables");
+                const i = decl.initializer
+            }
+            if (ts.isVariableDeclaration(decl.parent)) {
+                const i = decl.parent.initializer
+            }
+
+        })
+        return this.getTypeChecker().getSymbolAtLocation(node)!.declarations[0]
     }
 
 }

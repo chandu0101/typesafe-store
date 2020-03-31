@@ -151,7 +151,7 @@ function reportWatchStatusChanged(diagnostic: ts.Diagnostic) {
 
 function processFiles(diagnostic: ts.Diagnostic) {
     const msg = diagnostic.messageText.toString()
-    // console.log("Diag : ", diagnostic, "msg :", msg);
+    console.log("Diag : ", diagnostic, "msg :", msg);
     if (diagnostic.code !== 6032 &&
         diagnostic.category !== ts.DiagnosticCategory.Error
         && (msg.includes("Found 0 errors") || !msg.includes("error"))

@@ -12,6 +12,7 @@ import { ConfigUtils } from "../utils/config-utils";
 import { AstUtils } from "../utils/ast-utils";
 import { FileUtils } from "../utils/file-utils";
 import { CommonUtils } from "../utils/common-utils";
+import { boolean } from "@mojotech/json-type-validation";
 
 let wcp: ts.WatchOfConfigFile<ts.SemanticDiagnosticsBuilderProgram> = null as any;
 
@@ -127,6 +128,21 @@ export const createReducerFunction = (cd: ts.ClassDeclaration) => {
 };
 
 
+type GeneralStatementResult = { kind: "GeneralStatement", value: string }
+
+type MutationStatementResult = { kind: "MutationStatement", thisResult: ProcessThisResult, newValue: NewValue, newStatement: string }
+
+type ForEachStatementResult = { kind: "ForEachStatement", statement: ts.ExpressionStatement, statementResults: StatementResult[] }
+
+type IfStatementResult = { kind: "IfStatement", statement: ts.IfStatement, statementResults: StatementResult[] }
+
+type IfElseStatementResult = { kind: "IfElseStatement", statement: ts.Statement, ifStatementResults: StatementResult[], elseStatementResults: StatementResult[] }
+
+type TerinaryStatementResult = { kind: "TerinaryStatement", statement: ts.Statement, trueExp: MutationStatementResult, falseExp: MutationStatementResult }
+
+type StatementResult = GeneralStatementResult | MutationStatementResult
+    | IfStatementResult | IfElseStatementResult | ForEachStatementResult | TerinaryStatementResult
+
 const getSwitchClauses = () => {
 
     const methods = getMethodsFromTypeMembers();
@@ -177,102 +193,275 @@ const getSwitchClauses = () => {
 
             const statements = m.body!.statements;
 
-            // const processStatements = ()
+            const statementResults: StatementResult[] = []
 
-            statements.forEach(s => {
-                const text = s.getText().trim();
+            const isSupportedMutationExpression = (exp: ts.Expression) => {
+                return ((ts.isPostfixUnaryExpression(exp)
+                    || ts.isBinaryExpression(exp) ||
+                    (ts.isCallExpression(exp) &&
+                        ts.isPropertyAccessExpression(exp.expression) &&
+                        isArrayMutatableAction(exp.expression.name))))
+
+            }
+
+            const isSupportedMutationStatement = (s: ts.Statement): s is ts.ExpressionStatement => {
+                let result = false;
+                const text = s.getText()
                 if (ts.isExpressionStatement(s) && text.startsWith("this.")) {
-                    if (ts.isPostfixUnaryExpression(s.expression)) {
-                        let op = "";
-                        const operand = s.expression.operand;
-                        const result = processThisStatement(operand as any);
-                        const exprLeft = operand.getText();
-                        const exprRight = "1";
-                        let modifiedField = lastElementOfArray(exprLeft.split("."));
-                        let newValue = { name: modifiedField, op: "=", value: "" };
-                        const x = exprLeft.replace("this.", "state.");
-                        if (s.expression.operator === ts.SyntaxKind.PlusPlusToken) {
-                            op = "+=";
-                            newValue.value = `${x} + 1`;
-                        } else {
-                            op = "-=";
-                            newValue.value = `${x} - 1`;
-                        }
-                        addOrUpdateParentGroup(result, newValue);
-                        generalStatements.push(
-                            `${exprLeft.replace("this.", PREFIX)} ${op} ${exprRight}`
-                        );
-                    }
-                    if (ts.isBinaryExpression(s.expression)) {
-                        const left = s.expression.left;
-                        const result = processThisStatement(left as any);
-                        const exprLeft = left.getText();
-                        let exprRight = s.expression.right.getText();
-                        const op = s.expression.operatorToken.getText();
-                        let modifiedField = lastElementOfArray(exprLeft.split("."));
-                        let newValue = { name: modifiedField, op: op, value: exprRight };
-
-                        if (s.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-                            newValue.value = exprRight;
-                        } else {
-                            newValue.value = `${exprLeft.replace(
-                                "this.",
-                                ""
-                            )} ${op} ${exprRight}`;
-                        }
-                        addOrUpdateParentGroup(result, newValue);
-                        generalStatements.push(
-                            `${exprLeft.replace("this.", PREFIX)} ${op} ${exprRight}`
-                        );
-                    }
-
-                    if (
-                        ts.isCallExpression(s.expression) &&
-                        ts.isPropertyAccessExpression(s.expression.expression) &&
-                        isArrayMutatableAction(s.expression.expression.name)
-                    ) {
-                        const exp = s.expression.expression;
-                        const result = processThisStatement(exp.expression as any, true);
-                        let args = s.expression.arguments.map(a => a.getText()).join(",");
-                        let modifiedField = lastElementOfArray(
-                            exp.expression.getText().split(".")
-                        );
-                        let newValue = {
-                            name: modifiedField,
-                            op: s.expression.expression.name.getText(),
-                            value: ""
-                        };
-                        newValue.value = args;
-                        addOrUpdateParentGroup(result, newValue);
-                        generalStatements.push(s.getText().replace("this.", PREFIX));
-                    }
-                } else if (ts.isExpressionStatement(s) && ts.isDeleteExpression(s.expression)) {
-                    throw new Error("delete expression not supported,  instead assign value to property")
+                    result = isSupportedMutationExpression(s.expression)
                 }
-                else {
-                    otherThanMutationStatements = true;
-                    // other than straight mutations handle forEach/if else/tenary operator
-                    if (
-                        ts.isExpressionStatement(s) &&
+                return result;
+            }
+
+            const processMutationStatement = (s: ts.ExpressionStatement): MutationStatementResult => {
+                let mResult: MutationStatementResult = { kind: "MutationStatement" } as any
+                if (ts.isPostfixUnaryExpression(s.expression)) {
+                    let op = "";
+                    const operand = s.expression.operand;
+                    const result = processThisStatement(operand as any);
+                    const exprLeft = operand.getText();
+                    const exprRight = "1";
+                    let modifiedField = lastElementOfArray(exprLeft.split("."));
+                    let newValue = { name: modifiedField, op: "=", value: "" };
+                    const x = exprLeft.replace("this.", "state.");
+                    if (s.expression.operator === ts.SyntaxKind.PlusPlusToken) {
+                        op = "+=";
+                        newValue.value = `${x} + 1`;
+                    } else {
+                        op = "-=";
+                        newValue.value = `${x} - 1`;
+                    }
+                    // addOrUpdateParentGroup(result, newValue);                    
+                    mResult.thisResult = result
+                    mResult.newValue = newValue
+                    mResult.newStatement = `${exprLeft.replace("this.", PREFIX)} ${op} ${exprRight}`
+
+                } else if (ts.isBinaryExpression(s.expression)) {
+                    const left = s.expression.left;
+                    const result = processThisStatement(left as any);
+                    const exprLeft = left.getText();
+                    let exprRight = s.expression.right.getText();
+                    const op = s.expression.operatorToken.getText();
+                    let modifiedField = lastElementOfArray(exprLeft.split("."));
+                    let newValue = { name: modifiedField, op: op, value: exprRight };
+
+                    if (s.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+                        newValue.value = exprRight;
+                    } else {
+                        newValue.value = `${exprLeft.replace(
+                            "this.",
+                            ""
+                        )} ${op} ${exprRight}`;
+                    }
+                    // addOrUpdateParentGroup(result, newValue);
+                    mResult.thisResult = result
+                    mResult.newValue = newValue
+                    mResult.newStatement = `${exprLeft.replace("this.", PREFIX)} ${op} ${exprRight}`
+
+                } else if (
+                    ts.isCallExpression(s.expression) &&
+                    ts.isPropertyAccessExpression(s.expression.expression) &&
+                    isArrayMutatableAction(s.expression.expression.name)
+                ) {
+                    const exp = s.expression.expression;
+                    const result = processThisStatement(exp.expression as any, true);
+                    let args = s.expression.arguments.map(a => a.getText()).join(",");
+                    let modifiedField = lastElementOfArray(
+                        exp.expression.getText().split(".")
+                    );
+                    let newValue = {
+                        name: modifiedField,
+                        op: s.expression.expression.name.getText(),
+                        value: ""
+                    };
+                    newValue.value = args;
+                    // addOrUpdateParentGroup(result, newValue);
+                    const newStatement = s.getText().replace("this.", PREFIX)
+                    mResult.thisResult = result
+                    mResult.newValue = newValue
+                    mResult.newStatement = newStatement
+                } else {
+                    throw new Error(`Hmm, this type of mutation not supported yet, please file an issue with sample code.`)
+                }
+
+                return mResult;
+
+            }
+
+            const isBlockContainsMutationStatements = (b: ts.Block): boolean => {
+                return Boolean(b.statements.find(s => isSupportedMutationStatement(s)))
+            }
+
+            const isForEachStatementContainsMutationStatements = (input: ts.CallExpression): boolean => {
+                let result = false
+                const argument = input.arguments[0]
+                if (ts.isFunctionExpression(argument)) {
+                    result = Boolean(argument.body.statements.find(s => isSupportedMutationStatement(s)))
+                } else if (ts.isArrowFunction(argument)) {
+                    const body = argument.body
+                    if (ts.isBlock(body)) {
+                        result = isBlockContainsMutationStatements(body)
+                    } else {
+                        result = body.getText().startsWith("this.") && isSupportedMutationExpression(body)
+                    }
+                }
+                return result
+            }
+
+            const getForEachStatements = (input: ts.CallExpression): ts.NodeArray<ts.Statement> | ts.Expression => {
+                const argument = input.arguments[0]
+                if (ts.isFunctionExpression(argument)) {
+                    return argument.body.statements
+                } else {
+                    const af = argument as ts.ArrowFunction
+                    const body = af.body
+                    if (ts.isBlock(body)) {
+                        return body.statements
+                    } else {
+                        return body;
+                    }
+                }
+            }
+
+            const processForEachStatement = (s: ts.ExpressionStatement): ForEachStatementResult => {
+                let result: ForEachStatementResult = { kind: "ForEachStatement" } as any
+                result.statement = s
+                const statments = getForEachStatements((s as any).expression as any)
+                if (Array.isArray(statments)) {
+                    result.statementResults = processStatements(statements)
+                } else {
+                    result.statementResults = [processMutationStatement(ts.createExpressionStatement(statements as any))]
+                }
+                return result
+            }
+
+            const isTerinaryStatementContainsMutationExpression = (s: ts.ExpressionStatement): boolean => {
+                let result = false
+                if (ts.isConditionalExpression(s.expression)) {
+                    result = isSupportedMutationExpression(s.expression.whenTrue) && isSupportedMutationExpression(s.expression.whenFalse)
+                }
+                return result;
+            }
+
+            const processTerinaryStatement = (s: ts.ExpressionStatement): TerinaryStatementResult => {
+                let result: TerinaryStatementResult = { kind: "TerinaryStatement" } as any
+                const cond = s.expression as ts.ConditionalExpression
+                result.statement = s
+                result.trueExp = processMutationStatement(ts.createExpressionStatement(cond.whenTrue))
+                result.falseExp = processMutationStatement(ts.createExpressionStatement(cond.whenFalse))
+                return result
+            }
+
+            const isIfStatementOnly = (s: ts.Statement): s is ts.IfStatement => {
+                return ts.isIfStatement(s) && !s.elseStatement
+            }
+
+            const isIfElseStatement = (s: ts.Statement) => {
+                return ts.isIfStatement(s) && s.elseStatement
+            }
+
+            const isIfStatementContainsMutationExpression = (s: ts.IfStatement) => {
+                let result = false
+                if (ts.isBlock(s.thenStatement)) {
+                    result = isBlockContainsMutationStatements(s.thenStatement)
+                } else {
+                    result = isSupportedMutationStatement(s.thenStatement)
+                }
+                return result
+            }
+
+            const processIfonlyStatement = (s: ts.IfStatement): IfStatementResult => {
+                let result: IfStatementResult = { kind: "IfStatement" } as any
+                result.statement = s
+
+                if (ts.isBlock(s.thenStatement)) {
+                    result.statementResults = processStatements(s.thenStatement.statements)
+                } else {
+                    result.statementResults = [processMutationStatement(s.thenStatement as any)]
+                }
+                return result
+            }
+
+            const isIfElseStatementContainsMutationExpression = (s: ts.IfStatement): boolean => {
+                let result = false
+                if (isIfStatementContainsMutationExpression(s)) {
+                    return true;
+                }
+                const elseS = s.elseStatement!
+                if (ts.isBlock(elseS) && isBlockContainsMutationStatements(elseS)) {
+                    return true
+                } else if (isSupportedMutationStatement(s)) {
+                    return true;
+                } else if (isIfStatementOnly(elseS) && isIfStatementContainsMutationExpression(elseS)) {
+                    return true
+                } else if (isIfElseStatement(elseS)) {
+                    return isIfElseStatementContainsMutationExpression(elseS as any)
+                }
+                return result
+            }
+
+            const processIfElseStatement = (s: ts.IfStatement): IfElseStatementResult => {
+                let result: IfElseStatementResult = { kind: "IfElseStatement" } as any
+                result.statement = s;
+                const thenStatement = s.thenStatement
+                if (ts.isBlock(thenStatement)) {
+                    result.ifStatementResults = processStatements(thenStatement.statements)
+                } else if (isSupportedMutationStatement(thenStatement)) {
+                    result.ifStatementResults = [processMutationStatement(thenStatement)]
+                } else {
+                    result.ifStatementResults = []
+                }
+                const elseStatement = s.elseStatement!;
+                if (ts.isBlock(elseStatement)) {
+                    result.elseStatementResults = processStatements(elseStatement.statements)
+                } else if (isSupportedMutationStatement(elseStatement)) {
+                    result.elseStatementResults = [processMutationStatement(elseStatement)]
+                } else if (isIfStatementOnly(elseStatement)) {
+                    result.elseStatementResults = [processIfonlyStatement(elseStatement)]
+                } else if (isIfElseStatement(elseStatement)) {
+                    result.elseStatementResults = [processIfElseStatement(elseStatement as any)]
+                } else {
+                    result.elseStatementResults = []
+                }
+
+                return result;
+            }
+
+            const processStatements = (statements: ts.NodeArray<ts.Statement>): StatementResult[] => {
+                let results: StatementResult[] = []
+                statements.forEach(s => {
+                    // const text = s.getText().trim();
+                    if (isSupportedMutationStatement(s)) {
+                        results.push(processMutationStatement(s))
+                    } else if (ts.isExpressionStatement(s) &&
                         ts.isCallExpression(s.expression) &&
                         ts.isPropertyAccessExpression(s.expression.expression) &&
-                        s.expression.expression.name.getText() === "forEach"
-                    ) {
-                        // forEach
+                        s.expression.expression.name.getText() === "forEach" && isForEachStatementContainsMutationStatements(s.expression)) {
+                        results.push(processForEachStatement(s))
+                    } else if (ts.isExpressionStatement(s) && isTerinaryStatementContainsMutationExpression(s)) {
+                        results.push(processTerinaryStatement(s))
                     } else if (
                         ts.isExpressionStatement(s) &&
-                        ts.isConditionalExpression(s.expression)
+                        ts.isConditionalExpression(s.expression) && isTerinaryStatementContainsMutationExpression(s)
                     ) {
-                        // terinary op
-                    } else if (ts.isIfStatement(s) && !s.elseStatement) {
-                        // only if
-                    } else if (ts.isIfStatement(s) && s.elseStatement) {
-                        // if and else
-                    } else {
-                        generalStatements.push(s.getText());
+                        results.push(processTerinaryStatement(s))
+                    } else if (ts.isIfStatement(s) && !s.elseStatement && isIfStatementContainsMutationExpression(s)) {
+                        results.push(processIfonlyStatement(s))
+                    } else if (ts.isIfStatement(s) && s.elseStatement && isIfStatementContainsMutationExpression(s)) {
+                        results.push(processIfElseStatement(s))
                     }
-                }
-            });
+                    else if (ts.isExpressionStatement(s) && ts.isDeleteExpression(s.expression)) {
+                        throw new Error("delete expression not supported,  instead assign value to property")
+                    }
+                    else {
+                        const result: GeneralStatementResult = { kind: "GeneralStatement", value: s.getText() }
+                        results.push(result)
+                    }
+                });
+                return results
+            }
+
+
 
             if (!duplicateExists && !otherThanMutationStatements) {
                 parentGroups.forEach((value, group) => {

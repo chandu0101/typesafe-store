@@ -1,4 +1,5 @@
 
+// this file is auto generated on 2020-03-30T12:23:40.214Z, don't modify it
 import { FetchPost } from "@typesafe-store/reducer"
 export namespace codeSandbox {
 
@@ -6,16 +7,23 @@ export namespace codeSandbox {
 
         export namespace todos2 {
 
-            type getTodo1 = Readonly<{ todo: Readonly<{ text: string | null }> | null }>
-            type getTodo1Variables = undefined
+            type tTFrag = Readonly<{ text: string | null }>
+
+            type getTodo1 = Readonly<{ todo: Readonly<{ text: string | null }> & tTFrag | null }>
             export type GetTodos = FetchPost<{ path: "https://vous9.sse.codesandbox.io/" }, {
                 query: `
+  
+  fragment tTFrag on Todo {
+      text
+  }
+
   query getTodo1 {
       todo {
-          text
+          text,
+          ...tTFrag
       }
   }
-`
+`,
             }, getTodo1, "GraphqlError[]">
 
         }
@@ -25,5 +33,3 @@ export namespace codeSandbox {
 
 
 }
-
-const getT: codeSandbox.queries.todos2.GetTodos = {}
