@@ -5,9 +5,11 @@
   "author": "chandu0101",
   "license": "MIT",
   "scripts": {
-    "start": "nodemon src/index.ts",
+    "start": "node build/index.js",
+    "start-ts": "nodemon src/index.ts",
     "dev": "tstore",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf node_modules package-lock.json build"
   },
   "devDependencies": {
     "@types/uuid": "^7.0.2",
@@ -16,7 +18,7 @@
   },
   "dependencies": {
     "@typesafe-store/store": "file:../../../store",
-    "@typesafe-store/transformer": "file:../..",
+    "@typesafe-store/cli": "file:../..",
     "uuid": "^7.0.2"
   }
 }

@@ -27,13 +27,13 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     private storage?: PersistanceStorage<GetStateFromReducers<R>>
     isReady = false
-    readonly dipatch: Dispatch<GetActionFromReducers<R>>
+    readonly dispatch: Dispatch<GetActionFromReducers<R>>
 
     constructor({ reducers, middleWares, storage }:
         { reducers: R, middleWares: MiddleWare<R>[], storage?: PersistanceStorage<GetStateFromReducers<R>> }) {
         this.reducers = reducers
         const mchain = middleWares.map(m => m(this))
-        this.dipatch = compose<Dispatch<Action>>(...mchain)(this.defaultDispatch)
+        this.dispatch = compose<Dispatch<Action>>(...mchain)(this.defaultDispatch)
         if (storage) {
             this.prepareStoreWithStorage(storage, middleWares)
         } else {
@@ -79,9 +79,16 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         if (s !== ps) {
             (this._state as any)[stateKey] = s
             // notify listeners 
-            if (this.storage) {
-                this.notifyPerssitor(a)
-            }
+            this.notifyListeners(stateKey, a)
+        }
+    }
+
+    private notifyListeners(stateKey: string, action: Action) {
+        const skListeners = this.listeners[stateKey]
+        if (skListeners) {
+            skListeners.forEach(c => {
+                c(action)
+            })
         }
     }
 
@@ -98,19 +105,41 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         return this.reducers[stateKey]
     }
 
-    subscribe<K extends keyof GetStateFromReducers<R>>(groups: (Record<K, (keyof GetStateFromReducers<R>[K])[]>)[], callback: () => any) {
-        // groups.forEach(g => {
-        //     const el = this.listeners[g]
-        //     if (el) {
-        //         el.push(callback)
-        //     } else {
-        //         this.listeners[g] = [callback]
-        //     }
-        // })
+    subscribe<K extends keyof GetStateFromReducers<R>>(stateKeys: K[], callback: Callback) {
+
+        stateKeys.forEach(sk => {
+            const el = this.listeners[sk]
+            if (el) {
+                el.push(callback)
+            } else {
+                this.listeners[sk] = [callback]
+            }
+        })
+
+        let isSubscribed = true
+        return () => {
+            if (!isSubscribed) {
+                return
+            }
+            stateKeys.forEach(sk => {
+                const lrs = this.listeners[sk]
+                const index = lrs.indexOf(callback)
+                lrs.splice(index, 1)
+            })
+            isSubscribed = false
+        }
     }
 
 }
 
+type A = any
+type G1S = { books: { name: string }[] }
+const g1: ReducerGroup<G1S, A, "g1", undefined> = { r: null as any, g: "g1", ds: null as any, m: {} }
+const g2: ReducerGroup<G1S, A, "g2", undefined> = { r: null as any, g: "g2", ds: null as any, m: {} }
+const sr = { g1, g2 }
+const store = new TypeSafeStore({ reducers: sr, middleWares: [] })
+
+store.subscribe(["g1",], null as any)
 
 export interface PersistanceStorage<S> {
 
@@ -124,7 +153,10 @@ export interface PersistanceStorage<S> {
 
 // class 
 
-type Callback = () => any
+/**
+ *  store subscription will be called with current procesed action
+ */
+type Callback = (action: Action) => any
 
 export type Dispatch<A extends Action> = (action: A) => any
 

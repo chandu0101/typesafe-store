@@ -71,6 +71,17 @@ export function transformReducerFiles(files: string[]) {
     });
 }
 
+const createImportNode = (input: ts.ImportDeclaration) => {
+    const ms = input.moduleSpecifier.getText()
+    let result = input.getText()
+    if (ms.startsWith("\"./")) {
+        result = result.replace(".", "..")
+    } else if (ms.startsWith("\"..")) {
+        result = result.replace("..", "../..")
+    }
+    return ts.createIdentifier(result)
+}
+
 
 const reducerTransformer: ts.TransformerFactory<ts.SourceFile> = context => {
     const visit: ts.Visitor = node => {
@@ -78,6 +89,9 @@ const reducerTransformer: ts.TransformerFactory<ts.SourceFile> = context => {
         if (ts.isClassDeclaration(node)) {
             console.log("class found and processing");
             return createReducerFunction(node);
+        }
+        if (ts.isImportDeclaration(node)) {
+            return createImportNode(node)
         }
         return node;
     };
@@ -127,7 +141,7 @@ export const createReducerFunction = (cd: ts.ClassDeclaration) => {
   
            export type ${typeName}AsyncAction = ${asyncActionType}
   
-           export const ${typeName}ReducerGroup: ReducerGroup<${typeName}State,${typeName}Action,"${typeName}",${typeName}AsyncAction> = { r: ${f},g:"${typeName}",ds:${defaultState},m:${meta}}
+           export const ${typeName}Group: ReducerGroup<${typeName}State,${typeName}Action,"${typeName}",${typeName}AsyncAction> = { r: ${f},g:"${typeName}",ds:${defaultState},m:${meta}}
   
           `
         );
@@ -200,6 +214,15 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
 
             const statements = m.body!.statements;
 
+            // Todo cross check 
+            const replaceThisWithState = (node: ts.Node) => {
+                let result = node.getText()
+                if (result.startsWith("this.")) {
+                    result = result.replace("this.", "state.")
+                }
+                return result
+            }
+
             const isSupportedMutationExpression = (exp: ts.Expression) => {
                 return ((ts.isPostfixUnaryExpression(exp)
                     || ts.isBinaryExpression(exp) ||
@@ -245,7 +268,7 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
                     const left = s.expression.left;
                     const result = processThisStatement(left as any);
                     const exprLeft = left.getText();
-                    let exprRight = s.expression.right.getText();
+                    let exprRight = replaceThisWithState(s.expression.right);
                     const op = s.expression.operatorToken.getText();
                     let modifiedField = lastElementOfArray(exprLeft.split("."));
                     let newValue = { name: modifiedField, op: op, value: exprRight };
@@ -458,7 +481,7 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
                         throw new Error("delete expression not supported,  instead assign value to property")
                     }
                     else {
-                        const result: GeneralStatementResult = { kind: "GeneralStatement", value: s.getText() }
+                        const result: GeneralStatementResult = { kind: "GeneralStatement", value: s.getText().replace(/this\./g, "state.") }
                         results.push(result)
                     }
                 });
@@ -553,15 +576,6 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
                 propertyAssigments.push(`${group}:${PREFIX}${group}`);
             });
 
-
-            // Todo cross check 
-            const replaceThisWithState = (node: ts.Node) => {
-                let result = node.getText()
-                if (result.startsWith("this.")) {
-                    result = result.replace("this.", "state.")
-                }
-                return result
-            }
 
 
             const getStringVersionOfForEachStatementResult = (fsr: ForEachStatementResult): string => {
@@ -1018,7 +1032,7 @@ export const getActionTypes = (): ActionType[] => {
         const n = m.name.getText();
         const pl = m.parameters.length;
         if (pl === 0) {
-            return { name: n, group: n }
+            return { name: n, group }
         }
         const t = AstUtils.typeToString(
             memberTypes.find(mt => mt.name === n)!.type

@@ -18,6 +18,8 @@
 /packages/cli/project-fixtures/*/node_modules/
 /packages/cli/project-fixtures/*/build/
 /packages/*/package-lock.json
+/examples/*/node_modules/
+/examples/*/build/
 
 
 # misc
