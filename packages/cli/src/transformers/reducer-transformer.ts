@@ -54,9 +54,9 @@ function transformFile(file: string) {
     const output = `
        ${CommonUtils.dontModifyMessage()}
        ${imports}
-       ${printer.printFile(newSf)}
+       ${transformedContent}
       `;
-    const outFile = getOutputPathForReducerSourceFile(file)
+    const outFile = ConfigUtils.getOutputPathForReducerSourceFile(file)
     console.log("******* writing to out file : ", outFile);
     console.log("outFile : ", outFile);
     FileUtils.writeFileSync(outFile, output);
@@ -71,16 +71,7 @@ export function transformReducerFiles(files: string[]) {
     });
 }
 
-const createImportNode = (input: ts.ImportDeclaration) => {
-    const ms = input.moduleSpecifier.getText()
-    let result = input.getText()
-    if (ms.startsWith("\"./")) {
-        result = result.replace(".", "..")
-    } else if (ms.startsWith("\"..")) {
-        result = result.replace("..", "../..")
-    }
-    return ts.createIdentifier(result)
-}
+
 
 
 const reducerTransformer: ts.TransformerFactory<ts.SourceFile> = context => {
@@ -91,7 +82,7 @@ const reducerTransformer: ts.TransformerFactory<ts.SourceFile> = context => {
             return createReducerFunction(node);
         }
         if (ts.isImportDeclaration(node)) {
-            return createImportNode(node)
+            return AstUtils.transformImportNodeToGeneratedFolderImportNodes(node)
         }
         return node;
     };
@@ -103,7 +94,7 @@ const reducerTransformer: ts.TransformerFactory<ts.SourceFile> = context => {
 
 //constants
 
-export const createReducerFunction = (cd: ts.ClassDeclaration) => {
+const createReducerFunction = (cd: ts.ClassDeclaration) => {
     setClassDeclaration(cd);
     const propDecls = getPropDeclsFromTypeMembers();
     const defaultState = getDefaultState(propDecls);
@@ -925,18 +916,6 @@ export function getCurrentProcessingReducerFile() {
     return currentProcessingReducerFile;
 }
 
-export function setWatchCompilerHost(p: typeof wcp) {
-    wcp = p;
-}
-
-export function setStorePath(path: string) {
-    storePath = path
-}
-
-// export function getStoreTypesPath() {
-//   return join(config.storePath, STORE_TYPES_FOLDER)
-// }
-
 
 
 export function setClassDeclaration(cd: ts.ClassDeclaration) {
@@ -1254,7 +1233,7 @@ function typeOfMultipleArray(input: EAccess[], name: string): EAccess[] {
     // console.log("********** typeOfMultipleArray ***********", input[0].exp);
     return input.map((a, index) => ({ ...a, type: result[index] }));
 }
-export function processThisStatement(
+function processThisStatement(
     exp: ts.PropertyAccessExpression | ts.ElementAccessExpression,
     arrayMut?: boolean
 ): ProcessThisResult {
@@ -1476,13 +1455,4 @@ export function groupByValue<T extends { value: any }>(
     }, {});
 }
 
-/**
- *   
- * @param file 
- */
-export function getOutputPathForReducerSourceFile(file: string) {
-    const reducers = `${sep}${REDUCERS_FOLDER}${sep}`
-    const genReducers = `${reducers}${GENERATED_FOLDER}${sep}`
-    return file.replace(reducers, genReducers).replace(".ts", `${GEN_SUFFIX}.ts`)
-}
 

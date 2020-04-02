@@ -5,12 +5,14 @@ import { transformReducerFiles } from "./transformers/reducer-transformer";
 import { AstUtils } from "./utils/ast-utils";
 import { GraphqlUtils } from "./graphql";
 import { MetaUtils } from "./utils/meta-utils";
+import { transformSelectorFiles } from "./transformers/selector-transformer";
 
 
 
 
 let reducerFilesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
 let graphqlOperationFilesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
+let selectorFilesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
 let initialFiles: string[] = []
 
 const formatHost: ts.FormatDiagnosticsHost = {
@@ -165,6 +167,9 @@ function processFiles(diagnostic: ts.Diagnostic) {
             GraphqlUtils.processFiles(graphqlOperationFilesChanged.map(go => go.path))
             graphqlOperationFilesChanged = []
         }
+        if (selectorFilesChanged.length > 0) {
+            transformSelectorFiles(selectorFilesChanged.map(sf => sf.path))
+        }
     }
 }
 
@@ -183,6 +188,13 @@ function handleFileChange(f: string, e: ts.FileWatcherEventKind) {
 
         } else {
             graphqlOperationFilesChanged.push({ path: f, event: e })
+        }
+    } else if (ConfigUtils.isSelectorsSourceFile(f)) {
+        if (e == ts.FileWatcherEventKind.Deleted) {
+            //handle deleted files
+
+        } else {
+            selectorFilesChanged.push({ path: f, event: e })
         }
     }
 }

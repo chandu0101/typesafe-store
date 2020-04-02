@@ -191,6 +191,8 @@ export type TypeSafeStoreConfigExtra = TypeSafeStoreConfig & {
     restApiTypesPath: string,
     graphqlApiTypesPath: string,
     graphqlOperationsPath: string,
+    seelctorsPath: string,
+    selectorsGeneratedPath: string,
     tsBuildInfoPath?: string
 }
 
@@ -222,3 +224,4 @@ export type TsBuildInfo = {
 
 
 export type BooleanStringTuple = [boolean, string]
+

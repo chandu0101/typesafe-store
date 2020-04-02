@@ -1,6 +1,6 @@
 import { TypeSafeStoreConfigExtra, TypeSafeStoreConfig, TsBuildInfo, GraphqlApiConfig, TypescriptCompilerOptions, TypescriptPlugin, TsGraphqlPluginConfig, RestApiConfig, typeSafeStoreConfigDecoder } from "../types";
 import { resolve, join, dirname, sep } from "path";
-import { REDUCERS_FOLDER, GENERATED_FOLDER, STORE_TYPES_FOLDER, REST_API_TYPES_FOLDER, GRAPHQL_API_TYPES_FOLDER, GRAPHQL_OPERATIONS_FOLDER, TS_GRAPHQL_PLUGIN_NAME, TYPESAFE_STORE_CONFIG_KEY } from "../constants";
+import { REDUCERS_FOLDER, GENERATED_FOLDER, STORE_TYPES_FOLDER, REST_API_TYPES_FOLDER, GRAPHQL_API_TYPES_FOLDER, GRAPHQL_OPERATIONS_FOLDER, TS_GRAPHQL_PLUGIN_NAME, TYPESAFE_STORE_CONFIG_KEY, GEN_SUFFIX, SELECTORS_FOLDER } from "../constants";
 import * as ts from "typescript";
 import { FileUtils } from "./file-utils";
 import { initializeGraphqlConfig } from "../graphql";
@@ -147,11 +147,17 @@ export class ConfigUtils extends ConfigValidation {
             restApiTypesPath: "",
             graphqlApiTypesPath: "",
             graphqlOperationsPath: "",
+            seelctorsPath: "",
+            selectorsGeneratedPath: ""
         };
         config.storePath = resolve(config.storePath)
         config.reducersPath = join(config.storePath, REDUCERS_FOLDER)
 
         config.reducersGeneratedPath = join(config.reducersPath, GENERATED_FOLDER)
+
+        config.seelctorsPath = join(config.seelctorsPath, SELECTORS_FOLDER)
+
+        config.selectorsGeneratedPath = join(config.seelctorsPath, GENERATED_FOLDER)
 
         config.typesPath = join(config.storePath, STORE_TYPES_FOLDER)
 
@@ -271,5 +277,22 @@ export class ConfigUtils extends ConfigValidation {
         console.log("file : ", this.getConfig().graphqlOperationsPath);
         return this.isTsFile(file) && file.includes(this.getConfig().graphqlOperationsPath)
     }
+    static isSelectorsSourceFile(file: string) {
+        return this.isTsFile(file) && file.includes(this.getConfig().seelctorsPath) && !file.includes(this.getConfig().selectorsGeneratedPath)
+    }
+
+    static getOutputPathForReducerSourceFile(file: string) {
+        const reducers = `${sep}${REDUCERS_FOLDER}${sep}`
+        const genReducers = `${reducers}${GENERATED_FOLDER}${sep}`
+        return file.replace(reducers, genReducers).replace(".ts", `${GEN_SUFFIX}.ts`)
+    }
+
+    static getOutputPathForSelectorSourceFile(file: string) {
+        const selectors = `${sep}${SELECTORS_FOLDER}${sep}`
+        const genSelectors = `${selectors}${GENERATED_FOLDER}${sep}`
+        return file.replace(selectors, genSelectors).replace(".ts", `${GEN_SUFFIX}.ts`)
+    }
+
+
 
 }

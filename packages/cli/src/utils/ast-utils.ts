@@ -83,6 +83,21 @@ export class AstUtils {
         find(sf);
         return result;
     }
+
+    static findAllNodesInsideNode(node: ts.Node, cond: (node: ts.Node) => boolean) {
+        const result: ts.Node[] = [];
+        function find(node: ts.Node) {
+            if (cond(node)) {
+                result.push(node);
+                return;
+            } else {
+                ts.forEachChild(node, find);
+            }
+        }
+        find(node);
+        return result;
+    }
+
     /**
      *  
      * @param file 
@@ -116,19 +131,27 @@ export class AstUtils {
      * @param node 
      */
     static getDeclarationOfIdentifierNode(node: ts.Node): ts.Node {
-        const symbol = this.getTypeChecker().getSymbolAtLocation(node)
-        const decls = symbol!.declarations
-        decls.forEach(decl => {
-            if (ts.isVariableDeclaration(decl)) {
-                console.log("Its variables");
-                const i = decl.initializer
-            }
-            if (ts.isVariableDeclaration(decl.parent)) {
-                const i = decl.parent.initializer
-            }
 
-        })
         return this.getTypeChecker().getSymbolAtLocation(node)!.declarations[0]
     }
 
+    static transformImportNodeToGeneratedFolderImportNodes(input: ts.ImportDeclaration) {
+        const ms = input.moduleSpecifier.getText()
+        let result = input.getText()
+        if (ms.startsWith("\"./")) {
+            result = result.replace(".", "..")
+        } else if (ms.startsWith("\"..")) {
+            result = result.replace("..", "../..")
+        }
+        return ts.createIdentifier(result)
+    }
+
+    static isPropertyOrElementAccessExpression(node: ts.Node, obj: string): node is (ts.PropertyAccessExpression | ts.ElementAccessExpression) {
+        return (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && node.getText().startsWith(`${obj}.`)
+    }
+
+    static getTypeOfNode(node: ts.Node) {
+        const t = this.getTypeChecker().getTypeAtLocation(node)
+        return this.typeToString(t)
+    }
 }

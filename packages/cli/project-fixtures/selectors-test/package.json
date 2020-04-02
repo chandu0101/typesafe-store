@@ -1,0 +1,20 @@
+{
+  "name": "selectors-test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tstore"
+  },
+  "keywords": [],
+  "author": "chandu0101",
+  "license": "ISC",
+  "dependencies": {
+    "@typesafe-store/store": "file:../../../store"
+  },
+  "devDependencies": {
+    "@typesafe-store/cli": "file:../..",
+    "typescript": "^3.8.3"
+  }
+}

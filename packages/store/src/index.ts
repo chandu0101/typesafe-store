@@ -8,6 +8,8 @@ export * from "./reducer"
 
 export * from "./graphql"
 
+export * from "./selector"
+
 export type GetStateFromReducers<T extends Record<string, ReducerGroup<any, any, any, any>>> = {
     [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? S : any }
 
