@@ -6,5 +6,10 @@
     "sourceMap": true,
     "composite": true,
     "plugins": [],
-  }
+  },
+  "references": [
+    {
+      "path": "../store"
+    }
+  ]
 }

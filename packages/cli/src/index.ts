@@ -169,6 +169,7 @@ function processFiles(diagnostic: ts.Diagnostic) {
         }
         if (selectorFilesChanged.length > 0) {
             transformSelectorFiles(selectorFilesChanged.map(sf => sf.path))
+            selectorFilesChanged = []
         }
     }
 }

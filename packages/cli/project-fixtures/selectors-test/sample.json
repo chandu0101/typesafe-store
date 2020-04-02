@@ -1,0 +1,41 @@
+{
+    "values": [
+        {
+            "value": "obj1",
+            "childDeps": {
+                "values": [
+                    {
+                        "value": "name"
+                    }
+                ],
+                "parent": "obj1"
+            }
+        },
+        {
+            "value": "obj2.text.l",
+            "childDeps": {
+                "values": [],
+                "parent": "obj2.text.l"
+            }
+        },
+        {
+            "value": "obj2.text.l1.one",
+            "childDeps": {
+                "values": [],
+                "parent": "obj2.text.l1.one"
+            }
+        },
+        {
+            "value": "obj2.text.l2",
+            "childDeps": {
+                "values": [
+                    {
+                        "value": "name"
+                    }
+                ],
+                "parent": "obj2.text.l2"
+            }
+        }
+    ],
+    "parent": "state"
+}
