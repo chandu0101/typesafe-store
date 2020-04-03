@@ -47,13 +47,13 @@ function transformFile(file: string) {
     const printer = ts.createPrinter();
     const newSf = ts.transform(sf, [reducerTransformer]).transformed[0];
     const transformedContent = printer.printFile(newSf)
-    let imports = ""
+    let imports: string[] = []
     if (!transformedContent.includes(EMPTY_REDUCER_TRANFORM_MESSAGE)) {
-        imports = `import { ReducerGroup,FetchVariants } from "@typesafe-store/store"`
+        imports.push(`import { ReducerGroup,FetchVariants,PromiseData } from "@typesafe-store/store"`)
     }
     const output = `
        ${CommonUtils.dontModifyMessage()}
-       ${imports}
+       ${imports.join("\n")}
        ${transformedContent}
       `;
     const outFile = ConfigUtils.getOutputPathForReducerSourceFile(file)
@@ -937,10 +937,23 @@ export function cleanUpGloabals() {
     currentProcessingReducerFile = ""
 }
 
-export const getStateType = () => {
+
+
+const geenratePromiseDataType = (lpd: LocalPropertyDecls) => {
+    const tpe = lpd.typeStr
+    const i = tpe.indexOf("<")
+    const j = tpe.indexOf(">")
+    return `PromiseData<${tpe.substr(i + 1, j)}>`
+}
+
+const getStateType = () => {
     return `{${propDecls
         .map(p => {
             const n = p.pd.name.getText();
+            const tpe = p.typeStr
+            if (tpe.startsWith("Promise<")) {
+                return `${n}:${geenratePromiseDataType(p)}`
+            }
             return `${n}:${p.typeStr}`;
         })
         .join(",")}}`;
@@ -973,20 +986,20 @@ export function generateFetchActionType(lpd: LocalPropertyDecls): string {
 export const getAsyncActionTypeAndMeta = (): [string, string] => {
     const group = `${ConfigUtils.getPrefixPathForReducerGroup(currentProcessingReducerFile)}${getTypeName()}`;
     const fetchProps: string[] = []
-    const gqlProps: string[] = []
+    const promiseProps: string[] = []
     const asyncType = propDecls
         .filter(isAsyncPropDeclaration)
         .map(p => {
             let result = "undefined";
-            const declaredType = p.pd.type!.getText();
             console.log(
                 "Async TypeStr : ", p.typeStr,
             );
             const tpe = p.typeStr
-            if (declaredType.startsWith(AsyncTypes.PROMISE)) {
-                result = `{name:"${p.pd.name}",group:"${group}", promise: () => ${p.typeStr} }`;
+            const name = p.pd.name.getText()
+            if (tpe.startsWith("Promise<")) {
+                promiseProps.push(name)
+                result = `{name:"${name}",group:"${group}", promise: () => ${p.typeStr} }`;
             } else if (tpe.includes("_fmeta")) {
-                const name = p.pd.name.getText()
                 fetchProps.push(name)
                 result = `{name:"${
                     name
@@ -997,7 +1010,7 @@ export const getAsyncActionTypeAndMeta = (): [string, string] => {
         .join(" | ");
     const meta = `
     f:${fetchProps.length > 0 ? `{${fetchProps.map(p => `${p}:{}`).join(",")}}` : "undefined"},
-    gql:${gqlProps.length > 0 ? `{${gqlProps.map(p => `${p}:{}`).join(",")}}` : "undefined"}
+    p:${promiseProps.length > 0 ? `{${promiseProps.map(p => `${p}:{}`).join(",")}}` : "undefined"}
   `
     return [asyncType, meta]
 };
@@ -1116,7 +1129,7 @@ export const getPropDeclsFromTypeMembers = (): LocalPropertyDecls[] => {
 };
 
 export function isAsyncPropDeclaration(input: LocalPropertyDecls) {
-    return input.typeStr.startsWith(T_STORE_ASYNC_TYPE);
+    return input.typeStr.startsWith(T_STORE_ASYNC_TYPE) || input.typeStr;
 }
 
 export const getMethodsFromTypeMembers = () => {
@@ -1208,11 +1221,6 @@ export function replaceThisIdentifier(
 
 
 
-function typeOfArray(input: string) {
-    return input.charCodeAt(0);
-}
-
-function convertTypeTo() { }
 
 function typeOfMultipleArray(input: EAccess[], name: string): EAccess[] {
     const t = getTypeForPropertyAccess(name.split(","));

@@ -1,0 +1,29 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    // "rootDir": "src",
+    "outDir": "build",
+    "lib": [
+      "DOM",
+      "ESNext"
+    ],
+    "sourceMap": true,
+    "composite": true,
+    "plugins": [],
+    "typeRoots": [
+      "../../node_module/@types"
+    ]
+  },
+  "references": [
+    {
+      "path": "../store"
+    }
+  ],
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "../../node_modules"
+  ]
+}

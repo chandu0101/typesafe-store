@@ -38,15 +38,15 @@ async function processFetchAction<R extends Record<string, ReducerGroup<any, any
     const url = getUrl(fetchMeta.url)
     const options = getOptions(fetchMeta)
     const resultLoading: FetchAsyncData<any, any, any, any, any> = { loading: true }
-    store.dipatch({ ...action, _internal: { processed: true, data: resultLoading } })
+    store.dispatch({ ...action, _internal: { processed: true, data: resultLoading } })
     const res = await fetch(url, options)
     if (!res.ok) {
         const resultError: FetchAsyncData<any, any, any, any, any> = { error: res.statusText }
-        store.dipatch({ ...action, _internal: { processed: true, data: resultError } })
+        store.dispatch({ ...action, _internal: { processed: true, data: resultError } })
     }
     const json = await res.json() //TODO check for other resposne types 
     const resultSuccess: FetchAsyncData<any, any, any, any, any> = { data: json }
-    store.dipatch({ ...action, _internal: { processed: true, data: resultSuccess } })
+    store.dispatch({ ...action, _internal: { processed: true, data: resultSuccess } })
 }
 
 export default function fetchMiddleware<R extends Record<string, ReducerGroup<any, any, any, any>>>(): MiddleWare<R> {

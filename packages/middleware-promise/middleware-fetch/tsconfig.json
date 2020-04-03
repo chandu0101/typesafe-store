@@ -5,11 +5,11 @@
     "outDir": "build",
     "sourceMap": true,
     "composite": true,
-    "plugins": [],
+    "plugins": []
   },
   "references": [
     {
       "path": "../store"
     }
-  ]
+  ],
 }

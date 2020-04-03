@@ -7,6 +7,13 @@ export type Action = Readonly<{
     _internal?: { processed?: boolean, data?: any };
 }>;
 
+
+export type PromiseData<D, E = Error> = {
+    loading?: boolean;
+    error?: E;
+    data?: D;
+}
+
 export type Reducer<S extends any, A extends Action> = (
     state: S,
     action: A
