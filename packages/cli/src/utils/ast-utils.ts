@@ -1,6 +1,8 @@
 
 import * as ts from "typescript"
 import { MetaUtils } from "./meta-utils";
+import { resolve, join, dirname } from "path";
+import { FileUtils } from "./file-utils";
 
 
 /**
@@ -35,13 +37,20 @@ export class AstUtils {
         return typeChecker.getPropertiesOfType(typeChecker.getTypeFromTypeNode(type));
     }
 
-    static getMembersOfType(type: ts.Type, node: ts.Node) {
+    static getNonNullableType(type: ts.Type): ts.Type {
+        return this.getTypeChecker().getNonNullableType(type)
+    }
+
+    static getMembersOfType(type: ts.Type, node: ts.Node, nonNull?: boolean) {
         const typeChecker = this.getTypeChecker()
+        type = this.getNonNullableType(type)
         return typeChecker.getPropertiesOfType(type).map(s => {
+            let st = typeChecker.getTypeOfSymbolAtLocation(s, node)
+            if (nonNull) {
+                st = this.getTypeChecker().getNonNullableType(st)
+            }
             return {
-                type: typeChecker.getNonNullableType(
-                    typeChecker.getTypeOfSymbolAtLocation(s, node)
-                ),
+                type: st,
                 name: s.escapedName.toString()
             };
         });
@@ -62,13 +71,22 @@ export class AstUtils {
         return this.getTypeChecker().typeToString(type, undefined, ts.TypeFormatFlags.NoTruncation)
     }
 
+    static typeNodeToString(typeNode: ts.TypeNode) {
+        return this.typeToString(this.getTypeChecker().getTypeFromTypeNode(typeNode))
+    }
 
+    /**
+     *  Another Impl  return (this.getTypeChecker() as any).isArrayType(type)
+     *  https://github.com/microsoft/TypeScript/issues/37711
+     * @param input 
+     */
     static isArrayType(input: ts.Type) {
         // console.log("Checking array for type2 : ", input.flags, "toString : ", typeChecker.typeToString(input),
         // "Node :");
         // const s = input.symbol.valueDeclaration
         return ts.isArrayTypeNode(this.getTypeChecker().typeToTypeNode(input)!);
     }
+
 
     static findAllNodes(sf: ts.SourceFile, cond: (node: ts.Node) => boolean) {
         const result: ts.Node[] = [];
@@ -138,9 +156,9 @@ export class AstUtils {
     static transformImportNodeToGeneratedFolderImportNodes(input: ts.ImportDeclaration) {
         const ms = input.moduleSpecifier.getText()
         let result = input.getText()
-        if (ms.startsWith("\"./")) {
+        if (ms.startsWith("\"./") || ms.startsWith("'./")) {
             result = result.replace(".", "..")
-        } else if (ms.startsWith("\"..")) {
+        } else if (ms.startsWith("\"..") || ms.startsWith("'..")) {
             result = result.replace("..", "../..")
         }
         return ts.createIdentifier(result)
@@ -150,8 +168,59 @@ export class AstUtils {
         return (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && node.getText().startsWith(`${obj}.`)
     }
 
-    static getTypeOfNode(node: ts.Node) {
+    static getTypeStrOfNode(node: ts.Node) {
         const t = this.getTypeChecker().getTypeAtLocation(node)
         return this.typeToString(t)
     }
+
+    static getTypeOfNode(node: ts.Node) {
+        return this.getTypeChecker().getTypeAtLocation(node)
+    }
+
+    static isNodeArrayType(node: ts.Node) {
+        return this.isArrayType(this.getTypeOfNode(node))
+    }
+
+    static getDeclarationOfImportSpecifier(sourceFile: ts.SourceFile, fn: ts.ImportSpecifier | ts.ImportClause) {
+        const importDecls = this.findAllNodes(sourceFile, (node: ts.Node) => ts.isImportDeclaration(node)) as ts.ImportDeclaration[]
+        const fnName = fn.getText()
+        let path = ""
+        importDecls.forEach(id => {
+            const ic = id.importClause
+            let module = id.moduleSpecifier.getText().slice(1, -1)
+            if (ic) {
+                if ((ic.name && ic.name.getText() === fnName)) { // default import (ex: import x from "module")
+                    path = module
+                    return
+                }
+                if (ic.namedBindings) {
+                    if (ts.isNamespaceImport(ic.namedBindings) && ic.namedBindings.name.getText() === fnName) {
+                        path = module
+                        return
+                    }
+                    if (ts.isNamedImports(ic.namedBindings)) {
+                        ic.namedBindings.elements.forEach(is => {
+                            if (is.getText() === fnName) {
+                                path = module
+                                return
+                            }
+                        })
+                    }
+
+                }
+            }
+        })
+        path = join(dirname(sourceFile.fileName), path)
+        if (FileUtils.isDirectory(path)) { // index.ts import 
+            path = join(path, "index.ts")
+        } else {
+            path = `${path}.ts`
+        }
+        const resolvedPath = resolve(path)
+        console.log("Resolved Path : ", resolvedPath);
+        const sf = this.getProgram().getSourceFile(path)
+        console.log("Source file for path :", sf?.fileName);
+
+    }
+
 }

@@ -42,8 +42,12 @@ export type LocalPropertyDecls = {
     typeStr: string;
 };
 
+/**
+ *  isOptionalAccess meaning this.obj!.s = value
+ */
 export type Meta = {
-    isOptional?: boolean;
+    isOptionalAccess?: boolean;
+    isTypeOptional?: boolean,
     type: MetaType;
     access?: EAccess[];
 };
@@ -56,7 +60,7 @@ export type EAccess = {
 };
 
 export type MetaValue = { name: string; meta: Meta };
-export type ProcessThisResult = { g: string; v: string; values: MetaValue[] };
+export type ProcessThisResult = { group: string; value: string; values: MetaValue[] };
 
 export const enum MetaType {
     OBJECT,

@@ -5,17 +5,31 @@ import { ConfigUtils } from "../utils/config-utils";
 import { FileUtils } from "../utils/file-utils";
 import chalk = require("chalk");
 import { performance } from "perf_hooks"
-import { collectVariableUsage, UsageDomain } from "tsutils"
+import { collectVariableUsage, UsageDomain, VariableInfo } from "tsutils"
 
 let currentProcessingFile: string = ""
 let selectorAlreadyImported: boolean = false
-let variableUsage: ReturnType<typeof collectVariableUsage> = null as any
 
+/**
+ *  files and their variable usage 
+ */
+const variableUsageMap = new Map<ts.SourceFile, Map<ts.Identifier, VariableInfo>>()
 
 const cleanUpGloabls = () => {
     currentProcessingFile = ""
     selectorAlreadyImported = false
-    variableUsage = null as any
+    variableUsageMap.clear()
+}
+
+const getVariableUsageOfNode = (node: ts.Node) => {
+    const sf = node.getSourceFile()
+    let vu = variableUsageMap.get(sf)
+    if (!vu) {
+        const vu2 = collectVariableUsage(sf)
+        variableUsageMap.set(sf, vu2)
+        vu = vu2
+    }
+    return vu
 }
 
 
@@ -41,21 +55,51 @@ const isSeelctorVariableDeclarationStatement = (node: ts.Node) => {
 
 type DependenciesOfObject = { parent: string, values: { value: string, childDeps?: DependenciesOfObject }[] }
 
+/**
+ *  state.x ( if x is array/string we don't need its further access)
+ * @param node 
+ */
+const isNodeFurtherTracable = (node: ts.Node) => {
+    let result = true
 
+    if (AstUtils.isNodeArrayType(node)) {
+        return false
+    }
+    const t = AstUtils.getTypeStrOfNode(node)
+    if (t === "string") {
+        result = false
+    }
 
-const getPropertyAccessvalueAndItsParent = (pa: ts.Identifier): { value: string, vd?: ts.VariableDeclaration } => {
-    let result: { value: string, vd?: ts.VariableDeclaration } = { value: "" }
+    return result
+}
+
+/**
+ *  
+ * @param pa 
+ */
+const getPropertyAccessvalueAndItsParent = (pa: ts.Identifier): { value: string, pn?: ts.Node } => {
     const va: string[] = [pa.getText()]
-    let vd: ts.VariableDeclaration | undefined = undefined
+    let pn: ts.Node | undefined = undefined
+    let tempNode: ts.Node = null as any
     const innerFn = (node: ts.Node): any => {
+        console.log("******* getPropertyAccessvalueAndItsParent", node.getText());
         if (ts.isPropertyAccessExpression(node)) {
             va.push(node.name.getText())
+            tempNode = node
             return innerFn(node.parent)
-        } else if (ts.isVariableDeclaration(node)) {
-            const t = AstUtils.getTypeOfNode(node)
-            console.log("Got type : ", t);
-            if (t !== "string") { //check for others also 
-                vd = node
+        } else if (ts.isNonNullExpression(node)) {
+            return innerFn(node.parent)
+        } else if (ts.isElementAccessExpression(node)) { // if element access expression probably identifier we can not process further
+            return
+        }
+        else if (ts.isVariableDeclaration(node)) {
+            if (isNodeFurtherTracable(node)) {
+                pn = node
+            }
+            return
+        } else if (ts.isCallExpression(node)) {
+            if (isNodeFurtherTracable(tempNode)) {
+                pn = node
             }
             return
         } else {
@@ -63,25 +107,54 @@ const getPropertyAccessvalueAndItsParent = (pa: ts.Identifier): { value: string,
         }
     }
     innerFn(pa.parent)
-    result.value = va.slice(1).join(".")
-    result.vd = vd
-    return result
+    return { value: va.slice(1).join("."), pn }
 }
 
-const getDepenciesOfIdentifier = (id: ts.Identifier) => {
+const getDepencyObjectForCallExpression = (ce: ts.CallExpression, parent: string): DependenciesOfObject => {
+    const symb = AstUtils.getTypeChecker().getSymbolAtLocation(ce.expression)!
+    let decl = symb.declarations[0]
+    if (ts.isImportSpecifier(decl) || ts.isImportClause(decl)) {
+        const aSymbol = AstUtils.getTypeChecker().getAliasedSymbol(symb)
+        decl = aSymbol.declarations[0]
+    }
+    let identiFier: ts.BindingName = null as any
+    if (ts.isVariableDeclaration(decl)) {
+        if (decl.initializer && ts.isArrowFunction(decl.initializer)) {
+            identiFier = decl.initializer.parameters[0].name
+        }
+    } else if (ts.isFunctionDeclaration(decl) || ts.isMethodDeclaration(decl)) {
+        identiFier = decl.parameters[0].name
+    }
+    if (identiFier === null) {
+        throw new Error(`call Expression ${ce.getText()} is not supported yet`)
+    }
+    const variableUsage = getVariableUsageOfNode(decl)
+    return getDependenciesOfObject(identiFier, { variableUsage, parentObj: parent })
+}
+
+
+const getDepenciesOfIdentifier = (id: ts.Identifier, variableUsage: Map<ts.Identifier, VariableInfo>) => {
     let result: { value: string, childDeps?: DependenciesOfObject }[] = []
     const usage = variableUsage.get(id)
     if (usage) {
         const valueuses = usage.uses.filter(vu => vu.domain === UsageDomain.ValueOrNamespace)
         valueuses.forEach(vu => {
             const loc = vu.location
+            console.log("***** getDepenciesOfIdentifier ", loc.getText(), loc.parent.getText());
             if (ts.isPropertyAccessExpression(loc.parent)) {
-                const { value: lv, vd: lvd } = getPropertyAccessvalueAndItsParent(loc)
-                if (lvd) {
-                    result.push({ value: lv, childDeps: getDependenciesOfObject(lvd.name, lv) })
+                const { value: lv, pn } = getPropertyAccessvalueAndItsParent(loc)
+                if (pn) {
+                    if (ts.isVariableDeclaration(pn)) {
+                        result.push({ value: lv, childDeps: getDependenciesOfObject(pn.name, { parentObj: lv, variableUsage }) })
+                    } else if (ts.isCallExpression(pn)) {
+                        result.push({ value: lv, childDeps: getDepencyObjectForCallExpression(pn, lv) })
+                    }
                 } else {
                     result.push({ value: lv })
                 }
+            } else if (ts.isCallExpression(loc.parent)) {
+                const dofb = getDepencyObjectForCallExpression(loc.parent, "")
+                result.push(...dofb.values)
             }
         })
     }
@@ -89,23 +162,30 @@ const getDepenciesOfIdentifier = (id: ts.Identifier) => {
     return result;
 }
 
-const getDependenciesOfObjectBindingpattern = (obp: ts.ObjectBindingPattern, ) => {
+const getDependenciesOfObjectBindingpattern = (obp: ts.ObjectBindingPattern, options: GetDependenciesOfObjectOptions) => {
     let result: { value: string, childDeps?: DependenciesOfObject }[] = []
     obp.elements.forEach(e => {
         const v = e.propertyName ? e.propertyName.getText() : e.name.getText()
-        result.push({ value: v, childDeps: getDependenciesOfObject(e.name, v) })
+        result.push({ value: v, childDeps: getDependenciesOfObject(e.name, { ...options, parentObj: v }) })
     })
     return result
 }
 
 
-//TODO  understand compiler API alittle more 
-const getDependenciesOfObject = (node: ts.BindingName, obj?: string): DependenciesOfObject => {
-    const result: DependenciesOfObject = { values: [], parent: obj ? obj : "state" }
+type GetDependenciesOfObjectOptions = { parentObj?: string, variableUsage: Map<ts.Identifier, VariableInfo> }
+
+/**
+ * //TODO   reuse of selectors (its a must feature)
+ *   
+ * @param node 
+ * @param obj 
+ */
+const getDependenciesOfObject = (node: ts.BindingName, options: GetDependenciesOfObjectOptions): DependenciesOfObject => {
+    const result: DependenciesOfObject = { values: [], parent: options.parentObj ? options.parentObj : "state" }
     if (ts.isIdentifier(node)) {
-        result.values = getDepenciesOfIdentifier(node)
+        result.values = getDepenciesOfIdentifier(node, options.variableUsage)
     } else if (ts.isObjectBindingPattern(node)) {
-        result.values = getDependenciesOfObjectBindingpattern(node)
+        result.values = getDependenciesOfObjectBindingpattern(node, options)
     }
     return result;
 }
@@ -133,7 +213,9 @@ const processDependencyObject = (dg: DependenciesOfObject) => {
         }
         const mv = result.get(k)
         if (mv) {
-            mv.add(value)
+            if (value.length) {
+                mv.add(value)
+            }
         } else {
             const s = new Set<string>()
             if (value.length) {
@@ -155,22 +237,27 @@ const processDependencyObject = (dg: DependenciesOfObject) => {
 
 
 const getReturnTypeOfFunction = (f: ts.ArrowFunction | ts.FunctionExpression) => {
-    const t = AstUtils.getTypeOfNode(f)
+    const t = AstUtils.getTypeStrOfNode(f)
     const ai = t.lastIndexOf("=>")
     return t.substr(ai + 2).trim()
 }
 
 
 const getSelectorFromFunction = (f: ts.ArrowFunction | ts.FunctionExpression, name: string) => {
-
-    const param = f.parameters[0]
-    const dg = getDependenciesOfObject(param.name)
+    if (!f.type) {
+        throw new Error(`For selectors you must specify return type`)
+    }
+    const stateParam = f.parameters[0]
+    const extInputParam = f.parameters.length === 1 ? undefined : f.parameters[1]
+    const variableUsage = getVariableUsageOfNode(f)
+    const dg = getDependenciesOfObject(stateParam.name, { variableUsage })
     console.log("Dependency graph : ", JSON.stringify(dg));
     const pg = processDependencyObject(dg)
     console.log("Final Dependency Result : ", pg);
-    const sType = AstUtils.getTypeOfNode(param)
-    const rType = getReturnTypeOfFunction(f)
-    return `export const ${name}:Selector<${sType},${rType}> = {fn:${f.getText()},dependencies:${JSON.stringify(pg)}}`
+    const sType = stateParam.type!.getText()
+    const rType = f.type!.getText()
+    const extInputType = extInputParam ? extInputParam.type!.getText() : "undefined"
+    return `export const ${name}:Selector<${sType},${extInputType},${rType}> = {fn:${f.getText()},dependencies:${JSON.stringify(pg)}}`
 }
 
 const getSelectorFromFunctionExpress = (fe: ts.FunctionExpression) => {
@@ -230,7 +317,6 @@ const transformFile = (file: string) => {
         const t0 = performance.now();
         currentProcessingFile = file
         const sf = AstUtils.getSourceFile(file)!;
-        variableUsage = collectVariableUsage(sf)
         const printer = ts.createPrinter();
         const newSf = ts.transform(sf, [selectorTransformer]).transformed[0];
         const transformedContent = printer.printFile(newSf)

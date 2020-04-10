@@ -6,13 +6,15 @@ import { AstUtils } from "./utils/ast-utils";
 import { GraphqlUtils } from "./graphql";
 import { MetaUtils } from "./utils/meta-utils";
 import { transformSelectorFiles } from "./transformers/selector-transformer";
+import { resolve } from "path";
 
 
 
+type FileChanged = { path: string, event?: ts.FileWatcherEventKind }
 
-let reducerFilesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
-let graphqlOperationFilesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
-let selectorFilesChanged: { path: string, event?: ts.FileWatcherEventKind }[] = []
+let reducerFilesChanged: FileChanged[] = []
+let graphqlOperationFilesChanged: FileChanged[] = []
+let selectorFilesChanged: FileChanged[] = []
 let initialFiles: string[] = []
 
 const formatHost: ts.FormatDiagnosticsHost = {
@@ -63,7 +65,6 @@ export async function watchMain() {
     // using `createSemanticDiagnosticsBuilderProgram` may be more desirable.
     const createProgram = ts.createSemanticDiagnosticsBuilderProgram;
 
-
     // Note that there is another overload for `createWatchCompilerHost` that takes
     // a set of root files.
     const host = ts.createWatchCompilerHost(
@@ -106,7 +107,7 @@ export async function watchMain() {
             initialFiles.push(path)
         }
         return origWatchFile(path, (f, e) => {
-            handleFileChange(f, e)
+            handleFileChange(resolve(f), e)
             cb(f, e)
         })
     }
@@ -150,10 +151,13 @@ function reportWatchStatusChanged(diagnostic: ts.Diagnostic) {
     processFiles(diagnostic)
 
 }
-
+/**
+ * https://github.com/microsoft/TypeScript/blob/349ae45a2c2a0cefd034491624f095e68ae5c757/src/compiler/diagnosticMessages.json
+ * @param diagnostic 
+ */
 function processFiles(diagnostic: ts.Diagnostic) {
     const msg = diagnostic.messageText.toString()
-    console.log("Diag : ", diagnostic, "msg :", msg);
+    console.log("Diag : ", diagnostic);
     if (diagnostic.code !== 6032 &&
         diagnostic.category !== ts.DiagnosticCategory.Error
         && (msg.includes("Found 0 errors") || !msg.includes("error"))
@@ -174,6 +178,17 @@ function processFiles(diagnostic: ts.Diagnostic) {
     }
 }
 
+function isFileAlreadyExistInChangedList(file: string, array: FileChanged[]) {
+    let result = false
+    array.forEach(cf => {
+        if (cf.path === file) {
+            result = true
+            return
+        }
+    })
+    return result
+}
+
 function handleFileChange(f: string, e: ts.FileWatcherEventKind) {
     console.log(`handle FileChange : ${f} , event : ${e} `);
     if (ConfigUtils.isReducersSourceFile(f)) {
@@ -181,21 +196,27 @@ function handleFileChange(f: string, e: ts.FileWatcherEventKind) {
             //handle deleted files
 
         } else {
-            reducerFilesChanged.push({ path: f, event: e })
+            if (!isFileAlreadyExistInChangedList(f, reducerFilesChanged)) {
+                reducerFilesChanged.push({ path: f, event: e })
+            }
         }
     } else if (ConfigUtils.isGraphqlOperationsSourceFile(f)) {
         if (e == ts.FileWatcherEventKind.Deleted) {
             //handle deleted files
 
         } else {
-            graphqlOperationFilesChanged.push({ path: f, event: e })
+            if (!isFileAlreadyExistInChangedList(f, graphqlOperationFilesChanged)) {
+                graphqlOperationFilesChanged.push({ path: f, event: e })
+            }
         }
     } else if (ConfigUtils.isSelectorsSourceFile(f)) {
         if (e == ts.FileWatcherEventKind.Deleted) {
             //handle deleted files
 
         } else {
-            selectorFilesChanged.push({ path: f, event: e })
+            if (!isFileAlreadyExistInChangedList(f, selectorFilesChanged)) {
+                selectorFilesChanged.push({ path: f, event: e })
+            }
         }
     }
 }

@@ -41,7 +41,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     private _globalListener?: Callback
 
-    readonly selectorListeners: Record<keyof GetStateFromReducers<R>, { selector: Selector<GetStateFromReducers<R>, any>, listener: Callback, tag?: string }[]> = {} as any
+    readonly selectorListeners: Record<keyof GetStateFromReducers<R>, { selector: Selector<GetStateFromReducers<R>, any, any>, listener: Callback, tag?: string }[]> = {} as any
 
     /**
      *  used for framework integrations
@@ -236,7 +236,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         return result
     }
 
-    isSelectorDependenciesChanged = (currentSate: any, prevState: any, selector: Selector<any, any>, keyChanged: string): boolean => {
+    isSelectorDependenciesChanged = (currentSate: any, prevState: any, selector: Selector<any, any, any>, keyChanged: string): boolean => {
         const deps = selector.dependencies as Record<string, string[]>
         let result = false
         Object.entries(deps).forEach(([key, value]) => {
@@ -264,7 +264,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
      * @param listener 
      * @param tag component name in which 
      */
-    subscribeSelector<SR>(selector: Selector<GetStateFromReducers<R>, SR>, listener: Callback, tag?: string) {
+    subscribeSelector<SR>(selector: Selector<GetStateFromReducers<R>, any, SR>, listener: Callback, tag?: string) {
 
         const keys = Object.keys(selector.dependencies)
 
@@ -331,7 +331,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
     /**
      *  
      */
-    resetSelectorDepsToDefaultSate = (selector: Selector<GetStateFromReducers<R>, any>) => {
+    resetSelectorDepsToDefaultSate = (selector: Selector<GetStateFromReducers<R>, any, any>) => {
         Object.entries(selector.dependencies).forEach(([key, values]) => {
             const stateKey = key as any
             const sls = this.selectorListeners[stateKey]

@@ -1,5 +1,5 @@
 import { dirname } from "path"
-import { existsSync, mkdirSync, writeFileSync, readFileSync, promises as fsp } from "fs"
+import { existsSync, mkdirSync, writeFileSync, readFileSync, promises as fsp, lstatSync } from "fs"
 
 
 
@@ -24,5 +24,15 @@ export class FileUtils {
 
     static async readFile(path: string) {
         return fsp.readFile(path, { encoding: "utf-8" })
+    }
+
+    static isDirectory(path: string): boolean {
+        let result = false
+        try {
+            result = lstatSync(path).isDirectory()
+        } catch { // 
+            result = false
+        }
+        return result
     }
 }

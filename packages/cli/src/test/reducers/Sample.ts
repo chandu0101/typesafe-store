@@ -6,6 +6,8 @@ type GetBooks = Fetch<{ path: "books" }, string[], unknown>;
 class Sample {
   name = "First";
   count = 1;
+  count2?: number
+  count2A?: string[]
   person = { name: "P12", age: 10 };
   books: Book[] = [];
   optionalTodos: (Todo | undefined)[] = [];
@@ -32,6 +34,8 @@ class Sample {
   increment() {
     this.count++;
     this.count++;
+    this.count2!++;
+    this.count2A!.push("")
   }
   changePersonName(name: string) {
     this.person.name = name;

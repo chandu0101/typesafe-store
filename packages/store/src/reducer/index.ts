@@ -42,6 +42,7 @@ export type ReducerGroup<
  */
 export type RMeta<AA> = Readonly<{
     f?: Record<string, any>;
+    p?: Record<string, any>;
     gql?: Record<string, any>;
     grpc?: Record<string, any>;
     async?: AA

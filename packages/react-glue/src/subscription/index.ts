@@ -26,7 +26,7 @@ export class Subscription<R extends Record<string, ReducerGroup<any, any, any, a
         this.globalUnsubscribeFn = store._subscribeGlobal(this.globalListener)
     }
 
-    listenSelector<SR>(selector: Selector<GetStateFromReducers<R>, SR>, listener: () => any, tag: string) {
+    listenSelector<SR>(selector: Selector<GetStateFromReducers<R>, any, SR>, listener: () => any, tag: string) {
         return this.store.subscribeSelector(selector, listener, tag)
     }
 

@@ -1,6 +1,7 @@
 import Provider from './components/Provider'
 
 import useSelector from './hooks/useSelector'
+import useDispatch from './hooks/useDispatch'
 import useStore from './hooks/useStore'
 
 import { setBatch } from './utils/batch'
@@ -13,4 +14,5 @@ export {
   batch,
   useSelector,
   useStore,
+  useDispatch
 }

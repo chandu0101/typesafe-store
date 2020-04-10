@@ -167,7 +167,8 @@ export class ConfigUtils extends ConfigValidation {
 
         config.graphqlOperationsPath = join(config.storePath, GRAPHQL_OPERATIONS_FOLDER)
 
-        config.tsBuildInfoPath = ts.getTsBuildInfoEmitOutputFilePath(compilerOptions)
+        //TODO looks like it doesnt exist on older versions of typescript
+        // config.tsBuildInfoPath = ts.getTsBuildInfoEmitOutputFilePath(compilerOptions) 
         console.log("config obj : ", config);
         MetaUtils.setConfig(config)
     }
