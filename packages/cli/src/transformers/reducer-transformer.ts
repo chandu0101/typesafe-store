@@ -1424,7 +1424,6 @@ function processThisStatement2(exp: ts.Node, options: ProcessStatementsOptions =
     }
     processInner(exp)
     console.log("Processed values : ", values);
-    //TODO process values and assign propert types to access props or do it in isElementAccess blocks
     if (!onlyThisInput) {
         values.forEach(v => {
             const type = getTypeForPropertyAccess(v.name.split("."))

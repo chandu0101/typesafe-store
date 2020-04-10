@@ -2,6 +2,7 @@
 
 //@ts-ignore
 import { TypeSafeStore, ReducerGroup, Selector, Action, GetStateFromReducers, } from "@typesafe-store/store"
+import { getBatch } from "../utils/batch"
 
 
 
@@ -16,9 +17,13 @@ export class Subscription<R extends Record<string, ReducerGroup<any, any, any, a
                 changedListeners.push(sl.listener)
             }
         })
-        changedListeners.forEach(l => { // TODO batching https://stackoverflow.com/questions/61002877/how-to-get-current-react-component-name-inside-custom-react-hook
-            l()
+        const batch = getBatch()
+        batch(() => {
+            changedListeners.forEach(l => {
+                l()
+            })
         })
+
         this.store._globalListenerData = undefined
     }
     private globalUnsubscribeFn: () => any
