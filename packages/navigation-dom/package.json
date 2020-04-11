@@ -1,5 +1,5 @@
 {
-  "name": "@typesafe-store/middleware-fetch",
+  "name": "@typesafe-store/navigation-dom",
   "description": "type safe store reducer transformer",
   "version": "0.1.0",
   "main": "build/index.js",
@@ -20,9 +20,7 @@
     "transformers"
   ],
   "publishConfig": {
-    "access": "public",
-    "main": "build/index.js",
-    "types": "build/index.d.ts"
+    "access": "public"
   },
   "scripts": {
     "test": "jest",

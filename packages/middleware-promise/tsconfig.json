@@ -4,6 +4,7 @@
     "rootDir": "src",
     "outDir": "build",
     "sourceMap": true,
+    "declaration": true,
     "composite": true,
     "plugins": []
   },

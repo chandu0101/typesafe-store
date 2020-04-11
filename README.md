@@ -3,6 +3,18 @@
 
 ### Work In Progress
 
+Things to do before initial release : 
+
+- [ ] Navigation (test react-native,nativescript, nextjs)
+- [ ] Multi Threading (thread pools, web workers)
+- [ ] Frame work glues (react : done, lit-html,angular,vue,haunted,stencil,ionic)
+- [ ] Creat TypeSafe Store App (react,lit-html,angular,vue,haunted,stencil,ionic)
+- [ ] Brand new Dev tools
+- [ ] action creators for async props in selectors.
+- [ ] store meta information for sets and maps 
+- [ ] webpack plugin
+- [ ]
+
 TypeSafe Store is a library which manages all state needs of your application, you define your app state using classes in mutable way `transformer` package converts them into immutable reducers in compile time.
 
 If you're familiar with redux you know what reducer is..., if not reducer is a function which takes two paramaeters a state object and an action and returns a new state object without modifying original state.

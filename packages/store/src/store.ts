@@ -2,6 +2,7 @@ import { ReducerGroup, Action } from "./reducer"
 import { PersistanceStorage, StorageWriteMode } from "./storage"
 import compose from "./compose"
 import { Selector } from "./selector"
+import { Navigation, NAVIGATION_REDUCER_GROUP_NAME, Location, NavigationAction } from "./navigation"
 
 /**
  *  store subscription will be called with current procesed action
@@ -41,6 +42,8 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     private _globalListener?: Callback
 
+    _unsubscribeNavigationListener?: () => void
+
     readonly selectorListeners: Record<keyof GetStateFromReducers<R>, { selector: Selector<GetStateFromReducers<R>, any, any>, listener: Callback, tag?: string }[]> = {} as any
 
     /**
@@ -55,8 +58,15 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     readonly dispatch: Dispatch<GetActionFromReducers<R>>
 
-    constructor({ reducers, middleWares, storage }:
-        { reducers: R, middleWares: MiddleWare<R>[], storage?: PersistanceStorage<R, GetStateFromReducers<R>> }) {
+    readonly navigation: Navigation
+
+    constructor({ reducers, middleWares, storage, navigation }:
+        {
+            reducers: R,
+            middleWares: MiddleWare<R>[],
+            navigation?: Navigation,
+            storage?: PersistanceStorage<R, GetStateFromReducers<R>>
+        }) {
         this.reducers = reducers
         const mchain = middleWares.map(m => m(this))
         this.storage = storage
@@ -67,6 +77,43 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
             this.prepareNormalStore()
             this.isReady = true
         }
+        if (navigation) {
+            this.navigation = navigation
+            this.checkNavigationReducerAttached()
+            this._unsubscribeNavigationListener = this.navigation.listen(this.handleLocationChange)
+        } else { // react-native or similar environments
+            this.navigation = "lazyNavigation" as any
+        }
+    }
+
+
+    private checkNavigationReducerAttached() {
+        if (process.env.NODE_ENV !== "production") {
+            const nv = this.reducers["navigation"]
+            if (!nv || nv.g !== NAVIGATION_REDUCER_GROUP_NAME) {
+                throw new Error(`You provided navigation to store but didn't configured reducer
+                NavigationReducerGroup in reducers
+                 `)
+            }
+        }
+    }
+
+    /**
+     *  provide a way to set navigation lazily
+     * @param navigation 
+     */
+    setNavigation = (navigation: Navigation) => {
+        if (this._unsubscribeNavigationListener) {
+            this._unsubscribeNavigationListener()
+        }
+        (this as any).navigation = navigation
+        this.checkNavigationReducerAttached()
+        this._unsubscribeNavigationListener = this.navigation.listen(this.handleLocationChange)
+    }
+
+    private handleLocationChange(loc: Location) {
+        const a: NavigationAction = { name: "setLocation", group: NAVIGATION_REDUCER_GROUP_NAME, payload: loc }
+        this.dispatch(a as any)
     }
 
     /**

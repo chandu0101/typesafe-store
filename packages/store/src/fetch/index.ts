@@ -7,9 +7,10 @@ export type Json =
     | Json[];
 
 
-export type FetchResponse = Record<string, any> | void
+export type FetchResponse = Record<string, any> | void | ArrayBuffer | Blob | string
 
 export type FetchBody = Json | null
+
 
 export const enum FetchVariants {
     GET = "GET",
@@ -24,19 +25,11 @@ export type FetchAsyncData<D, U extends FUrl, B extends FetchBody, FV extends Fe
     loading?: boolean;
     error?: E;
     data?: D;
-    _fmeta?: FetchMeta<FV, U, B>
+    _fmeta?: FetchRequest<FV, U, B>
 }>;
 
-export type FetchMeta<FV extends FetchVariants, U extends FUrl, B extends (Json | null)> = { type: FV, url: U, body?: B }
+type FetchRequest<FV extends FetchVariants, U extends FUrl, B extends (Json | null)> = { type: FV, url: U, body?: B }
 
-/**
- *
- */
-export type FetchRequest<B> = {
-    type: "GET" | "POST" | "PATCH" | "DELETE" | "PUT";
-    url: string;
-    body?: B;
-};
 
 export type Transform<T, D> = (input: T) => D;
 

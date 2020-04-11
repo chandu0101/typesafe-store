@@ -6,9 +6,10 @@
       "dom",
       "es2017"
     ],
-    "baseUrl": "packages",
+    "baseUrl": ".packages/",
     "declaration": true,
     "composite": true,
+    "declarationMap": true,
     "incremental": true,
     // "isolatedModules": true,
     "strict": true,

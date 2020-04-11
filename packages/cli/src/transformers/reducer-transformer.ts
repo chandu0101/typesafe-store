@@ -1066,7 +1066,7 @@ export const lastElementOfArray = <T>(a: T[]) => {
  * 
  * @param lpd async(Fetch) property declaration
  */
-export function generateFetchActionType(lpd: LocalPropertyDecls): string {
+function generateFetchActionType(lpd: LocalPropertyDecls): string {
     console.log("generateFetchActionType Input: ", lpd.typeStr);
     const tpe = lpd.typeStr;
     const metaIndex = lpd.typeStr.indexOf("_fmeta")
@@ -1077,12 +1077,31 @@ export function generateFetchActionType(lpd: LocalPropertyDecls): string {
     return result;
 }
 
+function getFetchRequestResponseType(lpd: LocalPropertyDecls): string {
+    const tpe = lpd.typeStr
+    const dataStr = "data?"
+    const i = tpe.indexOf(dataStr)
+    let result = "json"
+    const rType = tpe.substr(i + dataStr.length).replace(":", "").trim()
+    if (rType.startsWith("string")) {
+        result = "text"
+    } else if (rType.startsWith("void")) {
+        result = "void"
+    } else if (rType.startsWith("Blob")) {
+        result = "blob"
+    } else if (rType.startsWith("ArrayBuffer")) {
+        result = "arrayBuffer"
+    }
+
+    return result
+}
+
 /**
  *  All async actions of a class
  */
-export const getAsyncActionTypeAndMeta = (): [string, string] => {
+const getAsyncActionTypeAndMeta = (): [string, string] => {
     const group = `${ConfigUtils.getPrefixPathForReducerGroup(currentProcessingReducerFile)}${getTypeName()}`;
-    const fetchProps: string[] = []
+    const fetchProps: { name: string, response: string }[] = []
     const promiseProps: string[] = []
     const asyncType = propDecls
         .filter(isAsyncPropDeclaration)
@@ -1097,7 +1116,7 @@ export const getAsyncActionTypeAndMeta = (): [string, string] => {
                 promiseProps.push(name)
                 result = `{name:"${name}",group:"${group}", promise: () => ${p.typeStr} }`;
             } else if (tpe.includes("_fmeta")) {
-                fetchProps.push(name)
+                fetchProps.push({ name, response: getFetchRequestResponseType(p) })
                 result = `{name:"${
                     name
                     }",group:"${group}", fetch: ${generateFetchActionType(p)}  }`;
@@ -1106,7 +1125,7 @@ export const getAsyncActionTypeAndMeta = (): [string, string] => {
         })
         .join(" | ");
     const meta = `
-    f:${fetchProps.length > 0 ? `{${fetchProps.map(p => `${p}:{}`).join(",")}}` : "undefined"},
+    f:${fetchProps.length > 0 ? `{${fetchProps.map(p => `${p.name}:{response:"${p.response}"}`).join(",")}}` : "undefined"},
     p:${promiseProps.length > 0 ? `{${promiseProps.map(p => `${p}:{}`).join(",")}}` : "undefined"}
   `
     return [asyncType, meta]

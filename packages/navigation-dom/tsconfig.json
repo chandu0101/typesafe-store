@@ -4,8 +4,13 @@
     "rootDir": "src",
     "outDir": "build",
     "sourceMap": true,
-    "composite": true,
     "declaration": true,
-    "plugins": [],
-  }
+    "composite": true,
+    "plugins": []
+  },
+  "references": [
+    {
+      "path": "../store/build"
+    }
+  ],
 }

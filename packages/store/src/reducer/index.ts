@@ -37,11 +37,14 @@ export type ReducerGroup<
         m: RMeta<AA>;
     }>;
 
+
+type RFetchMeta = { response: "json" | "text" | "blob" | "arrayBuffer" | "void" }
+
 /**
  *  f: fetch meta
  */
 export type RMeta<AA> = Readonly<{
-    f?: Record<string, any>;
+    f?: Record<string, RFetchMeta>;
     p?: Record<string, any>;
     gql?: Record<string, any>;
     grpc?: Record<string, any>;
