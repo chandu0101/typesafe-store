@@ -2,7 +2,7 @@
 
 import { Navigation, Location } from "@typesafe-store/store"
 
-
+// TODO implement state ,probably history.state
 export default class DomNavigation implements Navigation {
 
     private listener!: (loc: Location) => void
@@ -12,6 +12,7 @@ export default class DomNavigation implements Navigation {
     }
 
     private listenForHistoryChange = () => {
+
         const path = window.location.pathname
         const search = window.location.search
         let queryParams: Record<string, string | number> | undefined = undefined

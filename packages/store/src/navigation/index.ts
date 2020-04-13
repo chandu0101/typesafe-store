@@ -35,6 +35,6 @@ export const NavigationReducerGroup: ReducerGroup<NavigationState, NavigationAct
         }
     },
     g: NAVIGATION_REDUCER_GROUP_NAME,
-    m: {},
+    m: { a: {} },
     ds: {} as any
 }

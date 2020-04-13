@@ -5,7 +5,7 @@ import {
 } from "../types";
 import {
     T_STORE_ASYNC_TYPE, REDUCERS_FOLDER, GENERATED_FOLDER,
-    TSTORE_TEMP_V, EMPTY_REDUCER_TRANFORM_MESSAGE, GEN_SUFFIX
+    TSTORE_TEMP_V, EMPTY_REDUCER_TRANFORM_MESSAGE, GEN_SUFFIX, WORKER_STATE_EXTRACTOR_FUNCTION_NAME
 } from "../constants";
 import { sep, relative } from "path";
 import { ConfigUtils } from "../utils/config-utils";
@@ -13,13 +13,15 @@ import { AstUtils } from "../utils/ast-utils";
 import { FileUtils } from "../utils/file-utils";
 import { CommonUtils } from "../utils/common-utils";
 import { performance } from "perf_hooks"
-import { isUnionType } from "tsutils/typeguard/type"
+import { isUnionType, isObjectType } from "tsutils/typeguard/type"
 import chalk = require("chalk");
+import { WorkersUtils } from "../workers";
 
 
 
 
 const STATE_PARAM_NAME = "_trg_satate"
+const WORKER_RESPONSE_PARAM_NAME = "_wr"
 
 const PAYLOAD_VARIABLE_NAME = "_trg_payload"
 
@@ -66,7 +68,7 @@ function transformFile(file: string) {
         const transformedContent = printer.printFile(newSf)
         let imports: string[] = []
         if (!transformedContent.includes(EMPTY_REDUCER_TRANFORM_MESSAGE)) {
-            imports.push(`import { ReducerGroup,FetchVariants,PromiseData } from "@typesafe-store/store"`)
+            imports.push(`import { ReducerGroup,FetchVariants,PromiseData,FetchRequest } from "@typesafe-store/store"`)
         }
         const output = `
            ${CommonUtils.dontModifyMessage()}
@@ -79,6 +81,7 @@ function transformFile(file: string) {
         FileUtils.writeFileSync(outFile, output);
         const t1 = performance.now();
         console.log("time : ", t1 - t0, " ms");
+        WorkersUtils.createWorkersFile()
     } catch (error) {
         console.info(chalk.red(`Error processing file : ${relative(".", file)} : ${error}`))
     }
@@ -120,16 +123,20 @@ const createReducerFunction = (cd: ts.ClassDeclaration) => {
     const propDecls = getPropDeclsFromTypeMembers();
     const defaultState = getDefaultState(propDecls);
     const typeName = getTypeName();
-    const actionTypes = getActionTypes()
-    const caseClauses = getSwitchClauses(actionTypes);
-    let [asyncActionType, asyncMeta] = getAsyncActionTypeAndMeta();
+    const group = `${ConfigUtils.getPrefixPathForReducerGroup(currentProcessingReducerFile)}${typeName}`;
+    const stateName = `${typeName}State`
+    const methodsResults = processMethods({ group, stateName });
+    const syncMeta = methodsResults.filter(mr => mr.offload).map(mr => ({ name: mr.actionType.name, value: `{offload:${mr.offload}}` }))
+    let [asyncActionType, asyncMeta] = getAsyncActionTypeAndMeta(group);
     let result = ts.createIdentifier("")
-    if (caseClauses.length === 0 && asyncActionType === "") { // If no async properties and methods then return empty node
+    if (methodsResults.length === 0 && asyncActionType === "") { // If no async properties and methods then return empty node
         result = ts.createIdentifier(EMPTY_REDUCER_TRANFORM_MESSAGE)
     } else {
-        const f = buildFunction({ caseClauses: caseClauses, group: typeName });
+        const caseClauses = methodsResults.map(mr => mr.caseStatement)
+        const f = buildFunction({ caseClauses, typeName });
 
-        let actionType = actionTypes.map(at => {
+        let actionType = methodsResults.map(mt => {
+            const at = mt.actionType
             let result = ""
             if (at.payload) {
                 result = `{name: "${at.name}" ,group :"${at.group}",payload:${at.payload}}`
@@ -139,15 +146,16 @@ const createReducerFunction = (cd: ts.ClassDeclaration) => {
             return result
         }).join(" | ")
         if (actionType === "") {
-            actionType = "undefined"
+            actionType = `{name:"no_sync_reducers",group:"${group}"}`
         }
         if (asyncActionType === "") {
-            asyncActionType = "undefined"
+            asyncActionType = `undefined`
         }
-        const meta = `{async:undefined,${asyncMeta}}`
+
+        const meta = `{async:undefined,a:{${[...syncMeta, ...asyncMeta].map(m => `${m.name}:${m.value}`).join(",")}}}`
         result = ts.createIdentifier(
             `
-           export type ${typeName}State = ${getStateType()}
+           export type ${stateName} = ${getStateType()}
            
            export type ${typeName}Action = ${actionType}
   
@@ -182,7 +190,7 @@ type StatementResult = GeneralStatementResult | MutationStatementResult
 type ParentGroupValue = { values: ProcessThisResult["values"], newValue: NewValue }
 
 type ProcessStatementsOptions = { isReturnSupported?: boolean }
-const getSwitchClauses = (actionTypes: ActionType[]) => {
+const processMethods = ({ group, stateName }: { group: string, stateName: string }): { actionType: ActionType, caseStatement: string, offload?: string }[] => {
 
     const methods = getMethodsFromTypeMembers();
 
@@ -207,15 +215,31 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
                     const map = new Map();
                     parentGroups.set(g, map.set(v, { values, newValue }));
                 } else {
-                    if (oldValue.get(v)) {
+                    const oldAccess = oldValue.get(v)
+                    if (oldAccess) {
                         duplicateExists = true;
+                        const oldValues = oldAccess.values
+                        oldValues.forEach((ov, i) => {
+                            if (ov.meta.type === MetaType.ARRAY && ov.meta.access && ov.meta.access[0].name !== values[i].meta.access![0].name) { // meaning  user tried to modify array with different indexes in different places ,(this.a[1].name = "", this.a[0].name ="")
+                                throw new Error(`Mutating same array ${ov}  in with different indexes is not supported`)
+                            }
+                        })
                     }
                     parentGroups.set(g, oldValue.set(v, { values, newValue }));
                 }
             };
+            const payload = getPayloadForClassMethod(m)
+
+            let actionType: ActionType = null as any
+
+            if (payload.length) {
+                actionType = { group, name, payload }
+            } else {
+                actionType = { group, name }
+            }
             const paramsLenth = m.parameters.length;
             if (paramsLenth > 0) {
-                const payloadType = actionTypes.find(at => at.name === name)!.payload
+                const payloadType = actionType.payload!
                 let v = "";
                 if (paramsLenth === 1) {
                     v = `const ${m.parameters[0].name.getText()} = (action as any).payload as (${payloadType})`;
@@ -230,6 +254,7 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
             const statements = m.body!.statements;
 
             const replaceThisWithStateText = (input: string) => {
+                console.log("calling replaceThisWithStateText");
                 let result = input
                 for (const [key, value] of parentGroups) {
                     if (result.includes(`this.${key}`)) {
@@ -242,6 +267,7 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
             }
             // Todo cross check 
             const replaceThisWithState = (node: ts.Node) => {
+                console.log("Calling replaceThisWithState");
                 return replaceThisWithStateText(node.getText())
             }
 
@@ -302,7 +328,7 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
                         isNullField = true
                         processInput = (processInput as any).expression
                     }
-                    const thisResult = processThisStatement2(processInput);
+                    const thisResult = processThisStatement(processInput);
                     const exprLeft = operand.getText();
                     const exprRight = "1";
                     let modifiedField = getModifiedField(operand)
@@ -322,7 +348,7 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
                     mResult.thisResult = thisResult
                     mResult.newValue = newValue
 
-                    let newStatement = s.getText().replace("this.", PREFIX)
+                    let newStatement = s.getText()
                     if (isNullField) {
                         newStatement = `if(${operand.getText().slice(0, -1)}) {
                             ${newStatement}
@@ -338,9 +364,9 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
 
                 } else if (ts.isBinaryExpression(s.expression)) {
                     const left = s.expression.left;
-                    const thisResult = processThisStatement2((left as ts.PropertyAccessExpression).expression as any);
+                    const thisResult = processThisStatement((left as ts.PropertyAccessExpression).expression as any);
                     const exprLeft = left.getText();
-                    let exprRight = replaceThisWithState(s.expression.right);
+                    let exprRight = s.expression.right.getText()
                     const op = s.expression.operatorToken.getText();
                     let modifiedField = getModifiedField(left)
                     let newValue = { name: modifiedField, op: op, value: exprRight };
@@ -356,7 +382,7 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
                     // addOrUpdateParentGroup(result, newValue);
                     mResult.thisResult = thisResult
                     mResult.newValue = newValue
-                    let newStatement = `${exprLeft.replace("this.", PREFIX)} ${op} ${exprRight}`
+                    let newStatement = `${exprLeft} ${op} ${exprRight}`
                     if (thisResult.values.filter(v => v.meta.isOptionalAccess).length > 0) { // optional access
                         newStatement = `if(${getOptionalGuardForOptionalPropAccess(thisResult.values)}) {
                           ${newStatement}
@@ -370,7 +396,7 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
                     isArrayMutatableAction(s.expression.expression.name)
                 ) {
                     const exp = s.expression.expression;
-                    const thisResult = processThisStatement2(exp.expression as any);
+                    const thisResult = processThisStatement(exp.expression as any);
                     let args = s.expression.arguments.map(a => a.getText()).join(",");
                     let modifiedField = getModifiedField(exp.expression)
                     let newValue = {
@@ -378,9 +404,9 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
                         op: s.expression.expression.name.getText(),
                         value: ""
                     };
+
                     newValue.value = args;
-                    // addOrUpdateParentGroup(result, newValue);
-                    let newStatement = s.getText().replace("this.", PREFIX)
+                    let newStatement = s.getText()
                     if (thisResult.values.filter(v => v.meta.isOptionalAccess).length > 0) { // optional access
                         newStatement = `if(${getOptionalGuardForOptionalPropAccess(thisResult.values)}) {
                           ${newStatement}
@@ -399,22 +425,6 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
 
             const isBlockContainsMutationStatements = (b: ts.Block): boolean => {
                 return Boolean(b.statements.find(s => isSupportedMutationStatement(s)))
-            }
-
-            const isForEachStatementContainsMutationStatements = (input: ts.CallExpression): boolean => {
-                let result = false
-                const argument = input.arguments[0]
-                if (ts.isFunctionExpression(argument)) {
-                    result = Boolean(argument.body.statements.find(s => isSupportedMutationStatement(s)))
-                } else if (ts.isArrowFunction(argument)) {
-                    const body = argument.body
-                    if (ts.isBlock(body)) {
-                        result = isBlockContainsMutationStatements(body)
-                    } else {
-                        result = body.getText().startsWith("this.") && isSupportedMutationExpression(body)
-                    }
-                }
-                return result
             }
 
             const getForEachStatements = (input: ts.CallExpression): ts.NodeArray<ts.Statement> | ts.Expression => {
@@ -467,23 +477,6 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
 
             const isIfElseStatement = (s: ts.Statement) => {
                 return ts.isIfStatement(s) && s.elseStatement
-            }
-
-            const isIfStatementContainsMutationExpression = (s: ts.IfStatement) => {
-                let result = false
-                if (ts.isBlock(s.thenStatement)) {
-                    result = isBlockContainsMutationStatements(s.thenStatement)
-                } else {
-                    result = isSupportedMutationStatement(s.thenStatement)
-                }
-                return result
-            }
-
-            const isForEachNode = (node: ts.Node) => {
-                return ts.isExpressionStatement(node) &&
-                    ts.isCallExpression(node.expression) &&
-                    ts.isPropertyAccessExpression(node.expression.expression) &&
-                    node.expression.expression.name.getText() === "forEach"
             }
 
             const processIfonlyStatement = (s: ts.IfStatement, options: ProcessStatementsOptions): IfStatementResult => {
@@ -618,12 +611,12 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
                     }
 
                 });
-                return `case "${name}" : {
+                const caseStatement = `case "${name}" : {
                     ${reservedStatements.join("\n")}
                     return { ...${STATE_PARAM_NAME}, ${propertyAssignments.join(",")} }
                 }`;
+                return { actionType, caseStatement, }
             }
-
 
             parentGroups.forEach((map, group) => {
                 console.log("parent Group Entries: ", group, "Values : ", map);
@@ -664,24 +657,24 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
 
 
 
-            const getStringVersionOfForEachStatementResult = (fsr: ForEachStatementResult): string => {
+            const getStringVersionOfForEachStatementResult = (fsr: ForEachStatementResult, offload?: boolean): string => {
 
                 const ce = fsr.statement.expression as ts.CallExpression
-                const v = replaceThisWithState(ce.expression)
+                const v = offload ? replaceThisWithStateOffload(ce.expression) : replaceThisWithState(ce.expression)
                 let functionBody = ""
                 const arg = ce.arguments[0]
                 if (ts.isArrowFunction(arg)) {
                     const af = arg
                     const params = af.parameters.map(p => p.getText()).join(" ,")
                     functionBody = `(${params}) => {
-                       ${getOutputStatements(fsr.statementResults).join("\n")}
+                       ${offload ? getOutputStatementsOffload(fsr.statementResults).join("\n") : getOutputStatements(fsr.statementResults).join("\n")}
                     }`
                 } else if (ts.isFunctionExpression(arg)) {
                     const fe = arg
                     const params = fe.parameters.map(p => p.getText()).join(" ,")
                     functionBody = `
                       function (${params}) {
-                        ${getOutputStatements(fsr.statementResults).join("\n")}
+                        ${offload ? getOutputStatementsOffload(fsr.statementResults).join("\n") : getOutputStatements(fsr.statementResults).join("\n")}
                       }
                     `
                 }
@@ -691,39 +684,39 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
                 return result;
             }
 
-            const getStringVersionOfIfStatementResult = (isr: IfStatementResult) => {
+            const getStringVersionOfIfStatementResult = (isr: IfStatementResult, offload?: boolean) => {
                 const is = isr.statement
                 let body = ""
                 if (ts.isBlock(is.thenStatement)) {
                     body = `{  
-                        ${getOutputStatements(isr.statementResults).join("\n")}
+                        ${offload ? getOutputStatementsOffload(isr.statementResults).join("\n") : getOutputStatements(isr.statementResults).join("\n")}
                     }`
                 } else {
-                    body = `${getOutputStatements(isr.statementResults).join("\n")}`
+                    body = `${offload ? getOutputStatementsOffload(isr.statementResults).join("\n") : getOutputStatements(isr.statementResults).join("\n")}`
                 }
                 const result = `
-                  if(${replaceThisWithState(is.expression)}) ${body}
+                  if(${offload ? replaceThisWithStateOffload(is.expression) : replaceThisWithState(is.expression)}) ${body}
                 `
                 return result;
             }
 
-            const getStringVersionOfIfElseStatementResult = (iesr: IfElseStatementResult): string => {
+            const getStringVersionOfIfElseStatementResult = (iesr: IfElseStatementResult, offload?: boolean): string => {
                 const ies = iesr.statement
 
-                const ifCond = replaceThisWithState(ies.expression)
+                const ifCond = offload ? replaceThisWithStateOffload(ies.expression) : replaceThisWithState(ies.expression)
                 let ifBody = ""
                 if (ts.isBlock(ies.thenStatement)) {
                     ifBody = `{  
-                        ${getOutputStatements(iesr.ifStatementResults).join("\n")}
+                        ${offload ? getOutputStatementsOffload(iesr.ifStatementResults).join("\n") : getOutputStatements(iesr.ifStatementResults).join("\n")}
                     }`
                 } else {
-                    ifBody = `${getOutputStatements(iesr.ifStatementResults).join("\n")}`
+                    ifBody = `${offload ? getOutputStatementsOffload(iesr.ifStatementResults).join("\n") : getOutputStatements(iesr.ifStatementResults).join("\n")}`
                 }
                 const elseS = ies.elseStatement!
                 let else_str = ""
                 if (ts.isBlock(elseS) || isSupportedMutationStatement(elseS)) {
                     else_str = `else {
-                         ${getOutputStatements(iesr.elseStatementResults).join("\n")}
+                         ${offload ? getOutputStatements(iesr.elseStatementResults).join("\n") : getOutputStatements(iesr.elseStatementResults).join("\n")}
                      }`
                 } else if (isIfStatementOnly(elseS)) {
                     else_str = `else ${getStringVersionOfIfStatementResult(iesr.elseStatementResults[0] as any)}`
@@ -765,13 +758,248 @@ const getSwitchClauses = (actionTypes: ActionType[]) => {
 
             const outputStatements = getOutputStatements(statementsResults)
 
-            return `case "${name}" : {
+            const replaceThisWithStateOffloadText = (str: String) => {
+                console.log("calling replaceThisWithStateOffloadText");
+                return str.replace(/this\./g, `${STATE_PARAM_NAME}.`)
+            }
+
+            const replaceThisWithStateOffload = (node: ts.Node) => {
+                console.log("calling replaceThisWithStateOffload");
+                return replaceThisWithStateOffloadText(node.getText())
+            }
+
+            const getOutputStatementsOffload = (input: StatementResult[]): string[] => {
+                console.log("************  getOutputStatementsOffload");
+                const results: string[] = []
+                input.forEach(sr => {
+                    if (sr.kind === "MutationStatement") {
+                        results.push(replaceThisWithStateOffloadText(sr.newStatement))
+                    } else if (sr.kind === "GeneralStatement") {
+                        console.log("general statement : ", sr.statement.getText());
+                        results.push(replaceThisWithStateOffload(sr.statement))
+                    } else if (sr.kind === "TerinaryStatement") {
+                        const ts = sr.statement
+                        const ce = ts.expression as ts.ConditionalExpression
+                        const ts_string = `${replaceThisWithStateOffload(ce.condition)} ? ${sr.trueExp.newStatement} : ${sr.falseExp.newStatement}`
+                        results.push(ts_string)
+                    } else if (sr.kind === "ForEachStatement") {
+                        const fs_string = getStringVersionOfForEachStatementResult(sr, true)
+                        results.push(fs_string)
+                    } else if (sr.kind === "IfStatement") {
+                        const is_string = getStringVersionOfIfStatementResult(sr, true)
+                        results.push(is_string)
+                    } else if (sr.kind === "IfElseStatement") {
+                        const ies_string = getStringVersionOfIfElseStatementResult(sr, true)
+                        results.push(ies_string)
+                    }
+                })
+                return results
+            }
+            let offload: string | undefined = undefined
+            if (m.type && m.type.getText() === "Offload") { // we need to offload this action
+                const offloadOutputStatements = getOutputStatementsOffload(statementsResults)
+                offload = createOffloadFunction({ m, mutationParentGroup: parentGroups, offloadOutputStatements, group, stateName })
+            } else { // remove if already exist
+                WorkersUtils.removeWorkerFunction(name, group)
+            }
+
+            const caseStatement = `case "${name}" : {
                 ${reservedStatements.join("\n")}
                 ${outputStatements.join("\n")}
                 return { ...${STATE_PARAM_NAME}, ${propertyAssignments.join(",")} }
             }`;
+
+            return { actionType, caseStatement, offload }
         });
 };
+
+
+const createOffloadFunction = ({ m, mutationParentGroup, offloadOutputStatements, stateName, group }: {
+    m: ts.MethodDeclaration, mutationParentGroup: Map<string, Map<string, ParentGroupValue>>,
+    offloadOutputStatements: string[], stateName: string, group: string
+}) => {
+    console.log("offloadOutputStatements", offloadOutputStatements);
+    const parentGroup: Map<
+        string,
+        Map<string, MetaValue[]>> = new Map()
+    const isThisAccessnode = (node: ts.Node) => {
+        const nt = node.getText()
+        return nt.startsWith("this.") && ts.isPropertyAccessExpression(node.parent)
+    }
+    const thisNodes = AstUtils.findAllNodesInsideNode(m, isThisAccessnode)
+    thisNodes.forEach(n => {
+        console.log("thisNode ", n.getText(), n.kind, n.parent.getText())
+        const { group, value, values } = processThisStatementOffload(n.parent)
+        const ev = parentGroup.get(group)
+        if (ev) {
+            ev.set(value, values)
+        } else {
+            const m = new Map()
+            m.set(value, values)
+            parentGroup.set(group, m)
+        }
+    })
+
+    const stateToWorkerInStateAssignments: string[] = []
+    for (const [key, value] of parentGroup) {
+        stateToWorkerInStateAssignments.push(`${key}: ${selectObjectList(value)}`)
+    }
+
+    const stateToWorkerIn = `
+      (${STATE_PARAM_NAME}: ${stateName}) => {
+          return {${stateToWorkerInStateAssignments.join(",")}}
+      }
+    `
+
+    const newMutationParentGroup: Map<string, Map<string, ParentGroupValue>> = new Map()
+    const finalPropertyAccess: string[] = []
+
+    for (const [key, value] of mutationParentGroup) {
+        const newMap = new Map<string, ParentGroupValue>()
+        const setNewAccessName = ({ newAccessName, values }: { newAccessName: string, values: MetaValue[], }) => {
+            finalPropertyAccess.push(newAccessName)
+            const newAccessNameA = newAccessName.split(".")
+            const nvName = newAccessNameA[newAccessName.length - 1]
+            newAccessNameA.pop()
+            newMap.set(newAccessNameA.join("."), {
+                values,
+                newValue: {
+                    name: nvName, op: "",
+                    value: `${WORKER_RESPONSE_PARAM_NAME}["${newAccessName}"]`
+                }
+            })
+        }
+        for (const [pk, pv] of value) {
+            const mvs = pv.values;
+            const newMvs: MetaValue[] = [];
+            [...mvs].reverse().some(mv => {
+                if (mv.meta.access) {
+                    return true
+                }
+                newMvs.unshift(mv)
+            })
+            if (mvs.length === newMvs.length) {
+                if (mvs[0].meta.type === MetaType.ARRAY && arrayMutableMethods.includes(pv.newValue.op)) {
+                    setNewAccessName({ newAccessName: mvs[0].name, values: mvs })
+                } else if (pv.newValue.name.startsWith("[") && isNaN(parseInt(pv.newValue.name.slice(1, -1), 10))) { // identifier access
+
+                    setNewAccessName({ newAccessName: mvs[0].name, values: mvs })
+                } else {
+                    const newAccessname = `${mvs[0].name}.${pv.newValue.name}`
+                    finalPropertyAccess.push(newAccessname)
+                    const nv = `${WORKER_RESPONSE_PARAM_NAME}["${newAccessname}"]`
+                    newMap.set(pk, { values: mvs, newValue: { ...pv.newValue, value: nv } })
+                }
+
+            } else {
+                setNewAccessName({ newAccessName: newMvs[0].name, values: newMvs })
+            }
+        }
+        newMutationParentGroup.set(key, newMap)
+    }
+
+    const workerResponseToStatePropertyAssignments: string[] = []
+
+    for (const [key, value] of newMutationParentGroup) {
+        workerResponseToStatePropertyAssignments.push(`${key}: ${invalidateObjectWithList({ input: value })}`)
+    }
+
+    const workerResponseToState = `
+       (${STATE_PARAM_NAME}: ${stateName},${WORKER_RESPONSE_PARAM_NAME}:any) => {
+          return {...${STATE_PARAM_NAME},${workerResponseToStatePropertyAssignments.join(", ")} }
+       }
+    `
+
+    const workerFunction = `
+      function ${group.replace("/", "_")}_${m.name.getText()}(_input:any) {
+         const ${STATE_PARAM_NAME} = _input.${STATE_PARAM_NAME}
+         const {${m.parameters
+            .map(p => p.name.getText())
+            .join(",")}} = _input.payload;
+         ${offloadOutputStatements.join("\n")}
+         return ${WORKER_STATE_EXTRACTOR_FUNCTION_NAME}(${STATE_PARAM_NAME},_input.propAccessArray)
+      }
+    `
+    WorkersUtils.addWorkerFunction({ name: m.name.getText(), code: workerFunction, group })
+
+    return `{
+        stateToWorkerIn: ${stateToWorkerIn},
+        workerResponseToState: ${workerResponseToState},
+        propAccessArray: ${JSON.stringify(finalPropertyAccess)}
+    }`
+
+}
+
+
+
+const selectObjectList = (input: Map<string, MetaValue[]>, traversed: string[] = [], parent: string = STATE_PARAM_NAME): string => {
+    const entries = Array.from(input.entries())
+    const first = entries[0]
+    if (input.size === 1) {
+        const key = first[0]
+        const v = first[1]
+        return selectObject(key.split("."), v, [], parent)
+    } else {
+        const v1 = first[0].split(".")[0]
+        const v = traversed.length > 0 ? `${traversed.join(".")}.${v1}` : v1
+        let m: Meta = null as any
+        const newP = `${parent}.${v1}`
+        const obj: Record<string, Map<string, MetaValue[]>> = {}
+        entries.filter(([key, value]) => key.split(".").length > 1)
+            .forEach(([key, value]) => {
+                const ka = key.split(".")
+                const k1 = ka[1]
+                const ev = obj[k1]
+                if (!m) {
+                    const tf = value.find(m => m.name === v)
+                    if (tf) {
+                        m = tf.meta
+                    }
+                }
+                if (ev) {
+                    ev.set(ka.slice(1).join("."), value)
+                } else {
+                    const m = new Map()
+                    m.set(ka.slice(1).join("."), value)
+                    obj[k1] = m
+                }
+            })
+        console.log("Object : ", obj);
+        const r = `{${Object.keys(obj).map(s => `${s}:${selectObjectList(obj[s], traversed.concat(v1), newP)}`).join(", ")}}`
+        const isOptioal = m.isOptionalAccess || m.isTypeOptional
+        return isOptioal ? `${newP} ? ${r} : ${newP}` : r
+    }
+}
+
+const selectObject = (inp: string[], values: MetaValue[], traversed: { name: string, access?: string }[] = [], parent: string = "state"): string => {
+    console.log("selectObject Input : ", inp, values, parent);
+    const v1 = inp[0]
+    let vv1 =
+        traversed.length > 0
+            ? `${traversed.map(t => t.name).join(".")}.${v1}`
+            : `${v1}`;
+    const ps = parent.split(".")
+    if (ps.length > 1) {
+        vv1 = `${ps.slice(1).join(".")}.${vv1}`
+    }
+    const vv1tM = values.find(v => v.name === vv1)!
+    const v =
+        traversed.length > 0
+            ? `${parent}.${traversed
+                .map(t => (t.access ? `${t.name}${t.access}` : t.name))
+                .join(".")}.${v1}`
+            : `${parent}.${v1}`;
+    if (inp.length === 1) {
+        return v;
+    } else {
+        const v2 = inp[1]
+        const v2Exapnd = selectObject(inp.slice(1), values, traversed.concat({ name: v1 }), parent)
+        const r = `{${v2}: ${v2Exapnd}}`
+        const isOptional = vv1tM.meta.isOptionalAccess || vv1tM.meta.isTypeOptional
+        return isOptional ? `${v} ? ${r} : ${v} ` : r
+    }
+
+}
 
 const invalidateObjectWithList = ({
     input,
@@ -779,35 +1007,70 @@ const invalidateObjectWithList = ({
     parent = STATE_PARAM_NAME
 }: {
     input: Map<string, ParentGroupValue>;
-    traversed?: string[];
+    traversed?: { name: string, access?: string }[];
     parent?: string;
 }): string => {
     const entries = Array.from(input.entries());
+    const first = entries[0]
     if (input.size === 1) {
-        const [key, value] = entries[0];
+        const [key, value] = first;
         const v =
-            traversed.length > 0 ? `${parent}.${traversed.join(".")}` : `${parent}`;
+            traversed.length > 0 ? `${parent}.${traversed.map(t => (t.access ? `${t.name}${t.access}` : t.name)).join(".")}` : `${parent}`;
         return invalidateObject({
             map: { input: key.split("."), values: value.values, newValue: value.newValue },
             parent: v
         });
     } else {
-        //TODO multiple
-        return "TODO multiple entires of same object";
-        // const v1 = entries[0][0].split(".")[0]
-        // const props = groupByValue(input.filter(s => s.split(".").length > 1).map(s => {
-        //     const a = s.split(".")
-        //     return { key: a[1], value: a.slice(1).join(".") }
-        // }), "key")
-        // const v = traversed.length > 0 ? `${parent}.${traversed.join(".")}.${v1}` : `${parent}.${v1}`
-        // return ts.createObjectLiteral([
-        //     ts.createSpreadAssignment(ts.createIdentifier(v)),
-        //     ...Object.keys(props).map(k =>
-        //         ts.createPropertyAssignment(
-        //             ts.createIdentifier(k),
-        //             invalidateObjectWithList({ input: props[k], traversed: traversed.concat([v1]) })
-        //         ))
-        // ])
+        const v1 = first[0].split(".")[0]
+        const v = traversed.length > 0 ? `${traversed.map(t => t.name).join(".")}.${v1}` : v1
+        let m: Meta = null as any
+        const newP = traversed.length > 0
+            ? `${parent}.${traversed
+                .map(t => (t.access ? `${t.name}${t.access}` : t.name))
+                .join(".")}.${v1}`
+            : `${parent}.${v1}`;
+        const obj: Record<string, Map<string, ParentGroupValue>> = {}
+        entries.filter(([key, value]) => key.split(".").length > 1)
+            .forEach(([key, value]) => {
+                const ka = key.split(".")
+                const k1 = ka[1]
+                const ev = obj[k1]
+                if (!m) {
+                    const tf = value.values.find(m => m.name === v)!
+                    m = tf.meta
+                } else if (m) {
+                    if (m.type === MetaType.ARRAY && m.access) {
+                        const ntf = value.values.find(m => m.name === v)!
+                        if (!ntf.meta.access || m.access[0].name !== ntf.meta.access[0].name) {
+                            throw new Error(`Mutating same array in ${v} with different indexes is not supported`)
+                        }
+                    }
+                }
+                if (ev) {
+                    ev.set(ka.slice(1).join("."), value)
+                } else {
+                    const m = new Map()
+                    m.set(ka.slice(1).join("."), value)
+                    obj[k1] = m
+                }
+            })
+        console.log("Object : ", obj);
+
+        const isOptioal = m.isOptionalAccess || m.isTypeOptional
+        let r = ""
+        let access = m.access?.[0].name
+        if (m.isOptionalAccess) {
+            access = access ? `![${access}]` : "!";
+        }
+        const expand = Object.keys(obj).map(s => `${s}:${invalidateObjectWithList({ input: obj[s], traversed: traversed.concat({ name: v1, access }) })}`).join(", ")
+        if (m.type === MetaType.ARRAY) {
+            const obs = `{${expand}}`
+            r = `[...${newP}.map((${TSTORE_TEMP_V},_i) => _i === ${m.access?.[0].name} ? ${obs} : ${TSTORE_TEMP_V})]`;
+        } else {
+            r = `{...${newP},${expand}}`
+        }
+        return isOptioal ? `${newP} ? ${r} : ${newP}` : r
+
     }
 };
 
@@ -831,14 +1094,18 @@ const invalidateObject = ({
         traversed,
         "values: ",
         values,
-        "aprent : ",
+        "parent : ",
         parent
     );
     const v1 = input[0];
-    const vv1 =
+    let vv1 =
         traversed.length > 0
             ? `${traversed.map(t => t.name).join(".")}.${v1}`
             : `${v1}`;
+    const ps = parent.split(".")
+    if (ps.length > 1) {
+        vv1 = `${ps.slice(1).join(".")}.${vv1}`
+    }
     const v =
         traversed.length > 0
             ? `${parent}.${traversed
@@ -927,7 +1194,7 @@ const invalidateObject = ({
     } else {
         const v2 = input[1];
         const v2t = values.find(v => v.name === vv1)!;
-        let access = v1t.meta.access?.[0].name || undefined;
+        let access = v1t.meta.access?.[0].name
         if (v1t.meta.isOptionalAccess) {
             access = access ? `![${access}]` : "!";
         }
@@ -965,10 +1232,10 @@ const getDefaultState = (props: LocalPropertyDecls[]) => {
 
 function buildFunction({
     caseClauses,
-    group
+    typeName: group
 }: {
     caseClauses: string[];
-    group: string;
+    typeName: string;
 }) {
     if (caseClauses.length > 0) {
         return `
@@ -1099,8 +1366,7 @@ function getFetchRequestResponseType(lpd: LocalPropertyDecls): string {
 /**
  *  All async actions of a class
  */
-const getAsyncActionTypeAndMeta = (): [string, string] => {
-    const group = `${ConfigUtils.getPrefixPathForReducerGroup(currentProcessingReducerFile)}${getTypeName()}`;
+const getAsyncActionTypeAndMeta = (group: string): [string, { name: string, value: string }[]] => {
     const fetchProps: { name: string, response: string }[] = []
     const promiseProps: string[] = []
     const asyncType = propDecls
@@ -1116,6 +1382,18 @@ const getAsyncActionTypeAndMeta = (): [string, string] => {
                 promiseProps.push(name)
                 result = `{name:"${name}",group:"${group}", promise: () => ${p.typeStr} }`;
             } else if (tpe.includes("_fmeta")) {
+                const dtp = p.pd.type!
+                if (ts.isTypeReferenceNode(dtp)) {
+                    dtp.typeArguments?.forEach(ta => {
+                        if (ts.isTypeQueryNode(ta)) {
+                            console.log("Its Type Query Node : ");
+                            const symb = AstUtils.getTypeChecker().getSymbolAtLocation(ta.exprName)
+                            symb?.declarations.forEach(d => {
+                                console.log("************  getAsyncActionTypeAndMeta decl ", d.getText());
+                            })
+                        }
+                    })
+                }
                 fetchProps.push({ name, response: getFetchRequestResponseType(p) })
                 result = `{name:"${
                     name
@@ -1124,80 +1402,54 @@ const getAsyncActionTypeAndMeta = (): [string, string] => {
             return result;
         })
         .join(" | ");
-    const meta = `
-    f:${fetchProps.length > 0 ? `{${fetchProps.map(p => `${p.name}:{response:"${p.response}"}`).join(",")}}` : "undefined"},
-    p:${promiseProps.length > 0 ? `{${promiseProps.map(p => `${p}:{}`).join(",")}}` : "undefined"}
-  `
+    const meta = [...fetchProps.map(f => ({ name: f.name, value: `{response:"${f.response}"}` })),
+    ...promiseProps.map(p => ({ name: p, value: `{}` }))]
+
     return [asyncType, meta]
 };
 
 type ActionType = { name: string, group: string, payload?: string }
 
-// const replaceTypeParamaneter = (tn:ts.TypeNode,tp:ts.TypeParameter) => {
-//     ts.getMutableClone
-//     const result: ts.Node[] = [];
-//     function find(node: ts.Node) {
-//         if (cond(node)) {
-//             result.push(node);
-//             return;
-//         } else {
-//             ts.forEachChild(node, find);
-//         }
-//     }
-//     find(node);
-//     return result;
-// }
 
-
-export const getActionTypes = (): ActionType[] => {
-    const methods = getMethodsFromTypeMembers();
-    const group = `${ConfigUtils.getPrefixPathForReducerGroup(currentProcessingReducerFile)}${getTypeName()}`;
-    return methods.map(m => {
-        const n = m.name.getText();
-        const params = m.parameters
-        const pl = params.length;
-        if (pl === 0) {
-            return { name: n, group }
+const getPayloadForClassMethod = (m: ts.MethodDeclaration): string => {
+    const n = m.name.getText();
+    const params = m.parameters
+    const pl = params.length;
+    if (pl === 0) {
+        return ""
+    }
+    let t = AstUtils.typeToString(
+        memberTypes.find(mt => mt.name === n)!.type
+    );
+    let payload = ""
+    if (pl === 1) {
+        payload = params[0].type!.getText() // dont uses toString value as it replaces all references to its values and we cant import all individual types
+        if (m.typeParameters) {
+            const tp = m.typeParameters[0]
+            const name = tp.name.getText()
+            const r = new RegExp(name, "g") //TODO dont replace blidnly we have to iterate over type or just dont support type contraints https://stackoverflow.com/questions/61110391/how-to-replace-typeparaameter-from-typenode-using-typescript-compiler
+            payload = payload.replace(r, tp.constraint!.getText())
         }
-        let t = AstUtils.typeToString(
-            memberTypes.find(mt => mt.name === n)!.type
-        );
-        let payload = ""
-        if (pl === 1) {
-            payload = params[0].type!.getText() // dont uses toString value as it replaces all references to its values and we cant import all individual types
-            if (m.typeParameters) {
-                const tp = m.typeParameters[0]
-                const name = tp.name.getText()
-                const r = new RegExp(name, "g") //TODO dont replace blidnly we have to iterate over type or just dont support type contraints https://stackoverflow.com/questions/61110391/how-to-replace-typeparaameter-from-typenode-using-typescript-compiler
-                payload = payload.replace(r, tp.constraint!.getText())
+    } else {
+        const typeParams = m.typeParameters ?
+            m.typeParameters.map(tp => ({ name: tp.name.getText(), constraint: tp.constraint!, })) : []//Note: User should provide contrain based typeparams
+        const paramsProcessed = params.map(p => {
+            const name = p.name.getText()
+            const isOptional = !!p.questionToken
+            let t = p.type!.getText() // dont uses toString value as it replaces all references to its values and we cant import all individual types
+            if (typeParams.length > 0) {
+                typeParams.forEach(tp => {
+                    if (tp.name === t) {
+                        t = tp.constraint.getText()
+                    }
+                })
             }
-        } else {
-            const typeParams = m.typeParameters ?
-                m.typeParameters.map(tp => ({ name: tp.name.getText(), constraint: tp.constraint!, })) : []//Note: User should provide contrain based typeparams
-            const paramsProcessed = params.map(p => {
-                const name = p.name.getText()
-                const isOptional = !!p.questionToken
-                let t = p.type!.getText() // dont uses toString value as it replaces all references to its values and we cant import all individual types
-                if (typeParams.length > 0) {
-                    typeParams.forEach(tp => {
-                        if (tp.name === t) {
-                            t = tp.constraint.getText()
-                        }
-                    })
-                }
-                return `${name}${isOptional ? "?" : ""}: ${t}`
-            })
-            payload = `{${paramsProcessed.join(", ")}}`
-        }
-        return { name: n, group, payload };
-    })
-
-
-};
-
-
-
-
+            return `${name}${isOptional ? "?" : ""}: ${t}`
+        })
+        payload = `{${paramsProcessed.join(", ")}}`
+    }
+    return payload;
+}
 
 //   function isArrayType(type: ts.Type): boolean {
 //     return isTypeReference(type) && (
@@ -1349,8 +1601,8 @@ function typeOfMultipleArray(input: EAccess[], name: string): EAccess[] {
 
 type ProcessThisStatementOptions = { arrayMut?: boolean }
 
-function processThisStatement2(exp: ts.Node, options: ProcessStatementsOptions = {}): ProcessThisResult {
-    console.log("process thisResult input: ", exp.getText())
+function processThisStatement(exp: ts.Node, options: ProcessStatementsOptions = {}): ProcessThisResult {
+    console.log("process thisResult  input: ", exp.getText())
     const values: MetaValue[] = [];
     let propIdentifier: Meta = { type: MetaType.UNKNOWN };
     let argumentAccessOptional = false;
@@ -1466,8 +1718,8 @@ function processThisStatement2(exp: ts.Node, options: ProcessStatementsOptions =
                 isOptionalType = ulStr === "null" || ulStr === "undefined"
             }
             v.meta.isTypeOptional = isOptionalType
-            if (v.meta.access && v.meta.access.length > 1) { //TODO multiple element access 
-
+            if (v.meta.access && v.meta.access.length > 1) { // this.ob[1][2]
+                throw new Error(`Multiple element access is not supported`)
             }
         })
     }
@@ -1475,6 +1727,141 @@ function processThisStatement2(exp: ts.Node, options: ProcessStatementsOptions =
     console.log("Process this result : ", result);
     return result;
 }
+
+function processThisStatementOffload(exp: ts.Node, options: ProcessStatementsOptions = {}): ProcessThisResult {
+    console.log("process thisResult offload input: ", exp.getText())
+    const values: MetaValue[] = [];
+    let propIdentifier: Meta = { type: MetaType.UNKNOWN };
+    let argumentAccessOptional = false;
+    let group = ""
+    let onlyThisInput = false
+
+    function emptyPropidentifier() {
+        return { type: MetaType.UNKNOWN };
+    }
+    function updateValues(parent: string) {
+        values.forEach(v => {
+            v.name = `${parent}.${v.name}`
+        })
+    }
+
+    function processInner(input: ts.Node): any {
+
+        if (ts.isTypeNode(input)) {
+            const parent = input.parent as ts.PropertyAccessExpression
+            const name = parent.name.getText()
+            group = name
+            if (values.length === 0) {
+                onlyThisInput = true
+                values.push({ name, meta: { type: MetaType.UNKNOWN } }) // this.prop = value , no need to invalidate anything as parent is this ,so type is UNKOWN which we will check in invalidateObject method
+            }
+            return
+        } else if (ts.isPropertyAccessExpression(input) && input.expression.kind === ts.SyntaxKind.ThisKeyword) {
+            const name = input.name.getText()
+            updateValues(name)
+            group = name
+            values.push({ name, meta: { ...propIdentifier } })
+            propIdentifier = emptyPropidentifier()
+            return
+        } else if (ts.isPropertyAccessExpression(input)) {
+            const name = input.name.getText()
+            updateValues(name)
+            values.push({ name, meta: { ...propIdentifier, } })
+            propIdentifier = emptyPropidentifier()
+            return processInner(input.expression)
+        } else if (
+            ts.isNonNullExpression(input) &&
+            ts.isPropertyAccessExpression(input.expression)
+        ) {
+            const name = input.expression.name.getText()
+            updateValues(name)
+            values.push({ name, meta: { ...propIdentifier, isOptionalAccess: true, } })
+            propIdentifier = emptyPropidentifier()
+            return processInner(input.expression.expression)
+        } else if (
+            ts.isNonNullExpression(input) &&
+            ts.isElementAccessExpression(input.expression)
+        ) {
+            argumentAccessOptional = true;
+            return processInner(input.expression)
+        } else if (
+            ts.isElementAccessExpression(input) &&
+            ((ts.isNonNullExpression(input.expression) &&
+                ts.isPropertyAccessExpression(input.expression.expression)) ||
+                ts.isPropertyAccessExpression(input.expression))
+        ) {
+            propIdentifier = emptyPropidentifier();
+            propIdentifier.access = [
+                {
+                    name: input.argumentExpression.getText(),
+                    exp: input.argumentExpression,
+                    type: MetaType.UNKNOWN
+                }
+            ];
+            if (argumentAccessOptional) {
+                propIdentifier.isOptionalAccess = true;
+                argumentAccessOptional = false;
+            }
+            return processInner(input.expression);
+        } else if (
+            ts.isElementAccessExpression(input) &&
+            (ts.isElementAccessExpression(input.expression) ||
+                (ts.isNonNullExpression(input.expression) &&
+                    ts.isElementAccessExpression(input.expression.expression)))
+        ) {
+            // multiple element access this.a[0][1]
+            const { access, exp } = processMultipleElementAccess(input);
+            propIdentifier = emptyPropidentifier();
+            propIdentifier.access = access.map((a, index) => {
+                return { ...a, type: MetaType.UNKNOWN };
+            });
+            return processInner(exp)
+        } else {
+            throw new Error(`processThisResult ${exp.getText()} not supported`)
+        }
+    }
+    processInner(exp)
+    let finalValues: MetaValue[] = []
+    if (!onlyThisInput) {
+        values.reverse().some(v => {
+            const type = getTypeForPropertyAccess(v.name.split("."))
+            const nonNullType = AstUtils.getNonNullableType(type)
+            const tpeStr = AstUtils.typeToString(nonNullType).trim()
+            let isOptionalType = false
+            if (isUnionType(type)) {
+                const ul = type.types[0] // TODO cross check its returning  union memebers in reverse order :s 
+                type.types.forEach(m => {
+                    console.log("Union Memebers ", AstUtils.typeToString(m));
+                })
+                const ulStr = AstUtils.typeToString(ul).trim()
+                console.log("Union Type : ", ulStr);
+                isOptionalType = ulStr === "null" || ulStr === "undefined"
+            }
+            v.meta.isTypeOptional = isOptionalType
+            console.log("tpeStr : ", tpeStr);
+            let metaType = MetaType.UNKNOWN
+            if (tpeStr === "string") {
+                metaType = MetaType.STRING
+            } else if (tpeStr === "number") {
+                metaType = MetaType.NUMBER
+            } else if (AstUtils.isArrayType(nonNullType)) {
+                metaType = MetaType.ARRAY
+            } else if (isObjectType(nonNullType)) {
+                metaType = MetaType.OBJECT
+            }
+            v.meta.type = metaType
+            finalValues.push(v)
+            console.log("vm", metaType);
+            if (metaType === MetaType.STRING || metaType === MetaType.ARRAY || v.meta.access) {
+                return true;
+            }
+        })
+    }
+    const result: ProcessThisResult = { group: group, value: CommonUtils.lastElementOfArray(finalValues).name, values: finalValues }
+    console.log("Process this result offload : ", result);
+    return result;
+}
+
 
 
 // function processThisStatement(

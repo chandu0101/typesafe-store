@@ -1,3 +1,4 @@
+import { ActionOffload } from "../offload";
 
 
 export type Action = Readonly<{
@@ -29,24 +30,26 @@ export type ReducerGroup<
     S extends any,
     A extends Action,
     G extends string,
-    AA,
+    AA extends Action | undefined,
     > = Readonly<{
         r: Reducer<S, A>;
         g: G;
         ds: S;
-        m: RMeta<AA>;
+        m: RMeta<S, AA>;
     }>;
 
 
-type RFetchMeta = { response: "json" | "text" | "blob" | "arrayBuffer" | "void" }
+type RFetchActionMeta = { response: "json" | "text" | "blob" | "arrayBuffer" | "void" }
+
+
+type ActionMeta<S> = {
+    f?: RFetchActionMeta, offload?: ActionOffload<S>
+}
 
 /**
- *  f: fetch meta
+ *  a: all meta information about actions(sync and async)
  */
-export type RMeta<AA> = Readonly<{
-    f?: Record<string, RFetchMeta>;
-    p?: Record<string, any>;
-    gql?: Record<string, any>;
-    grpc?: Record<string, any>;
+export type RMeta<S, AA> = Readonly<{
+    a: Record<string, ActionMeta<S>>
     async?: AA
 }>;

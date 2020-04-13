@@ -1,6 +1,6 @@
 
 
-import { watchMain } from "@typesafe-store/transformer"
+// import { watchMain } from "@typesafe-store/transformer"
 
 
-watchMain()
+// watchMain()

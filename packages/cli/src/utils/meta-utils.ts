@@ -10,7 +10,8 @@ export class MetaUtils {
             restApis: new Map(),
             reducers: new Map(),
             config: null as any,
-            program: null as any
+            program: null as any,
+            workersMeta: { fns: [], isChanged: false }
         }
     }
 
@@ -40,6 +41,10 @@ export class MetaUtils {
 
     static getGraphqlMeta() {
         return global.tStoreMeta.graphqlApis
+    }
+
+    static getWorkersMeta() {
+        return global.tStoreMeta.workersMeta
     }
 
 }

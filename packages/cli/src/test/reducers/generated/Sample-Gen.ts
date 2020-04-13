@@ -119,7 +119,7 @@ export const SampleReducerGroup: ReducerGroup<SampleState, SampleAction, "Sample
 
             }
         }
-    , g: "Sample", ds: { name: "First", count: 1, person: { name: "P12", age: 10 }, books: [], optionalTodos: [], config: {}, getBooks: {}, getTwoBooks: {} }, m: { async: undefined },
+    , g: "Sample", ds: { name: "First", count: 1, person: { name: "P12", age: 10 }, books: [], optionalTodos: [], config: {}, getBooks: {}, getTwoBooks: {} }, m: { async: undefined, a: {} },
 }
 
 

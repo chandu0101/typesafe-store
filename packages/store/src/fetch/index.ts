@@ -21,17 +21,18 @@ export const enum FetchVariants {
 }
 
 
-export type FetchAsyncData<D, U extends FUrl, B extends FetchBody, FV extends FetchVariants, E> = Readonly<{
+
+export type FetchAsyncData<D, U extends FUrl, B extends FetchBody, FV extends FetchVariants, E,> = Readonly<{
     loading?: boolean;
     error?: E;
     data?: D;
     _fmeta?: FetchRequest<FV, U, B>
 }>;
 
-type FetchRequest<FV extends FetchVariants, U extends FUrl, B extends (Json | null)> = { type: FV, url: U, body?: B }
+export type FetchRequest<FV extends FetchVariants, U extends FUrl, B extends (Json | null)> = { type: FV, url: U, body?: B }
 
 
-export type Transform<T, D> = (input: T) => D;
+export type Transform<D, T> = (input: D) => T;
 
 /**
  *  path  static path of API (Example : "books", "updateBooks")
@@ -52,7 +53,8 @@ export type Fetch<
     U extends FUrl,
     R extends FetchResponse,
     E,
-    > = FetchAsyncData<R, U, null, FetchVariants.GET, E>;
+    T extends Transform<R, any> | null = null
+    > = T extends Transform<R, infer PR> ? FetchAsyncData<PR, U, null, FetchVariants.GET, E> : FetchAsyncData<R, U, null, FetchVariants.GET, E>
 
 /**
  *  U: url string static/dynamic

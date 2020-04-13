@@ -1,4 +1,4 @@
-import { dirname } from "path"
+import { dirname, join } from "path"
 import { existsSync, mkdirSync, writeFileSync, readFileSync, promises as fsp, lstatSync } from "fs"
 
 
@@ -35,4 +35,6 @@ export class FileUtils {
         }
         return result
     }
+
+
 }

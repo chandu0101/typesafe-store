@@ -1,5 +1,5 @@
 {
-  "name": "rest-reducers",
+  "name": "offload-test",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -13,12 +13,7 @@
   "author": "chandu0101",
   "license": "ISC",
   "devDependencies": {
-    "@typesafe-store/cli": "file:../..",
-    "ibm-openapi-validator": "^0.26.0",
-    "openapi3-ts": "^1.3.0",
-    "swagger2openapi": "^6.0.2",
-    "typescript": "^3.8.3",
-    "yamljs": "^0.3.0"
+    "@typesafe-store/cli": "file:../.."
   },
   "dependencies": {
     "@typesafe-store/store": "file:../../../store"

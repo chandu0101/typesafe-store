@@ -1,6 +1,6 @@
 import { TypeSafeStoreConfigExtra, TypeSafeStoreConfig, TsBuildInfo, GraphqlApiConfig, TypescriptCompilerOptions, TypescriptPlugin, TsGraphqlPluginConfig, RestApiConfig, typeSafeStoreConfigDecoder } from "../types";
 import { resolve, join, dirname, sep } from "path";
-import { REDUCERS_FOLDER, GENERATED_FOLDER, STORE_TYPES_FOLDER, REST_API_TYPES_FOLDER, GRAPHQL_API_TYPES_FOLDER, GRAPHQL_OPERATIONS_FOLDER, TS_GRAPHQL_PLUGIN_NAME, TYPESAFE_STORE_CONFIG_KEY, GEN_SUFFIX, SELECTORS_FOLDER } from "../constants";
+import { REDUCERS_FOLDER, GENERATED_FOLDER, STORE_TYPES_FOLDER, REST_API_TYPES_FOLDER, GRAPHQL_API_TYPES_FOLDER, GRAPHQL_OPERATIONS_FOLDER, TS_GRAPHQL_PLUGIN_NAME, TYPESAFE_STORE_CONFIG_KEY, GEN_SUFFIX, SELECTORS_FOLDER, WORKERS_FOLDER } from "../constants";
 import * as ts from "typescript";
 import { FileUtils } from "./file-utils";
 import { initializeGraphqlConfig } from "../graphql";
@@ -148,7 +148,8 @@ export class ConfigUtils extends ConfigValidation {
             graphqlApiTypesPath: "",
             graphqlOperationsPath: "",
             seelctorsPath: "",
-            selectorsGeneratedPath: ""
+            selectorsGeneratedPath: "",
+            workersPath: ""
         };
         config.storePath = resolve(config.storePath)
         config.reducersPath = join(config.storePath, REDUCERS_FOLDER)
@@ -166,6 +167,8 @@ export class ConfigUtils extends ConfigValidation {
         config.graphqlApiTypesPath = join(config.typesPath, GRAPHQL_API_TYPES_FOLDER)
 
         config.graphqlOperationsPath = join(config.storePath, GRAPHQL_OPERATIONS_FOLDER)
+
+        config.workersPath = join(config.storePath, WORKERS_FOLDER)
 
         //TODO looks like it doesnt exist on older versions of typescript
         // config.tsBuildInfoPath = ts.getTsBuildInfoEmitOutputFilePath(compilerOptions) 
@@ -294,6 +297,9 @@ export class ConfigUtils extends ConfigValidation {
         return file.replace(selectors, genSelectors).replace(".ts", `${GEN_SUFFIX}.ts`)
     }
 
+    static getOutputPathForWorkers() {
+        return join(this.getConfig().workersPath, "workers.ts")
+    }
 
 
 }

@@ -16,14 +16,16 @@ export type MiddleWareInfo<S = any> = Readonly<{
     meta: Record<string, ReducerGroup<any, any, any, any>>
 }>
 
-export type MiddleWare<R extends Record<string, ReducerGroup<any, any, any, any>>> = (store: TypeSafeStore<R>) =>
-    (next: Dispatch<GetActionFromReducers<R>>) => (action: GetActionFromReducers<R>) => any
 
 export type GetStateFromReducers<T extends Record<string, ReducerGroup<any, any, any, any>>> = {
     [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? S : any }
 
 
 export type GetActionFromReducers<T> = { [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? AA extends undefined ? A : A & AA : never }[keyof T]
+
+export type MiddleWare<R extends Record<string, ReducerGroup<any, any, any, any>>> = (store: TypeSafeStore<R>) =>
+    (next: Dispatch<GetActionFromReducers<R>>) => (action: GetActionFromReducers<R>) => any
+
 
 /**
  *  resetToDefault: while unsubscribing if you want to reset dependent state keys (keys you used to register) default values 
@@ -417,13 +419,16 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 }
 
 
-
-// type A = any
+type X = NonNullable<undefined | string>
+// type A1 = undefined
+// type A2 = { name: "a2", group: "g2" }
 // type G1S = { books: { name: string }[] }
-// const g1: ReducerGroup<G1S, A, "g1", undefined> = { r: null as any, g: "g1", ds: null as any, m: {} }
-// const g2: ReducerGroup<G1S, A, "g2", undefined> = { r: null as any, g: "g2", ds: null as any, m: {} }
+// const g1: ReducerGroup<G1S, A2, "g1", undefined> = { r: null as any, g: "g1", ds: null as any, m: {} }
+// const g2: ReducerGroup<G1S, A2, "g2", undefined> = { r: null as any, g: "g2", ds: null as any, m: {} }
 // const sr = { g1, g2 }
 // const store = new TypeSafeStore({ reducers: sr, middleWares: [] })
 
+// type AT = GetActionFromReducers<typeof sr>
+// store.dispatch({name:})
 // store.subscribe(["g1",], null as any)
 

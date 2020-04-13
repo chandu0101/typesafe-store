@@ -69,11 +69,5 @@
   "typesafe-store": {
     "storePath": "./src/store",
     "framework": "vanilla",
-    "restApis": [
-      {
-        "file": "./petstore.yaml",
-        "name": "petstore"
-      }
-    ]
   }
 }

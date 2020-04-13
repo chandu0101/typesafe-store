@@ -1,5 +1,5 @@
 
-         // this file is auto generated on 2020-03-31T21:55:34.483Z, don't modify it 
+         // this file is auto generated on 2020-04-11T12:58:03.126Z, don't modify it 
          import {FUrl,Fetch,FetchPost}  from "@typesafe-store/store"
 
          export namespace petstore {

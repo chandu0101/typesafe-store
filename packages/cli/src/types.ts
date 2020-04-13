@@ -67,9 +67,14 @@ export const enum MetaType {
     ARRAY,
     UNKNOWN,
     SET,
-    MAP
+    MAP,
+    STRING,
+    NUMBER
 }
 
+export type WorkerFunction = { name: string, group: string, code: string }
+
+export type WorkersMeta = { fns: WorkerFunction[], isChanged: boolean }
 
 export type GlobalMeta = {
     restApis: Map<string, GraphqlApiMeta>,
@@ -77,7 +82,8 @@ export type GlobalMeta = {
     reducers: Map<string, ReducersMeta>,
     config: TypeSafeStoreConfigExtra,
     program: ts.Program,
-    tempBuildInfo?: TsBuildInfo
+    tempBuildInfo?: TsBuildInfo,
+    workersMeta: WorkersMeta
 }
 
 /**
@@ -195,6 +201,7 @@ export type TypeSafeStoreConfigExtra = TypeSafeStoreConfig & {
     restApiTypesPath: string,
     graphqlApiTypesPath: string,
     graphqlOperationsPath: string,
+    workersPath: string,
     seelctorsPath: string,
     selectorsGeneratedPath: string,
     tsBuildInfoPath?: string
