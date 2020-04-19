@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "lib": [
+      "WebWorker",
+      "dom"
+    ],
+    "outDir": "build",
+    "sourceMap": true,
+    "composite": true,
+    "declaration": true,
+    "plugins": []
+  },
+  "references": [
+    {
+      "path": "../store/build"
+    }
+  ],
+}

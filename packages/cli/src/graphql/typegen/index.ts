@@ -181,7 +181,7 @@ export class GraphqlTypGen {
                     if (vt.trim() === "undefined") {
                         operations.push({ name: opType })
                     } else {
-                        statements.push(`type ${vn} = ${vt}`)
+                        statements.push(`export type ${vn} = ${vt}`)
                         operations.push({ name: opType, variables: vn })
                     }
                     parentTypeStack.consume();
@@ -376,7 +376,7 @@ export class GraphqlTypGen {
     }
 
     private static createTsTypeDeclaration(alias: string, fieldElement: FieldTypeElement) {
-        return `type ${alias} = ${this.createTsFieldTypeNode(fieldElement)}`
+        return `export type ${alias} = ${this.createTsFieldTypeNode(fieldElement)}`
     }
 
     private static createTsTypeNodeFromScalar(fieldType: GraphQLScalarType): string {

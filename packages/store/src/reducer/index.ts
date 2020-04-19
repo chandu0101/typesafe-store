@@ -1,11 +1,17 @@
-import { ActionOffload } from "../offload";
+import { SyncActionOffload } from "../offload";
+import { FetchActionMeta } from "../fetch";
+import { WebSocketActionmeta } from "../websockets";
 
+export type ActionInternalMeta = { kind: "Data", data: any, processed?: boolean }
+    | { knind: "State", data: any, processed?: boolean }
+    | { kind: "DataAndTypeOps", data: any, processed?: boolean, typeOp: NonNullable<FetchActionMeta["typeops"]> }
+    | { kind: "DiscardDataDoTypeOps", data: any, processed?: boolean, typeOp: NonNullable<FetchActionMeta["typeops"]> }
 
 export type Action = Readonly<{
     name: any;
     group: string;
     extensions?: Record<string, unknown>;
-    _internal?: { processed?: boolean, data?: any };
+    _internal?: ActionInternalMeta;
 }>;
 
 
@@ -39,11 +45,12 @@ export type ReducerGroup<
     }>;
 
 
-type RFetchActionMeta = { response: "json" | "text" | "blob" | "arrayBuffer" | "void" }
 
 
-type ActionMeta<S> = {
-    f?: RFetchActionMeta, offload?: ActionOffload<S>
+export type ActionMeta<S> = {
+    f?: FetchActionMeta,
+    offload?: SyncActionOffload<S>,
+    ws?: WebSocketActionmeta
 }
 
 /**

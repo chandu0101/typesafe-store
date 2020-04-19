@@ -1,4 +1,5 @@
 import { Offload } from "@typesafe-store/store"
+import { myApi, GetBooks3 } from "../types"
 
 
 class SampleReducer {
@@ -9,7 +10,11 @@ class SampleReducer {
         two: { b: string }
     } = {} as any
 
+    fData: myApi.GetBooks = {}
+    fData2: myApi.GetBooks2 = {}
+    fData3: GetBooks3 = {}
     book2: { b1: { name: string } } = {} as any
+
     changeBookName(name: string): Offload {
         new Array(10000000).fill(undefined).forEach((v, i) => {
             if (this.book.name.length > i) {
@@ -17,7 +22,7 @@ class SampleReducer {
             }
         })
         this.book.name = name
-        this.config.one.a = "12"
+        this.config.one.a = "1"
         this.config.two.b = ""
         this.book2.b1.name = "2"
     }

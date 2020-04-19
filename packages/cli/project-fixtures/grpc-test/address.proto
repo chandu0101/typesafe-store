@@ -1,0 +1,110 @@
+// See README.txt for information and build instructions.
+//
+// Note: START and END tags are used in comments to define sections used in
+// tutorials.  They are not part of the syntax for Protocol Buffers.
+//
+// To get an in-depth walkthrough of this file and the related examples, see:
+// https://developers.google.com/protocol-buffers/docs/tutorials
+
+// [START declaration]
+syntax = "proto3";
+package tutorial;
+
+
+// import "google/protobuf/timestamp.proto";
+import "f1/f1types.proto";
+// [END declaration]
+
+// [START java_declaration]
+option java_package = "com.example.tutorial";
+option java_outer_classname = "AddressBookProtos";
+// [END java_declaration]
+
+// [START csharp_declaration]
+option csharp_namespace = "Google.Protobuf.Examples.AddressBook";
+// [END csharp_declaration]
+
+// [START messages]
+
+enum PhoneType2 {
+    MOBILE = 0;
+    HOME = 1;
+    WORK = 2;
+  }
+message Person {
+  string name = 1;
+  int32 id = 2;  // Unique ID number for this person.
+  string email = 3;
+  bytes bf = 6;
+  map<string, string> projects = 7;
+  f1.HelloEnum helloEnum = 8;
+  f1.F1CM ipC = 9;
+  map<string,f1.HelloEnum> mapEnum = 10;
+  
+  enum PhoneType {
+    MOBILE = 0;
+    HOME = 1;
+    WORK = 2;
+  }
+
+
+  message PhoneNumber {
+   message PhoneNumber2 {
+          string number2 = 1;
+    }
+    string number = 1;
+    PhoneType type = 2;
+    PhoneNumber2 number2 = 3;
+  }
+  message SampleMessage {
+  oneof test_oneof {
+    string name = 4;
+    PhoneNumber sub_message = 9;
+  }
+}
+
+  repeated PhoneNumber phones = 4;
+
+ // google.protobuf.Timestamp last_updated = 5;
+   f1.Hello last_updated = 5;
+   map<string,PhoneNumber> mapMessage = 11;
+   map<string,SampleMessage> mapOneOfMessage = 12;
+   SampleMessage oneofMessageField = 13;
+}
+
+// Our address book file is just one of these.
+message AddressBook {
+  repeated Person people = 1;
+}
+
+message HelloRequest {
+  string name = 1;
+}
+
+message RepeatHelloRequest {
+  string name = 1;
+  int32 count = 2;
+}
+
+message HelloReply {
+  string message = 1;
+}
+// [END messages]
+
+service Greeter {
+  // unary call
+  rpc SayHello (HelloRequest) returns (HelloReply);
+  // server streaming call
+  rpc SayRepeatHello (RepeatHelloRequest) returns (stream HelloReply);
+  // unary call - response after a length delay
+  rpc SayHelloAfterDelay (HelloRequest) returns (repeated HelloReply);
+}
+
+service Greeter2 {
+  // unary call
+  rpc SayHello2 (HelloRequest) returns (HelloReply);
+  // server streaming call
+  rpc SayRepeatHello2 (RepeatHelloRequest) returns (stream HelloReply);
+  // unary call - response after a length delay
+  rpc SayHelloAfterDelay2 (HelloRequest) returns (HelloReply);
+}

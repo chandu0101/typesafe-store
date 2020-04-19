@@ -37,7 +37,7 @@
                     })
                 
 _trg_satate.book.name = name
-_trg_satate.config.one.a = "12"
+_trg_satate.config.one.a = "1"
 _trg_satate.config.two.b = ""
 _trg_satate.book2.b1.name = "2"
          return _getValuesFromState(_trg_satate,_input.propAccessArray)

@@ -8,7 +8,7 @@ export type ResultOfProcessedGqlNode = { gqlText: string, error?: string }
 
 export type NodeResultCacheValue = { gqlText: string, dependencyVersions: { fileName: string, version: string }[] }
 
-export type OperationValue = { text: string, isMultipleOp: boolean }
+export type OperationValue = { text: string, isMultipleOp: boolean, requestCreator: string }
 
 export type GraphqlApiMeta = {
     schemaManager: SchemaManager, resultCache: Map<ts.Node, NodeResultCacheValue>,

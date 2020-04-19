@@ -71,8 +71,20 @@
     "framework": "vanilla",
     "restApis": [
       {
-        "file": "./petstore.yaml",
+        "file": "./specs/petstore.yaml",
         "name": "petstore"
+      },
+      {
+        "file": "./specs/petstore-extended.yaml",
+        "name": "petstore-extend"
+      },
+      {
+        "file": "./specs/link-example.yaml",
+        "name": "linkExample"
+      },
+      {
+        "file": "./specs/uspto.yaml",
+        "name": "uspto"
       }
     ]
   }

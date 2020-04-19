@@ -223,4 +223,13 @@ export class AstUtils {
 
     }
 
+    /**
+     *  https://github.com/Microsoft/TypeScript/issues/11728
+     * @param t1 
+     * @param t2 
+     */
+    static isAssignableTo(t1: ts.Type, t2: ts.Type): boolean {
+        const typeChecker = this.getTypeChecker()
+        return (typeChecker as any).isTypeAssignableTo(t1, t2)
+    }
 }

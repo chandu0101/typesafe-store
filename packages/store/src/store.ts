@@ -165,9 +165,14 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         const rg = this.reducers[stateKey]
         const ps = this._state[stateKey]
         let s: typeof ps = null as any
-        if (_internal && _internal.processed && _internal.data) { // processed by middlewares (example: fetch,graphql)
+        if (_internal && _internal.processed) { // processed by middlewares (example: fetch,graphql)
+            //TODO
             s = { ...ps, [name]: _internal.data }
-        } else {
+            //  if (_internal && _internal.processed && _internal.state) { // processed offload middleware for sync action
+            //     s = _internal.state
+            // }
+        }
+        else {
             s = rg.r(ps, a)
         }
         if (s !== ps) {
@@ -222,6 +227,10 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
     getReducerGroup = (group: string) => {
         const stateKey = this.reducerGroupToStateKeyMap[group]
         return this.reducers[stateKey]
+    }
+
+    getStateKeyForGroup = (group: string) => {
+        return this.reducerGroupToStateKeyMap[group]
     }
 
     /**

@@ -3,10 +3,14 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "build",
+    "lib": [],
     "plugins": [],
     "sourceMap": true,
     "esModuleInterop": true,
-    "composite": true
+    "composite": true,
+    "typeRoots": [
+      "../../node_modules/@types"
+    ]
   },
   "include": [
     "src/**/*"

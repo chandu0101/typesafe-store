@@ -9,7 +9,7 @@
   },
   "references": [
     {
-      "path": "../store"
+      "path": "../store/build"
     }
   ],
 }

@@ -1,0 +1,24 @@
+{
+  "name": "grpc-test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node build/index.js",
+    "dev": "tstore",
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf node_modules && rm -rf build && rm -rf package-lock.json"
+  },
+  "keywords": [],
+  "author": "chandu0101",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^13.11.1",
+    "@typesafe-store/cli": "file:../.."
+  },
+  "dependencies": {
+    "@typesafe-store/store": "file:../../../store",
+    "proto-parser": "file:../../../../../proto-parser",
+    "ts-protoc-gen": "^0.12.0"
+  }
+}

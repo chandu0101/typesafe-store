@@ -1,0 +1,14 @@
+
+
+syntax = "proto3";
+
+package sample;
+
+message Sample {
+    string name = 1;
+}
+
+message Sample2 {
+    Sample sample = 1;
+    string sf = 2;
+}

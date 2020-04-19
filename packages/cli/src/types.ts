@@ -144,6 +144,12 @@ export type GraphqlApiConfig = {
     http?: HttpUrlConfig
 }
 
+export type GrpcApiConfig = {
+    name: string,
+    proto: string,
+    url: string,
+}
+
 /**
  *  storepath : "folderPath" to store.
  *  framework : framework you using in your application. 
@@ -154,7 +160,8 @@ export type TypeSafeStoreConfig = {
     storePath: string,
     framework: SupportedFrameworks,
     restApis?: RestApiConfig[],
-    graphqlApis?: GraphqlApiConfig[]
+    graphqlApis?: GraphqlApiConfig[],
+    grpcApis?: GrpcApiConfig[]
 }
 
 export const typeSafeStoreConfigDecoder: Decoder<TypeSafeStoreConfig> = object({
@@ -192,15 +199,17 @@ export const typeSafeStoreConfigDecoder: Decoder<TypeSafeStoreConfig> = object({
             body: optional(anyJson()),
         }))
     }))),
+    grpcApis: optional(array(object({
+        name: string(),
+        proto: string(),
+        url: string()
+    }))),
 })
 
 export type TypeSafeStoreConfigExtra = TypeSafeStoreConfig & {
     reducersPath: string,
+    apisPath: string,
     reducersGeneratedPath: string,
-    typesPath: string,
-    restApiTypesPath: string,
-    graphqlApiTypesPath: string,
-    graphqlOperationsPath: string,
     workersPath: string,
     seelctorsPath: string,
     selectorsGeneratedPath: string,

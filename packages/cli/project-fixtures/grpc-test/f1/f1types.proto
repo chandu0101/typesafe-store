@@ -1,0 +1,16 @@
+
+syntax = "proto3";
+
+package f1;
+import public  "f1/f1_c/f1ctypes.proto";
+import public "f1/f1stypes.proto";
+
+message Hello {
+   string name = 1;
+   f1.HelloS sname = 2;
+}
+
+enum HelloEnum {
+   HELLO_1 = 0;
+   HELLO_2 = 1;
+}

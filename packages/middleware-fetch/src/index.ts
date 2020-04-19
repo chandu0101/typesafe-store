@@ -1,10 +1,14 @@
 
 
-import { MiddleWare, TypeSafeStore, Dispatch, GetActionFromReducers, ReducerGroup, Action, FetchRequest, FetchVariants, FUrl, Json, FetchAsyncData } from "@typesafe-store/store"
+import {
+    MiddleWare, TypeSafeStore,
+    Dispatch, GetActionFromReducers, ReducerGroup, Action, FetchRequest, FetchVariants, FUrl,
+    Json, FetchAsyncData, FetchBody, FetchActionMeta
+} from "@typesafe-store/store"
 
 
 function isFetchAction(rg: ReducerGroup<any, any, any, any>, action: Action) {
-    return rg.m.f && rg.m.f[action.name]
+    return rg.m.a[action.name] && rg.m.a[action.name].f
 }
 
 
@@ -17,7 +21,8 @@ function getUrl(url: FUrl): string {
     }
     if (url.queryParams) {
         const query = Object.entries(url.queryParams)
-            .map(([key, value]) => `${key}=${value}`).join("&")
+            .filter(([key, value]) => value)
+            .map(([key, value]) => `${key}=${JSON.stringify(value)}`).join("&")
         if (query !== "") {
             path = `${path}?${query}`
         }
@@ -25,24 +30,53 @@ function getUrl(url: FUrl): string {
     return path
 }
 
-function getOptions<FV extends FetchVariants, U extends FUrl, B extends Json>(fmeta: FetchRequest<FV, U, B>) {
-    const options: RequestInit = { method: fmeta.type }
-    if (fmeta.body) {
-        options.body = JSON.stringify(fmeta.body)
+function getOptions<FV extends FetchVariants, U extends FUrl, B extends FetchBody>(
+    fRequest: FetchRequest<FV, U, B, any>, meta: FetchActionMeta) {
+    const options: RequestInit = { method: fRequest.type }
+
+    if (fRequest.body) {
+        if (meta.grpc) {
+            options.body = meta.grpc.sf(fRequest.body)
+        }
+        else if (meta.body === "string") {
+            options.body = JSON.stringify(fRequest.body)
+        } else {
+            options.body = fRequest.body as any
+        }
     }
     return options
 }
 
+type GenericFetchAsyncData = FetchAsyncData<any, any, any, any, any>
+
+//TODO optimistic stream type ops
 async function processFetchAction<R extends Record<string, ReducerGroup<any, any, any, any>>>(store: TypeSafeStore<R>, action: GetActionFromReducers<R>, rg: ReducerGroup<any, any, any, any>) {
-    const fetchRequest: FetchRequest<FetchVariants, FUrl, Json> = (action as any).fetch
-    const fetchMeta = rg.m.f[action.name]
+    const fetchRequest: FetchRequest<FetchVariants, FUrl, FetchBody, any> = (action as any).fetch
+    const fetchMeta = rg.m.a[action.name].f!
     const url = getUrl(fetchRequest.url)
-    const options = getOptions(fetchRequest)
-    const resultLoading: FetchAsyncData<any, any, any, any, any> = { loading: true }
-    store.dispatch({ ...action, _internal: { processed: true, data: resultLoading } })
+    const options = getOptions(fetchRequest, fetchMeta)
+    let typeOp = fetchMeta.typeops
+    if (fetchRequest.optimisticResponse) { // optimistic response 
+        const opResponse: GenericFetchAsyncData = { data: fetchRequest.optimisticResponse }
+        if (fetchMeta.typeops) {
+            store.dispatch({
+                ...action, _internal: {
+                    processed: true,
+                    kind: "DataAndTypeOps",
+                    data: opResponse, typeOp: { name: fetchMeta.typeops.name, obj: fetchMeta.typeops.obj }
+                }
+            })
+        } else {
+            store.dispatch({ ...action, _internal: { processed: true, kind: "Data", data: opResponse } })
+        }
+    } else {
+        const resultLoading: GenericFetchAsyncData = { loading: true }
+        store.dispatch({ ...action, _internal: { processed: true, kind: "Data", data: resultLoading } })
+    }
+
     const res = await fetch(url, options)
     if (!res.ok) {
-        const resultError: FetchAsyncData<any, any, any, any, any> = { error: res.statusText }
+        const resultError: GenericFetchAsyncData = { error: res.statusText, completed: true }
         store.dispatch({ ...action, _internal: { processed: true, data: resultError } })
     }
     let response = undefined as any
@@ -57,8 +91,8 @@ async function processFetchAction<R extends Record<string, ReducerGroup<any, any
     } else if (responseType === "text") {
         response = await res.text()
     }
+    let resultSuccess: GenericFetchAsyncData = { data: response }
 
-    const resultSuccess: FetchAsyncData<any, any, any, any, any> = { data: response }
     store.dispatch({ ...action, _internal: { processed: true, data: resultSuccess } })
 }
 

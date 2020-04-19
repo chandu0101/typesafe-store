@@ -1,4 +1,13 @@
+import { FetchPost, FetchBody } from "../fetch";
+import { WebSocketRequest, TSWebSocket } from "../websockets";
 
+
+
+export type GraphqlQuery<U extends string, B extends FetchBody, R, E> = FetchPost<{ path: U }, B, R, E>
+
+export type GraphqlMutation<U extends string, B extends FetchBody, R, E> = FetchPost<{ path: U }, B, R, E>
+
+export type GraphqlSubscription<U extends string, B extends FetchBody, R, E> = TSWebSocket<U, string, R, E>
 
 
 

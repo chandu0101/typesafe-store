@@ -16,6 +16,8 @@ import { performance } from "perf_hooks"
 import { isUnionType, isObjectType } from "tsutils/typeguard/type"
 import chalk = require("chalk");
 import { WorkersUtils } from "../workers";
+import { FetchActionMeta } from "../../../store/src";
+import { type } from "os";
 
 
 
@@ -254,7 +256,6 @@ const processMethods = ({ group, stateName }: { group: string, stateName: string
             const statements = m.body!.statements;
 
             const replaceThisWithStateText = (input: string) => {
-                console.log("calling replaceThisWithStateText");
                 let result = input
                 for (const [key, value] of parentGroups) {
                     if (result.includes(`this.${key}`)) {
@@ -267,7 +268,6 @@ const processMethods = ({ group, stateName }: { group: string, stateName: string
             }
             // Todo cross check 
             const replaceThisWithState = (node: ts.Node) => {
-                console.log("Calling replaceThisWithState");
                 return replaceThisWithStateText(node.getText())
             }
 
@@ -524,7 +524,7 @@ const processMethods = ({ group, stateName }: { group: string, stateName: string
                     } else if (ts.isExpressionStatement(s) &&
                         ts.isCallExpression(s.expression) &&
                         ts.isPropertyAccessExpression(s.expression.expression) &&
-                        s.expression.expression.name.getText() === "forEach") {
+                        (s.expression.expression.name.getText() === "forEach" || s.expression.expression.name.getText() === "some")) {
                         results.push(processForEachStatement(s))
                     } else if (ts.isExpressionStatement(s) && isTerinaryStatementContainsMutationExpression(s)) {
                         results.push(processTerinaryStatement(s))
@@ -759,17 +759,14 @@ const processMethods = ({ group, stateName }: { group: string, stateName: string
             const outputStatements = getOutputStatements(statementsResults)
 
             const replaceThisWithStateOffloadText = (str: String) => {
-                console.log("calling replaceThisWithStateOffloadText");
                 return str.replace(/this\./g, `${STATE_PARAM_NAME}.`)
             }
 
             const replaceThisWithStateOffload = (node: ts.Node) => {
-                console.log("calling replaceThisWithStateOffload");
                 return replaceThisWithStateOffloadText(node.getText())
             }
 
             const getOutputStatementsOffload = (input: StatementResult[]): string[] => {
-                console.log("************  getOutputStatementsOffload");
                 const results: string[] = []
                 input.forEach(sr => {
                     if (sr.kind === "MutationStatement") {
@@ -818,10 +815,10 @@ const createOffloadFunction = ({ m, mutationParentGroup, offloadOutputStatements
     m: ts.MethodDeclaration, mutationParentGroup: Map<string, Map<string, ParentGroupValue>>,
     offloadOutputStatements: string[], stateName: string, group: string
 }) => {
-    console.log("offloadOutputStatements", offloadOutputStatements);
     const parentGroup: Map<
         string,
         Map<string, MetaValue[]>> = new Map()
+    const name = m.name.getText()
     const isThisAccessnode = (node: ts.Node) => {
         const nt = node.getText()
         return nt.startsWith("this.") && ts.isPropertyAccessExpression(node.parent)
@@ -910,17 +907,19 @@ const createOffloadFunction = ({ m, mutationParentGroup, offloadOutputStatements
        }
     `
 
+    const pa = m.parameters.length === 0 ? "" : `const {${m.parameters
+        .map(p => p.name.getText())
+        .join(",")}} = _input.payload;`
+
     const workerFunction = `
-      function ${group.replace("/", "_")}_${m.name.getText()}(_input:any) {
+      function ${WorkersUtils.createFunctionNameFromGroup(name, group)}(_input:any) {
          const ${STATE_PARAM_NAME} = _input.${STATE_PARAM_NAME}
-         const {${m.parameters
-            .map(p => p.name.getText())
-            .join(",")}} = _input.payload;
+         ${pa}
          ${offloadOutputStatements.join("\n")}
          return ${WORKER_STATE_EXTRACTOR_FUNCTION_NAME}(${STATE_PARAM_NAME},_input.propAccessArray)
       }
     `
-    WorkersUtils.addWorkerFunction({ name: m.name.getText(), code: workerFunction, group })
+    WorkersUtils.addWorkerFunction({ name, code: workerFunction, group })
 
     return `{
         stateToWorkerIn: ${stateToWorkerIn},
@@ -1289,7 +1288,6 @@ export function setClassDeclaration(cd: ts.ClassDeclaration) {
 }
 
 export function cleanUpGloabals() {
-    // typeChecker = null as any
     classDecl = null as any;
     members = null as any;
     memberTypes = null as any;
@@ -1344,30 +1342,397 @@ function generateFetchActionType(lpd: LocalPropertyDecls): string {
     return result;
 }
 
-function getFetchRequestResponseType(lpd: LocalPropertyDecls): string {
-    const tpe = lpd.typeStr
-    const dataStr = "data?"
-    const i = tpe.indexOf(dataStr)
-    let result = "json"
-    const rType = tpe.substr(i + dataStr.length).replace(":", "").trim()
-    if (rType.startsWith("string")) {
+function getFetchRequestResponseType(response: string): FetchActionMeta["response"] {
+    let result: FetchActionMeta["response"] = "json"
+    if (response === "string") {
         result = "text"
-    } else if (rType.startsWith("void")) {
+    } else if (response === "void") {
         result = "void"
-    } else if (rType.startsWith("Blob")) {
+    } else if (response === "Blob") {
         result = "blob"
-    } else if (rType.startsWith("ArrayBuffer")) {
+    } else if (response === "ArrayBuffer") {
         result = "arrayBuffer"
     }
-
     return result
 }
+
+
+const enttityTypeOps = ["AppendToList", "PrependToList",
+    "UpdateList", "DeleteFromList", "AppendToListAndDiscard", "PrependToListAndDiscard",
+    "UpdateListAndDiscard", "DeleteFromListAndDiscard",
+    "PaginateAppend", "PaginatePrepend"]
+
+const paginatedTypeOps = ["PaginateAppend", "PaginatePrepend"]
+
+const isTypeOpsNode = (node: ts.Node) => {
+    const t = node.getText()
+    return enttityTypeOps.some(to => {
+        if (t.startsWith(`${to}<`) || paginatedTypeOps.includes(t)) {
+            return true;
+        }
+    })
+}
+
+const FETCHBODYTYPES_ARRAY = ["Blob", "BufferSource", "FormData", "URLSearchParams", "ReadableStream<Uint8Array>", "string"]
+const getFetchBodyType = (input: string): FetchActionMeta["body"] => {
+    let result: FetchActionMeta["body"] = "string"
+    if (FETCHBODYTYPES_ARRAY.includes(input)) {
+        result = undefined
+    }
+    return result
+}
+
+
+type ProcessFetchResult = {
+    name: string,
+    actionPayload: string,
+    graphql?: string,
+    bodyType?: string
+    responseType: string, tf?: string, grpcMeta?: string,
+    offload?: boolean,
+    typeOps?: string
+}
+
+//TODO form FetchRequest from type arguments dont depend on _fmeta
+const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetchResult => {
+    const OFFLOAD_ASYNC = "OffloadAsync"
+    let fieldTypeNode = lpd.pd.type!
+    const name = lpd.pd.name.getText()
+    let isGrpc = false
+    if (!fieldTypeNode) {
+        throw new Error(`You should specify type at field declation time`)
+    }
+    const fieldTypeNodeStr = lpd.pd.type!.getText()
+    let opNode: ts.TypeReferenceNode = null as any
+    if (ts.isIntersectionTypeNode(fieldTypeNode)) {
+        opNode = fieldTypeNode.types[0] as any // in intersection types first node should be namespaced Fetch/Grpc/Graphql type
+    } else {
+        opNode = fieldTypeNode as any
+    }
+    const symb = AstUtils.getTypeChecker().getSymbolAtLocation(opNode.typeName)
+    if (!symb) {
+        throw new Error(`Type should be from namespace`)
+    }
+    const decl = symb.declarations[0] as any
+    const declaredTypeNode = decl.type as ts.TypeReferenceNode
+    const declaredTypeNodeText = declaredTypeNode.getText()
+    let offload = false
+    let transformFunctionQueryNode: ts.TypeQueryNode | undefined = undefined
+    let grpcSerializeFnNode: ts.TypeQueryNode | undefined = undefined
+    let grpcDeserializeFnNode: ts.TypeQueryNode | undefined = undefined
+    let metaResponseType: FetchActionMeta["response"] = "blob"
+    let graphql: string | undefined = undefined
+    let typeOpNode: ts.TypeReferenceNode | undefined = undefined
+    let bodyType: FetchActionMeta["body"] = undefined
+    let responseTypeNode: ts.TypeNode = null as any
+    let grpcMeta: string | undefined = undefined
+    let actionPayload = `NoNullable<${opNode.typeName.getText()}["_fmeta"]>`
+    let typeOpsResult: string | undefined = "";
+    if (declaredTypeNodeText.startsWith("GRPCUnary<") || declaredTypeNodeText.startsWith("GRPCResponseStream<")) { // grpc 
+        isGrpc = true;
+        // let grpcOpNode: ts.TypeReferenceNode = null as any
+        if (ts.isIntersectionTypeNode(fieldTypeNode)) {
+            fieldTypeNode.types.forEach(t => {
+                if (t.getText() === OFFLOAD_ASYNC) {
+                    offload = true;
+                } else if (isTypeOpsNode(t)) {
+                    typeOpNode = t as any;
+                }
+            })
+        }
+
+        const opnodeTypeArgs = opNode.typeArguments!
+
+        const declTypeArgs = declaredTypeNode.typeArguments!
+        if (opnodeTypeArgs.length === 3) {
+            transformFunctionQueryNode = opnodeTypeArgs[2] as any
+        } else {
+            responseTypeNode = declTypeArgs[2]
+        }
+
+        grpcSerializeFnNode = opnodeTypeArgs[0] as any
+        grpcDeserializeFnNode = opnodeTypeArgs[1] as any
+        if (declaredTypeNodeText.startsWith("GRPCResponseStream<")) {
+            metaResponseType = "stream"
+        } else {
+            metaResponseType = "blob"
+        }
+
+    } else if (declaredTypeNodeText.startsWith("GraphqlQuery<") || declaredTypeNodeText.startsWith("GraphqlMutation<")) {
+        if (ts.isIntersectionTypeNode(fieldTypeNode)) {
+            fieldTypeNode.types.forEach(t => {
+                if (t.getText() === OFFLOAD_ASYNC) {
+                    offload = true;
+                } else if (isTypeOpsNode(t)) {
+                    typeOpNode = t as any;
+                }
+            })
+        }
+        graphql = `{}`;
+        metaResponseType = "json"
+        bodyType = "string"
+        const declaredTypeArgument = declaredTypeNode.typeArguments!
+        responseTypeNode = declaredTypeArgument[2];
+        if (ts.isTupleTypeNode(responseTypeNode)) {
+            graphql = `{multiOp:true}`
+        }
+
+    }
+    else if (declaredTypeNodeText.startsWith("Fetch<") || declaredTypeNodeText.startsWith("FetchPost<") || declaredTypeNodeText.startsWith("FetchPatch<") || declaredTypeNodeText.startsWith("FetchPut<")) {
+        if (ts.isIntersectionTypeNode(fieldTypeNode)) {
+            fieldTypeNode.types.forEach(t => {
+                if (t.getText() === OFFLOAD_ASYNC) {
+                    offload = true;
+                } else if (isTypeOpsNode(t)) {
+                    typeOpNode = t as any
+                }
+            })
+        }
+        if (opNode.typeArguments && opNode.typeArguments.length === 1) {
+            transformFunctionQueryNode = opNode.typeArguments[0] as any
+        }
+        const declaredTypeArguments = declaredTypeNode.typeArguments!
+        if (declaredTypeNodeText.startsWith("Fetch<")) {
+            if (!transformFunctionQueryNode) {
+                responseTypeNode = declaredTypeArguments[1]
+            }
+            metaResponseType = getFetchRequestResponseType(declaredTypeArguments[2].getText())
+
+        } else {
+            metaResponseType = getFetchRequestResponseType(declaredTypeArguments[3].getText())
+            if (!transformFunctionQueryNode) {
+                responseTypeNode = declaredTypeArguments[2]
+            }
+            bodyType = getFetchBodyType(declaredTypeArguments[1].getText())
+        }
+    } else {
+        throw new Error(`fetch field should annotate with typename from a namespace`)
+    }
+    if (typeOpNode) { // compare typeops node properties exist in respose type of operation 
+        // console.log("typeop node :", typeOpNode.getText());
+
+        const getObjectAccessAndIdentifier = (input: ts.IndexedAccessTypeNode, props: string[] = []): { props: string[], node: ts.TypeReferenceNode } => {
+            const ot = input.objectType
+            props.unshift(input.indexType.getText().slice(1, -1))
+            if (ts.isIndexedAccessTypeNode(ot)) {
+                return getObjectAccessAndIdentifier(ot as any, props)
+            } else {
+                return { props, node: ot as any }
+            }
+        }
+        const typeOpNodeNext = typeOpNode!.getText()
+        let propsAcess: Record<string, string> | undefined = undefined
+        let opName = ""
+        if (typeOpNodeNext.startsWith("PaginateAppend") || typeOpNodeNext.startsWith("PaginatePrepend")) {
+            let opNode: ts.TypeReferenceNode = typeOpNode as any;
+            const args = opNode.typeArguments
+
+            if (args) {
+                const indexedNode: ts.TypeNode = args[0] as any
+                if (!ts.isArrayTypeNode(indexedNode)) {
+                    throw new Error(`PaginateAppend/PaginatePrepend allowed for array types only , ${indexedNode.getText()} is not an array type`)
+                }
+                const { props, node } = getObjectAccessAndIdentifier(indexedNode as any)
+                console.log(" Paginated : props:", props, node.getText());
+                const parentClass = lpd.pd.parent.name?.getText()
+                console.log("parentClass :", parentClass);
+                if (props[0] !== name || parentClass !== node.getText()) {
+                    throw new Error(`Array object should be inside target field of class`)
+                }
+                propsAcess = { [group]: props.join(".") }
+
+            } else {
+                if (!ts.isArrayTypeNode(responseTypeNode)) {
+                    throw new Error(`PaginateAppend/PaginatePrepend allowed for array types only`)
+                }
+                let respType = AstUtils.getTypeChecker().getTypeFromTypeNode(responseTypeNode)
+                let idExists = false
+                respType.getNonNullableType().getNumberIndexType()!.getProperties().some(p => {
+                    if (p.escapedName === "id" || p.escapedName === "_id") {
+                        idExists = true
+                        return true
+                    }
+                })
+                if (!idExists) {
+                    throw new Error(`Type Ops only suuported on entities with id or _id field, ${responseTypeNode.getText()} doesn't contain id/_id field `)
+                }
+                opName = opNode.getText()
+            }
+
+        } else {
+            if (transformFunctionQueryNode) {
+                let symb = AstUtils.getTypeChecker().getSymbolAtLocation(transformFunctionQueryNode.exprName)
+                if (!symb) {
+                    throw new Error("no function definition for transform function node")
+                }
+                let decl = symb.declarations[0]
+                if (ts.isImportSpecifier(decl) || ts.isImportClause(decl)) { // when import get aliased symbol
+                    symb = AstUtils.getTypeChecker().getAliasedSymbol(symb)!
+                    decl = symb.declarations[0]
+                }
+                console.log("decl text : ", decl.getText());
+                if (ts.isVariableDeclaration(decl)) {
+                    if (decl.initializer && ts.isArrowFunction(decl.initializer)) {
+                        if (!decl.initializer.type) {
+                            throw new Error(`when you specify typeops like Append/Prepend/Update/Delete List you must annotate transform function with return type`)
+                        }
+                        responseTypeNode = decl.initializer!.type;
+                    }
+                } else if (ts.isFunctionLike(decl)) {
+                    console.log("decl");
+                    if (!decl.type) {
+                        throw new Error(`when you specify typeops like Append/Prepend/Update/Delete List you must annotate transform function with return type`)
+                    }
+                    responseTypeNode = decl.type
+                } else {
+                    throw new Error(`transform function must be a string, ${decl.getText()} `)
+                }
+            }
+            const targetTypeNode = (typeOpNode as ts.TypeReferenceNode).typeArguments![0]
+            let respType = AstUtils.getTypeChecker().getTypeFromTypeNode(responseTypeNode)
+            respType = respType.getNonNullableType()
+
+            let opNodeType = AstUtils.getTypeChecker().getTypeFromTypeNode(targetTypeNode)
+
+            opNodeType = opNodeType.getNonNullableType()
+
+            const indexType = opNodeType.getNumberIndexType()
+            if (!indexType) {
+                throw new Error("Target opnode should be an array type")
+            }
+            const isAssignable = AstUtils.isAssignableTo(respType, indexType)
+            if (!isAssignable) {
+                throw new Error(`${responseTypeNode.getText()} is not assignable to ${targetTypeNode.getText()}`)
+            }
+            console.log("is assignable result : ", isAssignable);
+
+            let idField: string | undefined = undefined
+
+            // indexType.getProperties().some(p => {
+            //     const name = p.escapedName
+            //     if (name === "id" || name === "_id") {
+            //         idField = name
+            //         return true;
+            //     }
+            // })
+
+            const { node: cnode, props } = getObjectAccessAndIdentifier(targetTypeNode as any)
+            console.log("pa ", props, cnode.getSourceFile().fileName);
+            let csymb = AstUtils.getTypeChecker().getSymbolAtLocation(cnode.typeName)
+            if (csymb) {
+                let cdecl = csymb.declarations[0]
+                console.log("decl :", csymb.declarations[0].getSourceFile().fileName, cdecl.kind);
+                if (ts.isImportClause(cdecl) || ts.isImportSpecifier(cdecl)) {
+                    csymb = AstUtils.getTypeChecker().getAliasedSymbol(csymb)
+                    cdecl = csymb!.declarations[0]
+                }
+                const path = cdecl.getSourceFile().fileName;
+                if (!ConfigUtils.isReducersSourceFile(path)) {
+                    throw new Error(`TypeOps target field should be from reudcer classes only`)
+                }
+                const group = `${ConfigUtils.getPrefixPathForReducerGroup(path)}${cnode.getText()}`
+                propsAcess = { [group]: props.join(".") }
+            }
+            if (!opName.length) {
+                const t = typeOpNode!.getText()
+                const i = t.indexOf("<")
+                opName = t.substr(0, i)
+            }
+
+            typeOpsResult = JSON.stringify({ name: opName, obj: propsAcess, idField })
+        }
+
+
+
+    }
+    if (transformFunctionQueryNode && offload) {// try to get response type of this function
+        let symb = AstUtils.getTypeChecker().getSymbolAtLocation(transformFunctionQueryNode.exprName)
+        let decl = symb!.declarations[0]
+        let fd: ts.FunctionDeclaration | ts.MethodDeclaration | ts.ArrowFunction = null as any
+        if (ts.isImportSpecifier(decl) || ts.isImportClause(decl)) {
+            symb = AstUtils.getTypeChecker().getAliasedSymbol(symb!)
+            decl = symb.declarations[0]
+        }
+        if (ts.isVariableDeclaration(decl)) {
+            const int = decl.initializer!
+            if (ts.isArrowFunction(int)) {
+                fd = int
+            }
+        } else if (ts.isFunctionDeclaration(decl)) {
+            fd = decl
+        } else if (ts.isMethodDeclaration(decl)) {
+            fd = decl
+        } else {
+            throw new Error(`transform function should be arrow function/ function declaration / static method declaration`)
+        }
+        const paramName = fd.parameters[0].name.getText()
+        let body = ""
+        if (ts.isBlock(fd.body!)) {
+            body = fd.body.getText()
+        } else {
+            body = `return ${fd.body?.getText()}`
+        }
+        const code = `
+          function ${WorkersUtils.createFunctionNameFromGroup(name, group)}_fetch_transform(${paramName}:any) {
+              ${body}
+          }
+        `
+        WorkersUtils.addWorkerFunction({ name, group, code })
+    }
+    if (isGrpc && offload) {
+        const serializersDeclSymb = AstUtils.getTypeChecker().getSymbolAtLocation(grpcSerializeFnNode!.exprName)
+        if (!serializersDeclSymb) {
+            throw new Error(`No symbol found for ${grpcDeserializeFnNode?.getText()}`)
+        }
+        const serliazerDecl = serializersDeclSymb.declarations[0]
+        if (ts.isMethodDeclaration(serliazerDecl)) {
+            const params = serliazerDecl.parameters.map(p => `${p.name}: ${p.type?.getText()}`).join(", ")
+            const code = `
+               function ${WorkersUtils.createFunctionNameFromGroup(name, group)}_grpc_serializer(${params}) {
+                   ${serliazerDecl.body?.getText()}
+               }
+             `
+            WorkersUtils.addWorkerFunction({ name, group, code })
+        } else {
+            throw new Error(`please use classes and static methods to define serializers deserializers`)
+        }
+
+        const deserializersDeclSymb = AstUtils.getTypeChecker().getSymbolAtLocation(grpcDeserializeFnNode!.exprName)
+        if (!deserializersDeclSymb) {
+            throw new Error(`No symbol found for ${grpcDeserializeFnNode?.getText()}`)
+        }
+        const deserliazerDecl = deserializersDeclSymb.declarations[0]
+        if (ts.isMethodDeclaration(deserliazerDecl)) {
+            const params = deserliazerDecl.parameters.map(p => `${p.name}: ${p.type?.getText()}`).join(", ")
+            const code = `
+               function ${WorkersUtils.createFunctionNameFromGroup(name, group)}_grpc_deserializer(${params}) {
+                   ${deserliazerDecl.body?.getText()}
+               }
+             `
+            WorkersUtils.addWorkerFunction({ name, group, code })
+        } else {
+            throw new Error(`please use classes and static methods to define serializers deserializers`)
+        }
+
+        grpcMeta = `{ sf: ${grpcSerializeFnNode!.exprName.getText()}, dsf: ${grpcDeserializeFnNode!.exprName.getText()} }` as any
+    }
+    if (lpd.pd.name.getText() === "books2") {
+        throw new Error("teseting : ")
+    }
+
+    return {
+        name, actionPayload, bodyType, responseType: metaResponseType, grpcMeta, graphql, offload,
+        tf: transformFunctionQueryNode?.exprName.getText()
+    }
+
+}
+
 
 /**
  *  All async actions of a class
  */
 const getAsyncActionTypeAndMeta = (group: string): [string, { name: string, value: string }[]] => {
-    const fetchProps: { name: string, response: string }[] = []
+    const fetchProps: { name: string, value: string }[] = []
     const promiseProps: string[] = []
     const asyncType = propDecls
         .filter(isAsyncPropDeclaration)
@@ -1382,27 +1747,23 @@ const getAsyncActionTypeAndMeta = (group: string): [string, { name: string, valu
                 promiseProps.push(name)
                 result = `{name:"${name}",group:"${group}", promise: () => ${p.typeStr} }`;
             } else if (tpe.includes("_fmeta")) {
-                const dtp = p.pd.type!
-                if (ts.isTypeReferenceNode(dtp)) {
-                    dtp.typeArguments?.forEach(ta => {
-                        if (ts.isTypeQueryNode(ta)) {
-                            console.log("Its Type Query Node : ");
-                            const symb = AstUtils.getTypeChecker().getSymbolAtLocation(ta.exprName)
-                            symb?.declarations.forEach(d => {
-                                console.log("************  getAsyncActionTypeAndMeta decl ", d.getText());
-                            })
-                        }
-                    })
-                }
-                fetchProps.push({ name, response: getFetchRequestResponseType(p) })
+                const fetchResult = processFetchProp2(p, group)
+                const meta: any = { response: fetchResult.responseType }
+                meta.offload = fetchResult.offload
+                meta.tf = fetchResult.tf
+                meta.graphql = fetchResult.graphql
+                meta.typeops = fetchResult.typeOps
+                meta.grpc = fetchResult.grpcMeta
+                fetchProps.push({ name, value: JSON.stringify(meta) })
                 result = `{name:"${
                     name
-                    }",group:"${group}", fetch: ${generateFetchActionType(p)}  }`;
+                    }",group:"${group}", fetch: ${fetchResult.actionPayload}  }`;
             }
+
             return result;
-        })
-        .join(" | ");
-    const meta = [...fetchProps.map(f => ({ name: f.name, value: `{response:"${f.response}"}` })),
+        }).join(" | ");
+
+    const meta = [...fetchProps,
     ...promiseProps.map(p => ({ name: p, value: `{}` }))]
 
     return [asyncType, meta]
@@ -1450,13 +1811,6 @@ const getPayloadForClassMethod = (m: ts.MethodDeclaration): string => {
     }
     return payload;
 }
-
-//   function isArrayType(type: ts.Type): boolean {
-//     return isTypeReference(type) && (
-//       type.target.symbol.name === "Array" ||
-//       type.target.symbol.name === "ReadonlyArray"
-//     );
-//   }
 
 export function getTypeForPropertyAccess(
     input: string[],
@@ -1531,7 +1885,8 @@ export const getPropDeclsFromTypeMembers = (): LocalPropertyDecls[] => {
 };
 
 export function isAsyncPropDeclaration(input: LocalPropertyDecls) {
-    return input.typeStr.startsWith(T_STORE_ASYNC_TYPE) || input.typeStr.startsWith("Promise<");
+    const tpe = input.typeStr
+    return tpe.includes("_fmeta") || tpe.startsWith("Promise<");
 }
 
 export const getMethodsFromTypeMembers = () => {
@@ -1547,7 +1902,7 @@ export const getTypeOfPropertyDecl = (
     checker.getTypeAtLocation(input);
 };
 
-export function isArrayMutatableAction(s: ts.Identifier) {
+export function isArrayMutatableAction(s: ts.Identifier | ts.PrivateIdentifier) {
     const name = s.getText();
     return arrayMutableMethods.includes(name);
 }
@@ -1861,210 +2216,6 @@ function processThisStatementOffload(exp: ts.Node, options: ProcessStatementsOpt
     console.log("Process this result offload : ", result);
     return result;
 }
-
-
-
-// function processThisStatement(
-//     exp: ts.PropertyAccessExpression | ts.ElementAccessExpression,
-//     arrayMut?: boolean
-// ): ProcessThisResult {
-//     console.log("processTHis Statemenut input : ", exp.getText(), ts.isPropertyAccessExpression(exp), "arrayArg", arrayMut);
-//     const values: MetaValue[] = [];
-//     let propIdentifier: Omit<Meta, "type"> = {};
-//     let argumentAccessOptional = false;
-//     const procesThisResult = (parent: string) => {
-//         let v = parent;
-//         let isObject = false;
-//         // console.log("Parent2 : ", v, "values: ", values);
-//         if (values.length > 0) {
-//             isObject = true;
-//             // console.log("before splice : ", arrayMut, values);
-//             if (!arrayMut) values.splice(0, 1);
-//             if (values.length > 0) {
-//                 values.forEach(v => {
-//                     v.name = `${parent}.${v.name}`;
-//                     if ((v.meta.access || arrayMut) && isArrayPropAccess(v.name)) {
-//                         v.meta.type = MetaType.ARRAY;
-//                     } else if (v.meta.access?.length && v.meta.access.length > 1) {
-//                         // multiple prop access
-//                         if (
-//                             v.meta.access.filter(
-//                                 a => a.exp.kind === ts.SyntaxKind.Identifier
-//                             ).length > 0
-//                         ) {
-//                             throw new Error("dynamic identifier access not supported");
-//                         }
-//                         v.meta.access = typeOfMultipleArray(v.meta.access, v.name);
-//                     }
-//                 });
-//                 v = values[0].name;
-//             }
-//             // console.log("after  splice : ", arrayMut, values);
-//         }
-//         const isArray =
-//             propIdentifier.access || arrayMut ? isArrayPropAccess(parent) : false;
-//         const t = isArray
-//             ? MetaType.ARRAY
-//             : isObject
-//                 ? MetaType.OBJECT
-//                 : MetaType.UNKNOWN;
-//         values.push({ name: parent, meta: { ...propIdentifier, type: t } });
-//         const result = { g: parent, v, values };
-//         console.log("processThisStatement Result :", result);
-//         return result;
-//     }
-//     const processInner = (
-//         input: ts.PropertyAccessExpression | ts.ElementAccessExpression
-//     ): ProcessThisResult => {
-//         console.log("process Inner : ", ts.isPropertyAccessExpression(input));
-//         if (ts.isThisTypeNode(input)) {
-//             return procesThisResult(input.parent.getText())
-//         }
-//         else if (ts.isPropertyAccessExpression(input)) {
-//             console.log("process Inner : ");
-//             const parent = input.name.getText()
-//             if (input.expression.kind === ts.SyntaxKind.ThisKeyword) {
-//                 let v = parent;
-//                 let isObject = false;
-//                 // console.log("Parent2 : ", v, "values: ", values);
-//                 if (values.length > 0) {
-//                     isObject = true;
-//                     // console.log("before splice : ", arrayMut, values);
-//                     if (!arrayMut) values.splice(0, 1);
-//                     if (values.length > 0) {
-//                         values.forEach(v => {
-//                             v.name = `${parent}.${v.name}`;
-//                             if ((v.meta.access || arrayMut) && isArrayPropAccess(v.name)) {
-//                                 v.meta.type = MetaType.ARRAY;
-//                             } else if (v.meta.access?.length && v.meta.access.length > 1) {
-//                                 // multiple prop access
-//                                 if (
-//                                     v.meta.access.filter(
-//                                         a => a.exp.kind === ts.SyntaxKind.Identifier
-//                                     ).length > 0
-//                                 ) {
-//                                     throw new Error("dynamic identifier access not supported");
-//                                 }
-//                                 v.meta.access = typeOfMultipleArray(v.meta.access, v.name);
-//                             }
-//                         });
-//                         v = values[0].name;
-//                     }
-//                     // console.log("after  splice : ", arrayMut, values);
-//                 }
-//                 const isArray =
-//                     propIdentifier.access || arrayMut ? isArrayPropAccess(parent) : false;
-//                 const t = isArray
-//                     ? MetaType.ARRAY
-//                     : isObject
-//                         ? MetaType.OBJECT
-//                         : MetaType.UNKNOWN;
-//                 values.push({ name: parent, meta: { ...propIdentifier, type: t } });
-//                 const result = { g: parent, v, values };
-//                 console.log("processThisStatement Result :", result);
-//                 return result;
-//                 // return procesThisResult(input.expression.parent.getText());
-//             }
-//             // console.log("Processing parent2: ", parent);
-//             values.forEach(v => {
-//                 v.name = `${parent}.${v.name}`;
-//             });
-//             values.push({
-//                 name: parent,
-//                 meta: { ...propIdentifier, type: MetaType.UNKNOWN }
-//             });
-//             propIdentifier = {};
-//             return processInner(input.expression as any);
-//         } else if (
-//             ts.isNonNullExpression(input) &&
-//             ts.isPropertyAccessExpression(input.expression)
-//         ) {
-//             const parent = input.expression.name.getText();
-//             // console.log("Processing parent : ", parent);
-//             values.forEach(v => {
-//                 v.name = `${parent}.${v.name}`;
-//             });
-//             values.push({
-//                 name: parent,
-//                 meta: { ...propIdentifier, type: MetaType.UNKNOWN, isOptional: true }
-//             });
-//             if (parent === "arr2") {
-//                 console.log(
-//                     "*********** Arr2 : ",
-//                     propIdentifier,
-//                     values[values.length - 1]
-//                 );
-//             }
-//             propIdentifier = {};
-
-//             return processInner(input.expression.expression as any);
-//         } else if (
-//             ts.isNonNullExpression(input) &&
-//             ts.isElementAccessExpression(input.expression)
-//         ) {
-//             console.log(
-//                 "*****Argument Access Optional : ",
-//                 argumentAccessOptional,
-//                 input.getText()
-//             );
-//             argumentAccessOptional = true;
-//             return processInner(input.expression as any);
-//         } else if (
-//             ts.isElementAccessExpression(input) &&
-//             ((ts.isNonNullExpression(input.expression) &&
-//                 ts.isPropertyAccessExpression(input.expression.expression)) ||
-//                 ts.isPropertyAccessExpression(input.expression))
-//         ) {
-//             //TODO this.prop[_]
-//             propIdentifier = {};
-//             propIdentifier.access = [
-//                 {
-//                     name: input.argumentExpression.getText(),
-//                     exp: input.argumentExpression,
-//                     type: MetaType.UNKNOWN
-//                 }
-//             ];
-//             if (argumentAccessOptional) {
-//                 propIdentifier.isOptional = true;
-//                 argumentAccessOptional = false;
-//             }
-//             return processInner(input.expression as any);
-//         } else if (
-//             ts.isElementAccessExpression(input) &&
-//             (ts.isElementAccessExpression(input.expression) ||
-//                 (ts.isNonNullExpression(input.expression) &&
-//                     ts.isElementAccessExpression(input.expression.expression)))
-//         ) {
-//             // multiple element access this.a[0][1]
-//             console.log(
-//                 "********* Got multiple access ********",
-//                 argumentAccessOptional,
-//                 input.getText()
-//             );
-//             const { access, exp } = processMultipleElementAccess(input);
-//             propIdentifier = {};
-//             propIdentifier.access = access.map((a, index) => {
-//                 return { ...a, type: MetaType.UNKNOWN };
-//             });
-
-//             console.log(
-//                 "********** got multiple access *******",
-//                 propIdentifier.access,
-//                 propIdentifier.isOptional,
-//                 exp.getText()
-//             );
-//             // if (ts.isNonNullExpression(exp)) {
-//             //   console.log("***** Optional found : ");
-//             //   propIdentifier.isOptional = true;
-//             //   return processInner(exp.expression as any);
-//             // }
-//             return processInner(exp as any);
-//         } else {
-//             throw new Error(`${exp.getText()} ${input.getText()} is not supported.`);
-//         }
-//     };
-//     return processInner(exp);
-// }
 
 type MultipleAccessReturn = { access: EAccess[]; exp: ts.Expression };
 

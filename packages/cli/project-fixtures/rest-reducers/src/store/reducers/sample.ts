@@ -10,6 +10,6 @@ const tf = (inp: Response) => {
 
 class SampleReducer {
 
-    d: Fetch<{ path: "w" }, Response, Error, typeof tf> = {}
+    // d: Fetch<{ path: "w" }, Response, Error, typeof tf> = {}
 
 }

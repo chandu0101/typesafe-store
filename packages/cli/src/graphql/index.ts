@@ -117,28 +117,79 @@ const processFile = (file: string, ) => {
                     let responseType = ""
                     let bodyType = ""
                     let isMultipleOp = false
-
+                    let requestCreator = ""
+                    let errorType = "GraphqlError[]"
+                    const typesImportName = `${apiName}_types`
                     if (operations.length > 1) {
                         isMultipleOp = true
+                        errorType = `[${operations.map(o => "GraphqlError[]").join(",")}]`
                         responseType = `[${operations.map(o => o.name).join(",")}]`
-                        bodyType = `[${operations.map(op => `{query: \`${gqlString}\`,${op.variables ? `variables:${op.variables}` : ""}}`).join(", ")}]`
+                        bodyType = `[${operations.map(op => `{query: \`${gqlString}\`,operationName:${op.name} ,${op.variables ? `variables:${op.variables}` : ""}}`).join(", ")}]`
+                        const variables = operations.map((o, i) => {
+                            if (o.variables) {
+                                return `${o.name}: ${o.variables}`
+                            } else {
+                                return ""
+                            }
+                        }).filter(p => p.length > 0).join(", ")
+                        const optimisticResponseType = `[${operations.map(o => `${typesImportName}.${namespaceName}.${o.name}`)}]`
+                        const params = variables.length > 0 ? `variables: {${variables}}, optimisticResponse?: ${optimisticResponseType}` : `optimisticResponse?: ${optimisticResponseType}`
+                        requestCreator = `
+                           create${variableName}Request(${params}) {
+                               return {type: FetchVariants.POST, url:{path:"${meta.schemaManager.url}"} ,body : [
+                                ${operations.map(op => `{query: \`${gqlString}\`,operationName:${op.name},${op.variables ? `variables:${op.name}_variables` : ""}}`).join(", ")}
+                               ],optimisticResponse }
+                           }
+                        `
                     } else {
                         responseType = `${operations[0].name}`
                         const op = operations[0]
                         bodyType = `{query: \`${gqlString}\`,${op.variables ? `variables:${op.variables}` : ""}}`
+                        const optimisticResponseType = `${typesImportName}.${namespaceName}.${op.name}`
+                        const params = op.variables ? `variables: {${op.variables}}, optimisticResponse?: ${optimisticResponseType}` : `optimisticResponse?: ${optimisticResponseType}`
+                        requestCreator = `
+                        create${variableName}Request(${params}) {
+                            return { url:{path:"${meta.schemaManager.url}"} , type: FetchVariants.POST,
+                            body : {query: \`${gqlString}\`,${op.variables ? `variables` : ""}},
+                            optimisticResponse
+                        }
+                     `
                     }
-                    //TODO subscription type , subscriptions should be handled via websockets
-                    const fType = `FetchPost<{path: "${meta.schemaManager.url}"},${bodyType},${responseType},GraphqlError[]>`
-                    const output = `
-                     ${types}
-                     export type ${pascal(variableName)} =  ${fType}
-                    `
-                    const operationValue = { text: output, isMultipleOp }
+
                     if (operation === GraphqlOperation.QUERY) {
+                        const fType = `GraphqlQuery<"${meta.schemaManager.url}",${bodyType},${responseType},${errorType}>`
+                        const output = `
+                         ${types}
+                         export type ${pascal(variableName)} =  ${fType}
+                        `
+                        const operationValue = { text: output, isMultipleOp, requestCreator }
                         meta.operations.queries[namespaceName] = operationValue
                     } else if (operation === GraphqlOperation.MUTATION) {
+                        const fType = `GraphqlMutation<"${meta.schemaManager.url}",${bodyType},${responseType},${errorType}>`
+                        const output = `
+                         ${types}
+                         export type ${pascal(variableName)} =  ${fType}
+                        `
+                        const operationValue = { text: output, isMultipleOp, requestCreator }
                         meta.operations.mutations[namespaceName] = operationValue
-                    } else {
+                    } else { // subscriptions websocket request
+                        if (operations.length > 0) {
+                            throw new Error("multiple subscriptions in single query is not supported")
+                        }
+                        const op = operations[0]
+                        requestCreator = `
+                        create${variableName}Request(${op.variables ? `variables:${op.variables} ,unsubscribe?:boolean` : "unsubscribe?:boolean"}) {
+                            return { url:"${meta.schemaManager.url}" ,
+                            message : JSON.stringify({query: \`${gqlString}\`,${op.variables ? `variables` : ""}}),
+                            unsubscribe
+                        }
+                     `
+                        const fType = `GraphqlMutation<"${meta.schemaManager.url}",${bodyType},${responseType},${errorType}>`
+                        const output = `
+                         ${types}
+                         export type ${pascal(variableName)} =  ${fType}
+                        `
+                        const operationValue = { text: output, isMultipleOp, requestCreator }
                         meta.operations.subscriptions[namespaceName] = operationValue
                     }
                     hasChanges = true
@@ -148,6 +199,7 @@ const processFile = (file: string, ) => {
         })
         if (hasChanges) {
             writeGraphqlTypesToFile(apiName, meta)
+            writeGraphqlRequestCreatorsToFile(apiName, meta)
         }
     } catch (error) {
         console.log(chalk.red(`Error processing file ${file}: ${error}`))
@@ -157,7 +209,7 @@ const processFile = (file: string, ) => {
 }
 
 function writeGraphqlTypesToFile(apiName: string, meta: GraphqlApiMeta) {
-    const outputPath = ConfigUtils.getGraphqlTypesOutputPath(apiName)
+    const outputPath = ConfigUtils.getOutputPathForGraphqlTypes(apiName)
     const operations = meta.operations
     let queries = ""
     let mutations = ""
@@ -209,20 +261,83 @@ function writeGraphqlTypesToFile(apiName: string, meta: GraphqlApiMeta) {
 
     const imports: string[] = []
     if (queries || mutations) {
-        imports.push(`import { FetchPost,GraphqlError } from "@typesafe-store/store"`)
+        imports.push(`import { GraphqlQuery,GraphqlMutation,GraphqlSubscription,GraphqlError } from "@typesafe-store/store"`)
     }
     const output = `
     ${CommonUtils.dontModifyMessage()}
     ${imports.join(";\n")}
-    export namespace ${apiName} {
+     namespace ${apiName} {
         ${queries}
         ${mutations}
         ${subscriptions}
     }
+    export default ${apiName}
    `
     FileUtils.writeFileSync(outputPath, output)
 }
 
+function writeGraphqlRequestCreatorsToFile(apiName: string, meta: GraphqlApiMeta) {
+    const outputPath = ConfigUtils.getOutputPathForGraphqlRequestCreators(apiName)
+    const operations = meta.operations
+    let queries = ""
+    let mutations = ""
+    let subscriptions = ""
+    if (!isEmpty(operations.queries)) {
+        const qt = Object.entries(operations.queries).map(([n, ov]) => {
+            return `
+             static ${ov.requestCreator}
+           `
+        }).join("\n ")
+        queries = `
+         static queries = class {
+            ${qt}
+         }
+       `
+    }
+
+    if (!isEmpty(operations.mutations)) {
+        const mt = Object.entries(operations.mutations).map(([n, ov]) => {
+            return `
+            static ${ov.requestCreator}
+           `
+        }).join("\n ")
+        queries = `
+         static mutations = class {
+             ${mt}
+         }
+       `
+    }
+
+    if (!isEmpty(operations.mutations)) {
+        const st = Object.entries(operations.subscriptions).map(([n, ov]) => {
+            return `
+            static ${ov.requestCreator}
+           `
+        }).join("\n ")
+        queries = `
+         staitc subscriptions = class {
+             ${st}
+         }
+       `
+    }
+
+    const imports: string[] = []
+    imports.push(`import ${apiName}_types from "../types"`)
+    imports.push(`import {FetchVariants} from "@typesafe-store/store"`)
+
+    const className = `${pascal(apiName)}RequestCreators`
+    const output = `
+    ${CommonUtils.dontModifyMessage()}
+    ${imports.join(";\n")}
+    class ${className} {
+        ${queries}
+        ${mutations}
+        ${subscriptions}
+    }
+    export default ${className}
+   `
+    FileUtils.writeFileSync(outputPath, output)
+}
 
 function getTextFromTaggedLiteral(node: ts.TemplateExpression | ts.TaggedTemplateExpression | ts.NoSubstitutionTemplateLiteral, file: string, apiMeta: GraphqlApiMeta): string {
     const cache = apiMeta.resultCache

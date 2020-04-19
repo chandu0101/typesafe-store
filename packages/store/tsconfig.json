@@ -3,9 +3,17 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "build",
-    "sourceMap": true,
-    "composite": true,
-    "declaration": true,
+    "lib": [],
     "plugins": [],
-  }
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "composite": true,
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "../../node_modules"
+  ],
 }

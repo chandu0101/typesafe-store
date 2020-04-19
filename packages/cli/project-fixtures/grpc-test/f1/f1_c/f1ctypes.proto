@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package f1;
+
+
+message F1CM {
+  string name = 1;
+}

@@ -1,6 +1,6 @@
 import { RestApiConfig, HttpUrlConfig, OpenApiSpecFormat, ContentType } from "../types";
 import set from "lodash/set"
-import { pascal } from "case"
+import { pascal, camel } from "case"
 import isEmpty from "lodash/isEmpty"
 import uniq from "lodash/uniq"
 import get from "lodash/get"
@@ -15,6 +15,9 @@ import {
     ResponseObject,
     SchemaObject,
 } from "openapi3-ts";
+import validator from "ibm-openapi-validator";
+
+// import JsYaml from "js-yaml"
 
 import swagger2openapi from "swagger2openapi";
 import { readFileSync, existsSync } from "fs";
@@ -80,7 +83,8 @@ function convertSwaggerToOpenApi(schema: any): Promise<OpenAPIObject> {
 }
 
 async function importSpec({ data, format }: { data: string, format: OpenApiSpecFormat }): Promise<OpenAPIObject> {
-    let specs: OpenAPIObject = format === "json" ? JSON.parse(data) : YAML.parse(data)
+    let specs: OpenAPIObject = format === "json" ? JSON.parse(data) : null as any
+    console.log("yaml parsed ");
     if (!specs.openapi || !specs.openapi.startsWith("3.0")) {
         specs = await convertSwaggerToOpenApi(specs)
     }
@@ -370,7 +374,7 @@ function getParamsInPath(path: string) {
 /**
  * 
  */
-function generatePathTypes(spec: OpenAPIObject): string {
+function generatePathTypes(spec: OpenAPIObject, apiName: string): { types: string, requestCreators: string[] } {
     let serverPath = ""
     const servers = spec.servers
     const paths = spec.paths
@@ -380,6 +384,8 @@ function generatePathTypes(spec: OpenAPIObject): string {
     }
     const operationIds: string[] = []
     let result = ""
+    const requestCreators: string[] = []
+    const typesImportName = `${apiName.replace(/-/g, "_")}_types`
     Object.entries(paths).forEach(([route, po]: [string, PathItemObject]) => {
         Object.entries(po).forEach(([verb, op]: [string, OperationObject]) => {
             if (["get", "post", "put", "delete", "patch"].includes(verb)) {
@@ -430,16 +436,41 @@ function generatePathTypes(spec: OpenAPIObject): string {
                 let type = ""
                 const path = `${serverPath}${route}`
                 const urlType = `{path:"${path}"${pathParamsType ? `,params:${pathParamsType}` : ""}${queryParamsType ? `, queryParams:${queryParamsType}` : ""}}`
+
                 if (verb === "get") {
-                    type = `Fetch<${urlType},${responseTypes},${errorTypes}>`
+                    type = `Fetch<${urlType},${responseTypes},${errorTypes},T>`
                 } else {
-                    type = `Fetch${pascal(verb)}<${urlType},${requestBodyTypes},${responseTypes},${errorTypes}>`
+                    type = `Fetch${pascal(verb)}<${urlType},${requestBodyTypes},${responseTypes},${errorTypes},T>`
                 }
-                result += `export type ${name} = ${type}` + "\n\n"
+                const rcResponseType: string | undefined = (responseTypes === "void" || responseTypes === "null" || responseTypes === "undefined") ? undefined : `${typesImportName}.${responseTypes}`
+                const rcBodyType: string | undefined = (requestBodyTypes === "null" || requestBodyTypes === "undefined" || requestBodyTypes === "void") ? undefined : `${typesImportName}.${requestBodyTypes}`
+                let paramsA = [{ name: "pathParams", value: pathParamsType },
+                { name: "queryParams", value: queryParamsType }, { name: "body", value: rcBodyType }, { name: "optimisticResponse ?", value: rcResponseType }]
+                let params = paramsA.map(v => {
+                    if (v.value && v.value !== "undefined" && v.value !== "null" && v.value !== "void") {
+                        return `${v.name}: ${v.value}`
+                    } else {
+                        return ""
+                    }
+                }).filter(v => v.length > 0).join(", ")
+                if (params.length) {
+                    params = `input: {${params}}`
+                }
+
+                const requestCreator = `
+                   static  ${camel(name)}Request(${params}) {
+                         return {
+                           type:FetchVariants.${verb.toUpperCase()} , url : {path:"${path}"${pathParamsType ? ",params:input.pathParams" : ""}${queryParamsType ? `, queryParams: input.queryParams` : ""}}
+                             ${rcBodyType ? ", body: input.body" : ""} ${rcResponseType ? ",optimisticResponse:input.optimisticResponse" : ""}
+                         }
+                     }
+                `
+                requestCreators.push(requestCreator)
+                result += `export type ${name}<T extends Transform<${responseTypes}, any> | null = null> = ${type}` + "\n\n"
             }
         })
     })
-    return result;
+    return { types: result, requestCreators }
 }
 
 
@@ -459,6 +490,7 @@ export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): 
                 throw new Error(`restApis config ${rApi.name} : you should provide valid openApiSpec file with extension .yaml/.yml/.json`)
             }
             const data = readFileSync(file, "utf-8")
+            console.log("sucessfully read from file");
             const format = file.endsWith(".json") ? "json" : "yaml"
             spec = await importSpec({ data, format })
         }
@@ -469,6 +501,10 @@ export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): 
             spec = await importSpec({ data, format })
         }
 
+        const validationResult = await validator(spec, true)
+
+        console.log("validationResult", validationResult);
+
         resolveDiscriminators(spec)
 
         const schemas = generateSchemaDefinitions(spec.components && spec.components.schemas)
@@ -477,7 +513,7 @@ export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): 
 
         const responses = generateResponseDefinition(spec.components && spec.components.responses)
 
-        const pathTypes = generatePathTypes(spec)
+        const { types: pathTypes, requestCreators } = generatePathTypes(spec, rApi.name)
 
         const haveGet = pathTypes.includes("Fetch<")
         const havePost = pathTypes.includes("FetchPost<")
@@ -500,21 +536,40 @@ export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): 
         if (havePatch) {
             reducerImports.push("FetchPatch")
         }
+        const nameSpaceName = rApi.name.replace(/-/g, "_")
         const output = `
          ${CommonUtils.dontModifyMessage()} 
-         import {${reducerImports.join(",")}}  from "@typesafe-store/store"
+         import {${reducerImports.join(",")},Transform}  from "@typesafe-store/store"
 
-         export namespace ${rApi.name} {
+          namespace ${nameSpaceName} {
              ${schemas}
              ${reqBodies}
              ${responses}
              ${pathTypes}
          }
+
+         export default ${nameSpaceName}
         `
 
-        const outFile = ConfigUtils.getOutPutPathForRestApiTypes(rApi.name)
+        const outFile = ConfigUtils.getRestApiOutputFilePathForTypes(rApi.name)
         FileUtils.writeFileSync(outFile, output)
-        chalk.yellow(`Successfully generated types for ${rApi.name}.`)
+
+        const rcOutFile = ConfigUtils.getRestApiOutputFilePathForRequestCreators(rApi.name)
+        const rcImports = []
+        rcImports.push(`import ${nameSpaceName}_types from "../types"`)
+        rcImports.push(`import {FetchVariants} from "@typesafe-store/store"`)
+        const className = `${pascal(nameSpaceName)}RequestCreators`
+        const rcOut = `
+         ${rcImports.join("\n")}
+
+         class ${className} {
+            ${requestCreators.join("\n")}
+         }
+        
+         export default ${className}
+        `
+        FileUtils.writeFileSync(rcOutFile, rcOut)
+        console.info(chalk.yellow(`Successfully generated types for ${rApi.name}.`));
 
     })
     )

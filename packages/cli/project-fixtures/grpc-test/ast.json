@@ -1,0 +1,78 @@
+{
+  "package": "sample",
+  "syntax": "proto3",
+  "root": {
+    "name": "",
+    "fullName": "",
+    "syntaxType": "ProtoRoot",
+    "nested": {
+      "sample": {
+        "name": "sample",
+        "fullName": ".sample",
+        "syntaxType": "NamespaceDefinition",
+        "nested": {
+          "Sample": {
+            "name": "Sample",
+            "fullName": ".sample.Sample",
+            "comment": null,
+            "syntaxType": "MessageDefinition",
+            "fields": {
+              "name": {
+                "name": "name",
+                "fullName": ".sample.Sample.name",
+                "comment": null,
+                "type": {
+                  "value": "string",
+                  "syntaxType": "BaseType"
+                },
+                "id": 1,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": false
+              }
+            }
+          },
+          "Sample2": {
+            "name": "Sample2",
+            "fullName": ".sample.Sample2",
+            "comment": null,
+            "syntaxType": "MessageDefinition",
+            "fields": {
+              "sample": {
+                "name": "sample",
+                "fullName": ".sample.Sample2.sample",
+                "comment": null,
+                "type": {
+                  "value": "Sample",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".sample.Sample"
+                },
+                "id": 1,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": false
+              },
+              "sf": {
+                "name": "sf",
+                "fullName": ".sample.Sample2.sf",
+                "comment": null,
+                "type": {
+                  "value": "string",
+                  "syntaxType": "BaseType"
+                },
+                "id": 2,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": false
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "syntaxType": "ProtoDocument"
+}

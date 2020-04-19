@@ -1,12 +1,13 @@
-import { TypeSafeStoreConfigExtra, TypeSafeStoreConfig, TsBuildInfo, GraphqlApiConfig, TypescriptCompilerOptions, TypescriptPlugin, TsGraphqlPluginConfig, RestApiConfig, typeSafeStoreConfigDecoder } from "../types";
+import { TypeSafeStoreConfigExtra, TypeSafeStoreConfig, TsBuildInfo, GraphqlApiConfig, TypescriptCompilerOptions, TypescriptPlugin, TsGraphqlPluginConfig, RestApiConfig, typeSafeStoreConfigDecoder, GrpcApiConfig } from "../types";
 import { resolve, join, dirname, sep } from "path";
-import { REDUCERS_FOLDER, GENERATED_FOLDER, STORE_TYPES_FOLDER, REST_API_TYPES_FOLDER, GRAPHQL_API_TYPES_FOLDER, GRAPHQL_OPERATIONS_FOLDER, TS_GRAPHQL_PLUGIN_NAME, TYPESAFE_STORE_CONFIG_KEY, GEN_SUFFIX, SELECTORS_FOLDER, WORKERS_FOLDER } from "../constants";
+import { REDUCERS_FOLDER, GENERATED_FOLDER, STORE_TYPES_FOLDER, REST_APIS_FOLDER, GRAPHQL_APIS_FOLDER, GRAPHQL_OPERATIONS_FOLDER, TS_GRAPHQL_PLUGIN_NAME, TYPESAFE_STORE_CONFIG_KEY, GEN_SUFFIX, SELECTORS_FOLDER, WORKERS_FOLDER, GRPC_APIS_FOLDER, GRPC_ENCODERS_DECODERS_FOLDER, APIS_FOLDER_NAME, APIS_TYPES_FOLDER, API_REQUEST_CREATORS_FOLDER } from "../constants";
 import * as ts from "typescript";
 import { FileUtils } from "./file-utils";
 import { initializeGraphqlConfig } from "../graphql";
 import { generateTypesForRestApiConfig } from "../rest/open-api-import";
 import { lstatSync, existsSync } from "fs";
 import { MetaUtils } from "./meta-utils";
+import { generateGrpcTypes } from "../grpc";
 
 
 
@@ -95,6 +96,20 @@ abstract class ConfigValidation {
         return result
     }
 
+    static async isValidGrpcAPisConfig(grpcAPis?: GrpcApiConfig[]): Promise<[boolean, string]> {
+        let result: [boolean, string] = [true, ""]
+        if (grpcAPis && grpcAPis.length > 0) {
+            const al = grpcAPis.length
+            const sl = [...new Set(grpcAPis.map(ra => ra.name))].length
+            if (al !== sl) {
+                result = [false, "grpcAPis config names should be unique"]
+            } else {
+                result = await generateGrpcTypes(grpcAPis)
+            }
+        }
+        return result
+    }
+
     /**
      * 
      * @param tsConfig 
@@ -121,7 +136,10 @@ abstract class ConfigValidation {
                     if (result[0]) { // valid restApis config 
                         result = await this.isValidGraphqlConfig(tsConfig, tStoreConfig.graphqlApis)
                         if (result[0]) { //  valid graphqlAPis config
+                            result = await this.isValidGrpcAPisConfig(tStoreConfig.grpcApis)
+                            if (result[0]) { // valid grpcApis config
 
+                            }
                         }
                     }
                 }
@@ -143,13 +161,10 @@ export class ConfigUtils extends ConfigValidation {
         const compilerOptions = co
         const config: TypeSafeStoreConfigExtra = {
             ...tStoreCnofig, reducersPath: "", reducersGeneratedPath: "",
-            typesPath: "",
-            restApiTypesPath: "",
-            graphqlApiTypesPath: "",
-            graphqlOperationsPath: "",
             seelctorsPath: "",
             selectorsGeneratedPath: "",
-            workersPath: ""
+            workersPath: "",
+            apisPath: ""
         };
         config.storePath = resolve(config.storePath)
         config.reducersPath = join(config.storePath, REDUCERS_FOLDER)
@@ -159,15 +174,7 @@ export class ConfigUtils extends ConfigValidation {
         config.seelctorsPath = join(config.seelctorsPath, SELECTORS_FOLDER)
 
         config.selectorsGeneratedPath = join(config.seelctorsPath, GENERATED_FOLDER)
-
-        config.typesPath = join(config.storePath, STORE_TYPES_FOLDER)
-
-        config.restApiTypesPath = join(config.typesPath, REST_API_TYPES_FOLDER)
-
-        config.graphqlApiTypesPath = join(config.typesPath, GRAPHQL_API_TYPES_FOLDER)
-
-        config.graphqlOperationsPath = join(config.storePath, GRAPHQL_OPERATIONS_FOLDER)
-
+        config.apisPath = join(config.storePath, APIS_FOLDER_NAME)
         config.workersPath = join(config.storePath, WORKERS_FOLDER)
 
         //TODO looks like it doesnt exist on older versions of typescript
@@ -195,8 +202,35 @@ export class ConfigUtils extends ConfigValidation {
      * 
      * @param apiName 
      */
-    static getOutPutPathForRestApiTypes(apiName: string) {
-        return join(this.getConfig().restApiTypesPath, GENERATED_FOLDER, apiName + ".ts")
+    static getRestApiOutputFilePathForTypes(apiName: string) {
+        return join(this.getConfig().apisPath, REST_APIS_FOLDER, apiName, APIS_TYPES_FOLDER, "index.ts")
+    }
+
+    static getRestApiOutputFilePathForRequestCreators(apiName: string) {
+        return join(this.getConfig().apisPath, REST_APIS_FOLDER, apiName, API_REQUEST_CREATORS_FOLDER, "index.ts")
+    }
+    static getRestApiOutputFolderPathForTypes(apiName: string) {
+        return join(this.getConfig().apisPath, REST_APIS_FOLDER, apiName, APIS_TYPES_FOLDER)
+    }
+
+    static getGrpcApiOutputFilePathForTypes(apiName: string) {
+        return join(this.getConfig().apisPath, GRPC_APIS_FOLDER, apiName, APIS_TYPES_FOLDER, "index.ts")
+    }
+
+    static getGrpcApiOutputFilePathForRequestCreators(apiName: string) {
+        return join(this.getConfig().apisPath, GRPC_APIS_FOLDER, apiName, API_REQUEST_CREATORS_FOLDER, "index.ts")
+    }
+
+    static getGrpcApiOutputFolderForTypes(apiName: string) {
+        return join(this.getConfig().apisPath, GRPC_APIS_FOLDER, apiName, APIS_TYPES_FOLDER)
+    }
+
+    static getGrpcOutputFilePathForSerializersTypes(apiName: string) {
+        return join(this.getConfig().apisPath, GRPC_APIS_FOLDER, apiName, GRPC_ENCODERS_DECODERS_FOLDER, "index.ts")
+    }
+
+    static getGrpcOutputFolderForSerializersTypes(apiName: string) {
+        return join(this.getConfig().apisPath, GRPC_APIS_FOLDER, apiName, GRPC_ENCODERS_DECODERS_FOLDER)
     }
 
     static getBuildInfo(): TsBuildInfo | undefined {
@@ -226,13 +260,13 @@ export class ConfigUtils extends ConfigValidation {
     }
 
     static getGraphqlApiNameFromGraphqlOperationsPath(file: string) {
-        const res = file.replace(this.getConfig().graphqlOperationsPath, "").split(sep)
+        const res = file.replace(this.getGraphqlApisFolder(), "").split(sep)
         console.log("res", res);
         return res[1]
     }
 
     static getGraphqlOperationVariableNamePrefix(file: string) {
-        let p = file.replace(this.getConfig().graphqlOperationsPath, "").split(sep).slice(2)
+        let p = file.replace(this.getGraphqlApisFolder(), "").split(sep).slice(2)
         const f = p[0]
         if (f === "queries" || f === "mutations" || f === "subscriptions") {
             p = p.slice(1)
@@ -269,17 +303,32 @@ export class ConfigUtils extends ConfigValidation {
     private static isTsFile(file: string) {
         return file.endsWith(".ts")
     }
-    static getGraphqlTypesOutputPath(apiName: string) {
-        return join(this.getConfig().graphqlApiTypesPath, apiName, "index.ts")
+    static getOutputPathForGraphqlTypes(apiName: string) {
+        return join(this.getConfig().apisPath, GRAPHQL_APIS_FOLDER, apiName, APIS_TYPES_FOLDER, "index.ts")
     }
 
+    static getOutputPathForGraphqlRequestCreators(apiName: string) {
+        return join(this.getConfig().apisPath, GRAPHQL_APIS_FOLDER, apiName, API_REQUEST_CREATORS_FOLDER, "index.ts")
+    }
+
+    static getGraphqlOutputFolderForTypes(apiName: string) {
+        return join(this.getConfig().apisPath, GRAPHQL_APIS_FOLDER, apiName, APIS_TYPES_FOLDER)
+    }
+    static getGraphqlApisFolder() {
+        return join(this.getConfig().apisPath, GRAPHQL_APIS_FOLDER)
+    }
     static isReducersSourceFile(file: string) {
         return this.isTsFile(file) && file.includes(this.getConfig().reducersPath) && !file.includes(this.getConfig().reducersGeneratedPath)
     }
 
     static isGraphqlOperationsSourceFile(file: string) {
-        console.log("file : ", this.getConfig().graphqlOperationsPath);
-        return this.isTsFile(file) && file.includes(this.getConfig().graphqlOperationsPath)
+        const graphqlApis = this.getGraphqlApisFolder()
+        if (this.isTsFile(file) && file.includes(graphqlApis)) {
+            const restPath = file.replace(graphqlApis, "").slice(1)
+            const r = /\w+\/operations/i
+            return !!restPath.match(r)
+        }
+        return false
     }
     static isSelectorsSourceFile(file: string) {
         return this.isTsFile(file) && file.includes(this.getConfig().seelctorsPath) && !file.includes(this.getConfig().selectorsGeneratedPath)
@@ -301,5 +350,9 @@ export class ConfigUtils extends ConfigValidation {
         return join(this.getConfig().workersPath, "workers.ts")
     }
 
+    static isPathReducersSourcePath(file: string) {
+        const config = this.getConfig()
+        return file.includes(config.reducersPath) && !file.includes(config.reducersGeneratedPath)
+    }
 
 }
