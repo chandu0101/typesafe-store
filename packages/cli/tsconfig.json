@@ -3,7 +3,9 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "build",
-    "lib": [],
+    "lib": [
+      "DOM"
+    ],
     "plugins": [],
     "sourceMap": true,
     "esModuleInterop": true,

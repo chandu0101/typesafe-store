@@ -22,7 +22,8 @@ import validator from "ibm-openapi-validator";
 import swagger2openapi from "swagger2openapi";
 import { readFileSync, existsSync } from "fs";
 import groupBy from "lodash/groupBy"
-import YAML from "yamljs"
+//@ts-ignore
+import JsYaml from "js-yaml"
 import chalk from "chalk"
 import { ConfigUtils } from "../utils/config-utils";
 import { FileUtils } from "../utils/file-utils";
@@ -83,7 +84,7 @@ function convertSwaggerToOpenApi(schema: any): Promise<OpenAPIObject> {
 }
 
 async function importSpec({ data, format }: { data: string, format: OpenApiSpecFormat }): Promise<OpenAPIObject> {
-    let specs: OpenAPIObject = format === "json" ? JSON.parse(data) : null as any
+    let specs: OpenAPIObject = format === "json" ? JSON.parse(data) : JsYaml.safeLoad(data)
     console.log("yaml parsed ");
     if (!specs.openapi || !specs.openapi.startsWith("3.0")) {
         specs = await convertSwaggerToOpenApi(specs)
@@ -383,7 +384,7 @@ function generatePathTypes(spec: OpenAPIObject, apiName: string): { types: strin
         serverPath = servers[0].url
     }
     const operationIds: string[] = []
-    let result = ""
+    let pathResults: string[] = []
     const requestCreators: string[] = []
     const typesImportName = `${apiName.replace(/-/g, "_")}_types`
     Object.entries(paths).forEach(([route, po]: [string, PathItemObject]) => {
@@ -442,8 +443,27 @@ function generatePathTypes(spec: OpenAPIObject, apiName: string): { types: strin
                 } else {
                     type = `Fetch${pascal(verb)}<${urlType},${requestBodyTypes},${responseTypes},${errorTypes},T>`
                 }
-                const rcResponseType: string | undefined = (responseTypes === "void" || responseTypes === "null" || responseTypes === "undefined") ? undefined : `${typesImportName}.${responseTypes}`
-                const rcBodyType: string | undefined = (requestBodyTypes === "null" || requestBodyTypes === "undefined" || requestBodyTypes === "void") ? undefined : `${typesImportName}.${requestBodyTypes}`
+                let rcResponseType: string | undefined = ""
+                const respInit = ["Blob", "ArrayBuffer", "string"]
+                if (responseTypes === "void" || responseTypes === "null" || responseTypes === "undefined") {
+                    rcResponseType = undefined
+                } else if (respInit.includes(responseTypes)) {
+                    rcResponseType = responseTypes
+                } else if (responseTypes.trim().startsWith("{")) {
+                    rcResponseType = responseTypes
+                } else {
+                    rcResponseType = `${typesImportName}.${responseTypes}`
+                }
+                const bodyInit = ["Blob", "BufferSource", "FormData", "URLSearchParams", "ReadableStream<Uint8Array>", "string"];
+                let rcBodyType: string | undefined = undefined
+                if (requestBodyTypes === "null" || requestBodyTypes === "undefined" || requestBodyTypes === "void") {
+                    rcBodyType = undefined
+                } else if (bodyInit.includes(requestBodyTypes) || requestBodyTypes.trim().startsWith("{")) {
+                    rcBodyType = requestBodyTypes
+                } else {
+                    rcBodyType = `${typesImportName}.${requestBodyTypes}`
+                }
+
                 let paramsA = [{ name: "pathParams", value: pathParamsType },
                 { name: "queryParams", value: queryParamsType }, { name: "body", value: rcBodyType }, { name: "optimisticResponse ?", value: rcResponseType }]
                 let params = paramsA.map(v => {
@@ -466,11 +486,16 @@ function generatePathTypes(spec: OpenAPIObject, apiName: string): { types: strin
                      }
                 `
                 requestCreators.push(requestCreator)
-                result += `export type ${name}<T extends Transform<${responseTypes}, any> | null = null> = ${type}` + "\n\n"
+                pathResults.push(`export type ${name}<T extends Transform<${responseTypes}, any> | null = null> = ${type}`)
             }
         })
     })
-    return { types: result, requestCreators }
+    const types = `
+       export namespace requests {
+          ${pathResults.join("\n")}
+       }
+    `
+    return { types, requestCreators }
 }
 
 
@@ -505,6 +530,10 @@ export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): 
 
         console.log("validationResult", validationResult);
 
+        // if (validationResult.errors.length > 0) {
+        //     throw new Error(`Open API Spec is not valid : ${JSON.stringify(validationResult.errors)}`)
+        // }
+
         resolveDiscriminators(spec)
 
         const schemas = generateSchemaDefinitions(spec.components && spec.components.schemas)
@@ -520,26 +549,26 @@ export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): 
         const haveDelete = pathTypes.includes("FetchDelete<")
         const havePatch = pathTypes.includes("FetchPatch<")
         const havePut = pathTypes.includes("FetchPut<")
-        const reducerImports: string[] = ["FUrl"]
+        const fetchImports: string[] = ["FUrl"]
         if (haveGet) {
-            reducerImports.push("Fetch")
+            fetchImports.push("Fetch")
         }
         if (havePut) {
-            reducerImports.push("FetchPut")
+            fetchImports.push("FetchPut")
         }
         if (havePost) {
-            reducerImports.push("FetchPost")
+            fetchImports.push("FetchPost")
         }
         if (haveDelete) {
-            reducerImports.push("FetchDelete")
+            fetchImports.push("FetchDelete")
         }
         if (havePatch) {
-            reducerImports.push("FetchPatch")
+            fetchImports.push("FetchPatch")
         }
         const nameSpaceName = rApi.name.replace(/-/g, "_")
         const output = `
          ${CommonUtils.dontModifyMessage()} 
-         import {${reducerImports.join(",")},Transform}  from "@typesafe-store/store"
+         import {${fetchImports.join(",")},Transform}  from "@typesafe-store/store"
 
           namespace ${nameSpaceName} {
              ${schemas}

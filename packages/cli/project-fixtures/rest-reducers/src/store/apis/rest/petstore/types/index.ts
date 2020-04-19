@@ -1,5 +1,5 @@
 
-         // this file is auto generated on 2020-04-19T12:45:33.998Z, don't modify it 
+         // this file is auto generated on 2020-04-19T20:28:33.961Z, don't modify it 
          import {FUrl,Fetch,FetchPost,Transform}  from "@typesafe-store/store"
 
           namespace petstore {
@@ -9,7 +9,11 @@
   readonly tag?: string
 }
 
- export type Pets = Pet[]
+ export type Pets = {
+  readonly id: number
+  readonly name: string
+  readonly tag?: string
+}[]
 
 export interface Error {
   readonly code: number
@@ -18,18 +22,43 @@ export interface Error {
 
              
              
-             export type ListPets<T extends Transform<Pets, any> | null = null> = Fetch<{path:"http://petstore.swagger.io/v1/pets", queryParams:{ 
+             
+       export namespace requests {
+          export type ListPets<T extends Transform<{
+  readonly id: number
+  readonly name: string
+  readonly tag?: string
+}[], any> | null = null> = Fetch<{path:"http://petstore.swagger.io/v1/pets", queryParams:{ 
                        /**
    * How many items to return at one time (max 100)
    */
   limit:number  | undefined
-                   }},Pets,Error,T>
-
-export type CreatePets<T extends Transform<void, any> | null = null> = FetchPost<{path:"http://petstore.swagger.io/v1/pets"},null,void,Error,T>
-
-export type ShowPetById<T extends Transform<Pet, any> | null = null> = Fetch<{path:"http://petstore.swagger.io/v1/pets/{petId}",params:{ petId :string }},Pet,Error,T>
-
-
+                   }},{
+  readonly id: number
+  readonly name: string
+  readonly tag?: string
+}[],{
+  readonly code: number
+  readonly message: string
+},T>
+export type CreatePets<T extends Transform<void, any> | null = null> = FetchPost<{path:"http://petstore.swagger.io/v1/pets"},null,void,{
+  readonly code: number
+  readonly message: string
+},T>
+export type ShowPetById<T extends Transform<{
+  readonly id: number
+  readonly name: string
+  readonly tag?: string
+}, any> | null = null> = Fetch<{path:"http://petstore.swagger.io/v1/pets/{petId}",params:{ petId :string }},{
+  readonly id: number
+  readonly name: string
+  readonly tag?: string
+},{
+  readonly code: number
+  readonly message: string
+},T>
+       }
+    
          }
 
          export default petstore

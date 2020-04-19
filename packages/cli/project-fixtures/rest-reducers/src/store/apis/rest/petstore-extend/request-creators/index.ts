@@ -12,7 +12,12 @@ import {FetchVariants} from "@typesafe-store/store"
    * maximum number of results to return
    */
   limit:number  | undefined
-                   }, optimisticResponse ?: petstore_extend_types.Pet[]}) {
+                   }, optimisticResponse ?: {
+  readonly name: string
+  readonly tag?: string
+} & {
+  readonly id: number
+}[]}) {
                          return {
                            type:FetchVariants.GET , url : {path:"http://petstore.swagger.io/api/pets", queryParams: input.queryParams}
                               ,optimisticResponse:input.optimisticResponse
@@ -20,7 +25,15 @@ import {FetchVariants} from "@typesafe-store/store"
                      }
                 
 
-                   static  addPetRequest(input: {body: petstore_extend_types.NewPet, optimisticResponse ?: petstore_extend_types.Pet}) {
+                   static  addPetRequest(input: {body: {
+  readonly name: string
+  readonly tag?: string
+}, optimisticResponse ?: {
+  readonly name: string
+  readonly tag?: string
+} & {
+  readonly id: number
+}}) {
                          return {
                            type:FetchVariants.POST , url : {path:"http://petstore.swagger.io/api/pets"}
                              , body: input.body ,optimisticResponse:input.optimisticResponse
@@ -28,7 +41,12 @@ import {FetchVariants} from "@typesafe-store/store"
                      }
                 
 
-                   static  findPetByIdRequest(input: {pathParams: { id :number }, optimisticResponse ?: petstore_extend_types.Pet}) {
+                   static  findPetByIdRequest(input: {pathParams: { id :number }, optimisticResponse ?: {
+  readonly name: string
+  readonly tag?: string
+} & {
+  readonly id: number
+}}) {
                          return {
                            type:FetchVariants.GET , url : {path:"http://petstore.swagger.io/api/pets/{id}",params:input.pathParams}
                               ,optimisticResponse:input.optimisticResponse

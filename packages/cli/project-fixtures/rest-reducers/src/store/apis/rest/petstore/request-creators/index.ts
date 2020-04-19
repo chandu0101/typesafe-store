@@ -9,7 +9,11 @@ import {FetchVariants} from "@typesafe-store/store"
    * How many items to return at one time (max 100)
    */
   limit:number  | undefined
-                   }, optimisticResponse ?: petstore_types.Pets}) {
+                   }, optimisticResponse ?: {
+  readonly id: number
+  readonly name: string
+  readonly tag?: string
+}[]}) {
                          return {
                            type:FetchVariants.GET , url : {path:"http://petstore.swagger.io/v1/pets", queryParams: input.queryParams}
                               ,optimisticResponse:input.optimisticResponse
@@ -25,7 +29,11 @@ import {FetchVariants} from "@typesafe-store/store"
                      }
                 
 
-                   static  showPetByIdRequest(input: {pathParams: { petId :string }, optimisticResponse ?: petstore_types.Pet}) {
+                   static  showPetByIdRequest(input: {pathParams: { petId :string }, optimisticResponse ?: {
+  readonly id: number
+  readonly name: string
+  readonly tag?: string
+}}) {
                          return {
                            type:FetchVariants.GET , url : {path:"http://petstore.swagger.io/v1/pets/{petId}",params:input.pathParams}
                               ,optimisticResponse:input.optimisticResponse

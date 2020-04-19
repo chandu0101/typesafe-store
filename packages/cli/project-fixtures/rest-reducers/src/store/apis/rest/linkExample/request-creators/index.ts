@@ -4,7 +4,10 @@ import {FetchVariants} from "@typesafe-store/store"
 
          class LinkExampleRequestCreators {
             
-                   static  getUserByNameRequest(input: {pathParams: { username :string }, optimisticResponse ?: linkExample_types.User}) {
+                   static  getUserByNameRequest(input: {pathParams: { username :string }, optimisticResponse ?: {
+  readonly username?: string
+  readonly uuid?: string
+}}) {
                          return {
                            type:FetchVariants.GET , url : {path:"/2.0/users/{username}",params:input.pathParams}
                               ,optimisticResponse:input.optimisticResponse
@@ -12,7 +15,13 @@ import {FetchVariants} from "@typesafe-store/store"
                      }
                 
 
-                   static  getRepositoriesByOwnerRequest(input: {pathParams: { username :string }, optimisticResponse ?: linkExample_types.Repository[]}) {
+                   static  getRepositoriesByOwnerRequest(input: {pathParams: { username :string }, optimisticResponse ?: {
+  readonly slug?: string
+  readonly owner?: {
+  readonly username?: string
+  readonly uuid?: string
+}
+}[]}) {
                          return {
                            type:FetchVariants.GET , url : {path:"/2.0/repositories/{username}",params:input.pathParams}
                               ,optimisticResponse:input.optimisticResponse
@@ -20,7 +29,13 @@ import {FetchVariants} from "@typesafe-store/store"
                      }
                 
 
-                   static  getRepositoryRequest(input: {pathParams: { username :string, slug :string }, optimisticResponse ?: linkExample_types.Repository}) {
+                   static  getRepositoryRequest(input: {pathParams: { username :string, slug :string }, optimisticResponse ?: {
+  readonly slug?: string
+  readonly owner?: {
+  readonly username?: string
+  readonly uuid?: string
+}
+}}) {
                          return {
                            type:FetchVariants.GET , url : {path:"/2.0/repositories/{username}/{slug}",params:input.pathParams}
                               ,optimisticResponse:input.optimisticResponse
@@ -30,7 +45,21 @@ import {FetchVariants} from "@typesafe-store/store"
 
                    static  getPullRequestsByRepositoryRequest(input: {pathParams: { username :string, slug :string }, queryParams: { 
                        state:"open" | "merged" | "declined"  | undefined
-                   }, optimisticResponse ?: linkExample_types.Pullrequest[]}) {
+                   }, optimisticResponse ?: {
+  readonly id?: number
+  readonly title?: string
+  readonly repository?: {
+  readonly slug?: string
+  readonly owner?: {
+  readonly username?: string
+  readonly uuid?: string
+}
+}
+  readonly author?: {
+  readonly username?: string
+  readonly uuid?: string
+}
+}[]}) {
                          return {
                            type:FetchVariants.GET , url : {path:"/2.0/repositories/{username}/{slug}/pullrequests",params:input.pathParams, queryParams: input.queryParams}
                               ,optimisticResponse:input.optimisticResponse
@@ -38,7 +67,21 @@ import {FetchVariants} from "@typesafe-store/store"
                      }
                 
 
-                   static  getPullRequestsByIdRequest(input: {pathParams: { username :string, slug :string, pid :string }, optimisticResponse ?: linkExample_types.Pullrequest}) {
+                   static  getPullRequestsByIdRequest(input: {pathParams: { username :string, slug :string, pid :string }, optimisticResponse ?: {
+  readonly id?: number
+  readonly title?: string
+  readonly repository?: {
+  readonly slug?: string
+  readonly owner?: {
+  readonly username?: string
+  readonly uuid?: string
+}
+}
+  readonly author?: {
+  readonly username?: string
+  readonly uuid?: string
+}
+}}) {
                          return {
                            type:FetchVariants.GET , url : {path:"/2.0/repositories/{username}/{slug}/pullrequests/{pid}",params:input.pathParams}
                               ,optimisticResponse:input.optimisticResponse
