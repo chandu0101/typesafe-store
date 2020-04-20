@@ -36,5 +36,8 @@ export class FileUtils {
         return result
     }
 
+    static createDirectory(path: string) {
+        mkdirSync(path, { recursive: true })
+    }
 
 }

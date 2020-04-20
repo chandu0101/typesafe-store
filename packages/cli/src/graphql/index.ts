@@ -4,7 +4,7 @@ import { FileSchemaManager } from "./schema-manager/file-schema-manager";
 import { HttpSchemaManager } from "./schema-manager/http-schema-manager";
 import * as ts from "typescript"
 import { AstUtils } from "../utils/ast-utils";
-import { GraphqlApiMeta, GraphqlOperation } from "./types";
+import { GraphqlApiMeta, GraphqlOperation, OperationValue } from "./types";
 import { ConfigUtils } from "../utils/config-utils";
 import chalk from "chalk"
 import { validate } from "graphql/validation"
@@ -15,7 +15,8 @@ import { FileUtils } from "../utils/file-utils";
 import isEmpty from "lodash/isEmpty"
 import { MetaUtils } from "../utils/meta-utils";
 import { CommonUtils } from "../utils/common-utils";
-
+import { relative } from "path"
+import { performance } from "perf_hooks"
 
 
 // let apiMetaMap = new Map<string, GraphqlApiMeta>()
@@ -70,11 +71,45 @@ export class GraphqlUtils {
             processFile(f)
         })
     }
+
+    static addOperationValue({ namespace, ops, ov, }: { namespace: string, ops: Record<string, OperationValue[]>, ov: OperationValue, }) {
+        const v = ops[namespace]
+        if (v) {
+            const exists = v.some(ev => {
+                if (ev.name === ov.name) {
+                    ev.isMultipleOp = ov.isMultipleOp
+                    ev.text = ov.text
+                    ev.requestCreator = ov.requestCreator
+                    return true
+                }
+            })
+            if (!exists) {
+                v.push(ov)
+            }
+        } else {
+            ops[namespace] = [ov]
+        }
+    }
+
+    static removeDeletedVariables(nameSpace: string, variables: string[], meta: GraphqlApiMeta) {
+        const operations = meta.operations
+        if (operations.queries[nameSpace]) {
+            operations.queries[nameSpace] = operations.queries[nameSpace].filter(ov => variables.includes(ov.name))
+        }
+        if (operations.mutations[nameSpace]) {
+            operations.mutations[nameSpace] = operations.mutations[nameSpace].filter(ov => variables.includes(ov.name))
+        }
+        if (operations.subscriptions[nameSpace]) {
+            operations.subscriptions[nameSpace] = operations.subscriptions[nameSpace].filter(ov => variables.includes(ov.name))
+        }
+    }
 }
 
 const processFile = (file: string, ) => {
+    let t1 = performance.now()
+    const fileRelativePath = relative(".", file)
     try {
-        console.log("Graphql Processing file : ", file);
+        console.log("Graphql Processing file : ", fileRelativePath);
         const [valid, msg] = GraphqlUtils.isValidGraphqlOperationSourceFile(file)
         if (!valid) {
             throw new Error(msg)
@@ -98,13 +133,17 @@ const processFile = (file: string, ) => {
         const nodes = templateNodes.filter(node => isTaggedNode(node, tag)) as (ts.TemplateExpression | ts.NoSubstitutionTemplateLiteral)[]
         console.log("Tagged Nodes : ", nodes)
         let hasChanges = false
+        const existingVariables: string[] = []
         nodes.forEach(node => {
             const gqlString = getTextFromTaggedLiteral(node, file, meta)
             console.log("gqlString : ", gqlString);
             const document = parse(gqlString)
             const { isFragment, operation, errorMessage } = GraphqlTypGen.isValidQueryDocument(document)
             if (!isFragment) {// if its fragment only node then skip
+                let vt1 = performance.now()
                 const errors = validate(meta.schemaManager.schema!, document)
+                const vt2 = performance.now()
+                console.info(chalk.yellow(`validation took : ${vt2 - vt1} ms`));
                 if (errors.length > 0) {
                     throw new Error(`query : ${gqlString} is not valid, ${JSON.stringify(errors)}`)
                 }
@@ -113,18 +152,32 @@ const processFile = (file: string, ) => {
                 }
                 if (operation) {
                     const variableName = (node.parent.parent as ts.VariableDeclaration).name.getText() // Todo Check for other than VariableDeclaration(is it possible ?)
+                    existingVariables.push(variableName)
                     const { types, operations } = GraphqlTypGen.generateType(document, meta.schemaManager.schema!)
                     let responseType = ""
                     let bodyType = ""
                     let isMultipleOp = false
                     let requestCreator = ""
-                    let errorType = "GraphqlError[]"
+                    let errorType = "GraphQLError[]"
                     const typesImportName = `${apiName}_types`
+                    const getRequestCreatorTypePrefix = (opName: string) => {
+                        let result = ""
+                        const suffix = `${namespaceName}.${variableName}.Request`
+                        if (operation === GraphqlOperation.QUERY) {
+                            result = `${typesImportName}.queries.${suffix}`
+                        } else if (operation === GraphqlOperation.MUTATION) {
+                            result = `${typesImportName}.mutations.${suffix}`
+                        } else {
+                            result = `${typesImportName}.subscriptions.${suffix}`
+                        }
+                        return result;
+                    }
+                    const rcName = variableName
                     if (operations.length > 1) {
                         isMultipleOp = true
-                        errorType = `[${operations.map(o => "GraphqlError[]").join(",")}]`
+                        errorType = `[${operations.map(o => "GraphQLError[]").join(",")}]`
                         responseType = `[${operations.map(o => o.name).join(",")}]`
-                        bodyType = `[${operations.map(op => `{query: \`${gqlString}\`,operationName:${op.name} ,${op.variables ? `variables:${op.variables}` : ""}}`).join(", ")}]`
+                        bodyType = `[${operations.map(op => `{query: \`${gqlString}\`,operationName:"${op.name}" ,${op.variables ? `variables:${op.variables}` : ""}}`).join(", ")}]`
                         const variables = operations.map((o, i) => {
                             if (o.variables) {
                                 return `${o.name}: ${o.variables}`
@@ -132,12 +185,12 @@ const processFile = (file: string, ) => {
                                 return ""
                             }
                         }).filter(p => p.length > 0).join(", ")
-                        const optimisticResponseType = `[${operations.map(o => `${typesImportName}.${namespaceName}.${o.name}`)}]`
+                        const optimisticResponseType = `[${operations.map(o => `${getRequestCreatorTypePrefix(o.name)}`)}]`
                         const params = variables.length > 0 ? `variables: {${variables}}, optimisticResponse?: ${optimisticResponseType}` : `optimisticResponse?: ${optimisticResponseType}`
                         requestCreator = `
-                           create${variableName}Request(${params}) {
+                           static ${rcName}Request(${params}) {
                                return {type: FetchVariants.POST, url:{path:"${meta.schemaManager.url}"} ,body : [
-                                ${operations.map(op => `{query: \`${gqlString}\`,operationName:${op.name},${op.variables ? `variables:${op.name}_variables` : ""}}`).join(", ")}
+                                ${operations.map(op => `{query: \`${gqlString}\`,operationName:"${op.name}",${op.variables ? `variables:${op.name}_variables` : ""}}`).join(", ")}
                                ],optimisticResponse }
                            }
                         `
@@ -145,14 +198,15 @@ const processFile = (file: string, ) => {
                         responseType = `${operations[0].name}`
                         const op = operations[0]
                         bodyType = `{query: \`${gqlString}\`,${op.variables ? `variables:${op.variables}` : ""}}`
-                        const optimisticResponseType = `${typesImportName}.${namespaceName}.${op.name}`
+                        const optimisticResponseType = getRequestCreatorTypePrefix(op.name)
+
                         const params = op.variables ? `variables: {${op.variables}}, optimisticResponse?: ${optimisticResponseType}` : `optimisticResponse?: ${optimisticResponseType}`
                         requestCreator = `
-                        create${variableName}Request(${params}) {
+                         static ${rcName}Request(${params}) {
                             return { url:{path:"${meta.schemaManager.url}"} , type: FetchVariants.POST,
                             body : {query: \`${gqlString}\`,${op.variables ? `variables` : ""}},
-                            optimisticResponse
-                        }
+                            optimisticResponse}
+                         }   
                      `
                     }
 
@@ -160,37 +214,37 @@ const processFile = (file: string, ) => {
                         const fType = `GraphqlQuery<"${meta.schemaManager.url}",${bodyType},${responseType},${errorType}>`
                         const output = `
                          ${types}
-                         export type ${pascal(variableName)} =  ${fType}
+                         export type Request =  ${fType}
                         `
-                        const operationValue = { text: output, isMultipleOp, requestCreator }
-                        meta.operations.queries[namespaceName] = operationValue
+                        const operationValue = { text: output, isMultipleOp, name: variableName, requestCreator }
+                        GraphqlUtils.addOperationValue({ namespace: namespaceName, ov: operationValue, ops: meta.operations.queries })
                     } else if (operation === GraphqlOperation.MUTATION) {
                         const fType = `GraphqlMutation<"${meta.schemaManager.url}",${bodyType},${responseType},${errorType}>`
                         const output = `
                          ${types}
-                         export type ${pascal(variableName)} =  ${fType}
+                         export type Request =  ${fType}
                         `
-                        const operationValue = { text: output, isMultipleOp, requestCreator }
-                        meta.operations.mutations[namespaceName] = operationValue
+                        const operationValue = { text: output, isMultipleOp, name: variableName, requestCreator }
+                        GraphqlUtils.addOperationValue({ namespace: namespaceName, ov: operationValue, ops: meta.operations.mutations })
                     } else { // subscriptions websocket request
                         if (operations.length > 0) {
                             throw new Error("multiple subscriptions in single query is not supported")
                         }
                         const op = operations[0]
                         requestCreator = `
-                        create${variableName}Request(${op.variables ? `variables:${op.variables} ,unsubscribe?:boolean` : "unsubscribe?:boolean"}) {
+                        static ${rcName}Request(${op.variables ? `variables:${op.variables} ,unsubscribe?:boolean` : "unsubscribe?:boolean"}) {
                             return { url:"${meta.schemaManager.url}" ,
                             message : JSON.stringify({query: \`${gqlString}\`,${op.variables ? `variables` : ""}}),
                             unsubscribe
                         }
                      `
-                        const fType = `GraphqlMutation<"${meta.schemaManager.url}",${bodyType},${responseType},${errorType}>`
+                        const fType = `GraphqlSubscription<"${meta.schemaManager.url}",${bodyType},${responseType},${errorType}>`
                         const output = `
                          ${types}
-                         export type ${pascal(variableName)} =  ${fType}
+                         export type Request =  ${fType}
                         `
-                        const operationValue = { text: output, isMultipleOp, requestCreator }
-                        meta.operations.subscriptions[namespaceName] = operationValue
+                        const operationValue = { text: output, isMultipleOp, name: variableName, requestCreator }
+                        GraphqlUtils.addOperationValue({ namespace: namespaceName, ov: operationValue, ops: meta.operations.subscriptions })
                     }
                     hasChanges = true
                 }
@@ -198,18 +252,20 @@ const processFile = (file: string, ) => {
 
         })
         if (hasChanges) {
+            GraphqlUtils.removeDeletedVariables(namespaceName, existingVariables, meta)
             writeGraphqlTypesToFile(apiName, meta)
             writeGraphqlRequestCreatorsToFile(apiName, meta)
         }
     } catch (error) {
-        console.log(chalk.red(`Error processing file ${file}: ${error}`))
+        console.log(chalk.red(`Error processing file ${fileRelativePath}: ${error}`))
         return
     }
-
+    const t2 = performance.now()
+    console.info(chalk.yellow(`Time took to process file ${fileRelativePath} : ${t2 - t1}ms`))
 }
 
 function writeGraphqlTypesToFile(apiName: string, meta: GraphqlApiMeta) {
-    const outputPath = ConfigUtils.getOutputPathForGraphqlTypes(apiName)
+    const outputPath = ConfigUtils.getGraphqlOutputPathForTypes(apiName)
     const operations = meta.operations
     let queries = ""
     let mutations = ""
@@ -218,7 +274,13 @@ function writeGraphqlTypesToFile(apiName: string, meta: GraphqlApiMeta) {
         const qt = Object.entries(operations.queries).map(([n, ov]) => {
             return `
              export namespace ${n} {
-                ${ov.text}
+                ${ov.map(o => {
+                return `
+                     export namespace ${o.name} {
+                         ${o.text}
+                     }
+                    `
+            }).join("\n")}
              }
            `
         }).join("\n ")
@@ -232,8 +294,14 @@ function writeGraphqlTypesToFile(apiName: string, meta: GraphqlApiMeta) {
     if (!isEmpty(operations.mutations)) {
         const mt = Object.entries(operations.mutations).map(([n, ov]) => {
             return `
-             export namespace ${n} {
-                ${ov.text}
+            export namespace ${n} {
+                ${ov.map(o => {
+                return `
+                     export namespace ${o.name} {
+                         ${o.text}
+                     }
+                    `
+            }).join("\n")}
              }
            `
         }).join("\n ")
@@ -247,8 +315,14 @@ function writeGraphqlTypesToFile(apiName: string, meta: GraphqlApiMeta) {
     if (!isEmpty(operations.mutations)) {
         const st = Object.entries(operations.subscriptions).map(([n, ov]) => {
             return `
-             export namespace ${n} {
-                ${ov.text}
+            export namespace ${n} {
+                ${ov.map(o => {
+                return `
+                     export namespace ${o.name} {
+                         ${o.text}
+                     }
+                    `
+            }).join("\n")}
              }
            `
         }).join("\n ")
@@ -261,7 +335,7 @@ function writeGraphqlTypesToFile(apiName: string, meta: GraphqlApiMeta) {
 
     const imports: string[] = []
     if (queries || mutations) {
-        imports.push(`import { GraphqlQuery,GraphqlMutation,GraphqlSubscription,GraphqlError } from "@typesafe-store/store"`)
+        imports.push(`import { GraphqlQuery,GraphqlMutation,GraphqlSubscription,GraphQLError } from "@typesafe-store/store"`)
     }
     const output = `
     ${CommonUtils.dontModifyMessage()}
@@ -277,16 +351,16 @@ function writeGraphqlTypesToFile(apiName: string, meta: GraphqlApiMeta) {
 }
 
 function writeGraphqlRequestCreatorsToFile(apiName: string, meta: GraphqlApiMeta) {
-    const outputPath = ConfigUtils.getOutputPathForGraphqlRequestCreators(apiName)
+    const outputPath = ConfigUtils.getGraphqlOutputPathForlRequestCreators(apiName)
     const operations = meta.operations
     let queries = ""
     let mutations = ""
     let subscriptions = ""
     if (!isEmpty(operations.queries)) {
         const qt = Object.entries(operations.queries).map(([n, ov]) => {
-            return `
-             static ${ov.requestCreator}
-           `
+            return `static ${n} = class {
+                ${ov.map(o => o.requestCreator).join("\n")}
+            }`
         }).join("\n ")
         queries = `
          static queries = class {
@@ -297,9 +371,9 @@ function writeGraphqlRequestCreatorsToFile(apiName: string, meta: GraphqlApiMeta
 
     if (!isEmpty(operations.mutations)) {
         const mt = Object.entries(operations.mutations).map(([n, ov]) => {
-            return `
-            static ${ov.requestCreator}
-           `
+            return `static ${n} = class {
+                ${ov.map(o => o.requestCreator).join("\n")}
+            }`
         }).join("\n ")
         queries = `
          static mutations = class {
@@ -310,9 +384,9 @@ function writeGraphqlRequestCreatorsToFile(apiName: string, meta: GraphqlApiMeta
 
     if (!isEmpty(operations.mutations)) {
         const st = Object.entries(operations.subscriptions).map(([n, ov]) => {
-            return `
-            static ${ov.requestCreator}
-           `
+            return `static ${n} = class {
+                ${ov.map(o => o.requestCreator).join("\n")}
+            }`
         }).join("\n ")
         queries = `
          staitc subscriptions = class {
@@ -509,6 +583,7 @@ export const initializeGraphqlConfig = async (graphqlApis: GraphqlApiConfig[]): 
         } else {
             schemaManager = new HttpSchemaManager(gApi.http!, gApi.tag)
         }
+        console.info(chalk.yellow(`Getting schema for graphql api ${gApi.name}`))
         await schemaManager.readSchema()
         if (schemaManager.error) {
             throw new Error(schemaManager.error)
@@ -518,7 +593,21 @@ export const initializeGraphqlConfig = async (graphqlApis: GraphqlApiConfig[]): 
             schemaManager, resultCache: new Map(),
             spanNodeCache: new Map(), operations: { queries: {}, mutations: {}, subscriptions: {} }
         })
+        const apiName = gApi.name
 
+        const tag = `
+          export default function ${gApi.tag}(strings: TemplateStringsArray, ...keys: any[]) {
+            throw new Error("I am a compile time functions")
+        }
+        `
+        const tagFile = ConfigUtils.getGraphqlOutputPathForTagFunction(apiName, gApi.tag)
+        FileUtils.writeFileSync(tagFile, tag)
+        const opPath = ConfigUtils.getGraphqlOutputFolderForOperations(apiName)
+        FileUtils.createDirectory(opPath)
+        const tp = ConfigUtils.getGraphqlOutputFolderForTypes(apiName)
+        FileUtils.createDirectory(tp)
+        const rcp = ConfigUtils.getGraphqlOutputFolderForRequestCreators(apiName)
+        FileUtils.createDirectory(rcp)
     }))
     return result;
 }

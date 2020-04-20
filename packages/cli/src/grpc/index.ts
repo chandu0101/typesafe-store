@@ -457,15 +457,17 @@ const getReadWriteMethodsForIdentifier = (input: {
     imports: Record<string, string>,
     typeTracking: GenerateProtoFileInput["typesConfig"]["typesTracking"]
     file: string,
+    parentClassName: string,
     repeated: boolean,
 }): [ReadMethod, WriteMethod, any] => {
     console.log("getReadWriteMethodsForIdentifier", input);
-    const { identifier, imports, typeTracking, repeated, file } = input
+    const { identifier, imports, typeTracking, parentClassName, repeated, file } = input
     let readMethod: ReadMethod = null as any
     let writeMethod: WriteMethod = null as any
     let defaultValue: any = undefined
     let t = identifier.value
     let ip = ""
+    const packageName = typeTracking[file].package
     Object.keys(imports).some(i => {
         if (t.startsWith(i)) {
             ip = i;
@@ -484,6 +486,7 @@ const getReadWriteMethodsForIdentifier = (input: {
 
             if (t.name === identifier.resolvedValue || t.name === identifier.value) {
                 protoIType = t.type
+
                 return true
             }
         })
@@ -508,15 +511,18 @@ const getReadWriteMethodsForIdentifier = (input: {
             } else {
                 t = t.replace(ip, ip.split(".").join("_"))
             }
+        } else {
+            const rv = identifier.resolvedValue!.split(".")
+            t = packageName ? `${parentClassName}.${rv.slice(2).join(".")}` : `${parentClassName}.${rv.slice(1).join(".")}`
         }
 
         if (repeated) {
             defaultValue = "[]"
-            readMethod = { name: `${t}.read`, callType: "PUSH_TO_FIELD_WITH_OBJECT_READ_VARIANT" }
-            writeMethod = { name: "writeMessage", callType: "FOR_LOOP_OVERFIELD_CALL_METHOD_WITH_OBJECT_WRITE_AND_INDEX_VALUE", objWriteFn: `${t}.write` }
+            readMethod = { name: `${t}._read`, callType: "PUSH_TO_FIELD_WITH_OBJECT_READ_VARIANT" }
+            writeMethod = { name: "writeMessage", callType: "FOR_LOOP_OVERFIELD_CALL_METHOD_WITH_OBJECT_WRITE_AND_INDEX_VALUE", objWriteFn: `${t}._write` }
         } else {
-            readMethod = { name: `${t}.read`, callType: "PBF_ARG_READVARIANT_POS" }
-            writeMethod = { name: "writeMessage", callType: "OBJECTWRITE_METHOD_FIELD_VALUE", objWriteFn: `${t}.write` }
+            readMethod = { name: `${t}._read`, callType: "PBF_ARG_READVARIANT_POS" }
+            writeMethod = { name: "writeMessage", callType: "OBJECTWRITE_METHOD_FIELD_VALUE", objWriteFn: `${t}._write` }
         }
 
     }
@@ -552,13 +558,13 @@ const convertWriteMethodToPBFCall = (wm: WriteMethod, id: number, objKey: string
     if (wm.callType === "VALUE_ARG") {
         result = `pbf.${wm.name}(${id}, obj.${objKey})`
     } else if (wm.callType === "FOR_LOOP_OVERFIELD_CALL_METHOD_WITH_INDEX_VALUE") {
-        result = `for (i = 0; i < obj.${objKey}.length; i++) pbf.${wm.name}(${id}, obj.${objKey}[i]);`
+        result = `for (let i = 0; i < obj.${objKey}.length; i++) pbf.${wm.name}(${id}, obj.${objKey}[i]);`
     } else if (wm.callType === "FOR_LOOP_OVERFIELD_CALL_METHOD_WITH_OBJECT_WRITE_AND_INDEX_VALUE") {
-        result = `for (i = 0; i < obj.${objKey}.length; i++) pbf.writeMessage(${id}, ${wm.objWriteFn}, obj.${objKey}[i]);`
+        result = `for (let i = 0; i < obj.${objKey}.length; i++) pbf.writeMessage(${id}, ${wm.objWriteFn}, obj.${objKey}[i]);`
     } else if (wm.callType === "OBJECTWRITE_METHOD_FIELD_VALUE") {
         result = `pbf.writeMessage(${id}, ${wm.objWriteFn}, obj.${objKey});`
     } else if (wm.callType === "MAP_WRITE") {
-        result = `for (const i in obj.${objKey}) if (Object.prototype.hasOwnProperty.call(obj.${objKey}, i)) pbf.writeMessage(35, ${wm.name}, { key: i, value: obj.${objKey}[i] });`
+        result = `for (let i in obj.${objKey}) if (Object.prototype.hasOwnProperty.call(obj.${objKey}, i)) pbf.writeMessage(35, ${wm.name}, { key: i, value: obj.${objKey}[i] });`
     }
     return result;
 }
@@ -566,10 +572,11 @@ const convertWriteMethodToPBFCall = (wm: WriteMethod, id: number, objKey: string
 const generateSerliazeClassForMap = (input: {
     fd: protoParser.FieldDefinition,
     file: string,
+    parentClassName: string,
     typeTracking: GenerateProtoFileInput["typesConfig"]["typesTracking"],
     imports: Record<string, string>
 }) => {
-    const { fd, file, typeTracking, imports } = input;
+    const { fd, file, typeTracking, imports, parentClassName } = input;
 
     const [kr, kw, kd] = getReadWriteMethodForBasicType(fd.keyType! as any, false)
     let vr: ReadMethod = null as any
@@ -583,7 +590,7 @@ const generateSerliazeClassForMap = (input: {
     } else if (fd.type.syntaxType === SyntaxType.Identifier) {
         const ir = getReadWriteMethodsForIdentifier({
             file, identifier: fd.type, imports,
-            repeated: false, typeTracking
+            repeated: false, typeTracking, parentClassName
         })
         vr = ir[0]
         vw = ir[1]
@@ -618,14 +625,16 @@ const getTSTypeNameFromFullName = (fullName: string, packageName?: string) => {
 
 
 const convertMessageDefToSerializeDeserializeClass = (input: {
+
     md: protoParser.MessageDefinition,
     typesTracking: GenerateProtoFileInput["typesConfig"]["typesTracking"],
     imports: Record<string, string>,
     file: string,
+    parentClassName: string
     typesImportName: string,
 }) => {
     console.log("convertMessageDefToSerializeDeserialize", input);
-    const { md, file, typesImportName, imports, typesTracking } = input
+    const { md, file, typesImportName, imports, typesTracking, parentClassName } = input
     console.log("**** getting class for ", md.name, md.fullName);
     if (md.name === "PhoneNumber") {
         console.log("****** phone number class");
@@ -642,7 +651,7 @@ const convertMessageDefToSerializeDeserializeClass = (input: {
     if (nested) {
         Object.entries(nested).forEach(([key, value]) => {
             if (value.syntaxType === SyntaxType.MessageDefinition) {
-                const code = convertMessageDefToSerializeDeserializeClass({ md: value as any, file, imports, typesTracking, typesImportName })
+                const code = convertMessageDefToSerializeDeserializeClass({ md: value as any, parentClassName, file, imports, typesTracking, typesImportName })
                 statics.push({ name: value.name, value: code })
             }
         })
@@ -659,7 +668,7 @@ const convertMessageDefToSerializeDeserializeClass = (input: {
                     defaultValue: "{}",
                     id: fd.id,
                 })
-                const code = generateSerliazeClassForMap({ file, fd, imports, typeTracking: typesTracking })
+                const code = generateSerliazeClassForMap({ file, fd, imports, typeTracking: typesTracking, parentClassName })
                 statics.push({ name: sfName, value: code })
             } else {
                 let [rm, wm, dv] = getReadWriteMethodForBasicType(fd.type, fd.repeated)
@@ -668,7 +677,7 @@ const convertMessageDefToSerializeDeserializeClass = (input: {
             }
         }
         else if (fd.type.syntaxType === SyntaxType.Identifier) { // nested field 
-            const [rm, wm, dv] = getReadWriteMethodsForIdentifier({ identifier: fd.type, file, imports, repeated: fd.repeated, typeTracking: typesTracking })
+            const [rm, wm, dv] = getReadWriteMethodsForIdentifier({ identifier: fd.type, file, imports, parentClassName, repeated: fd.repeated, typeTracking: typesTracking })
             fields.push({ name: fd.name, id: fd.id, readMethod: rm, writeMethod: wm, defaultValue: dv })
         }
     })
@@ -688,7 +697,7 @@ const convertMessageDefToSerializeDeserializeClass = (input: {
     console.log("fields : ", fields);
 
     const readFileCode = () => {
-        return `static _readField(tag:number,obj:any,pbf:any) {
+        return `private static _readField(tag:number,obj:any,pbf:any) {
             ${fields.map((f, i) => {
             const v = `(tag === ${f.id}) {
                     ${convertReadMethodToPBFCall(f.readMethod, f.name)}
@@ -711,11 +720,23 @@ const convertMessageDefToSerializeDeserializeClass = (input: {
     }).join("\n")}
 
          ${readFileCode()}
-         static read(pbf:any,end:any):${objectTypeName} {
+         static _read(pbf:any,end?:any):${objectTypeName} {
             return pbf.readFields(this._readField, {${fields.map(f => `${f.name}:${f.defaultValue}`).join(",")}}, end) as any;
          }
-     
-         static write(obj:${objectTypeName},pbf:any) {
+
+         static deserialize(buffer:Uint8Array):${objectTypeName} {
+             const pbf = new Pbf(buffer)
+             return this._read(pbf)
+         }
+          
+         static serialize(obj:${objectTypeName}) {
+             const pbf = new Pbf()
+             this._write(obj,pbf)
+             return pbf.finish()
+         }
+
+
+         static _write(obj:${objectTypeName},pbf:any) {
              ${fields.map(f => {
         return `if (obj.${f.name}) ${convertWriteMethodToPBFCall(f.writeMethod, f.id, f.name)};`
     }).join("\n")}
@@ -733,7 +754,7 @@ const convertServiceMethodToGrpCRequest = ({ md, baseUrl, serviceName, packageNa
     const o = md.responseType.value
     const url = `${baseUrl}/${packageName}.${serviceName}/${md.name}`
     let grpcMethodType = (md as any).responseStream ? "GRPCUnary" : "GRPCResponseStream"
-    return `export  type ${pascal(md.name)}<S extends GRPCSerializer<${i}>,DS extends GRPCDeSerializer<${o}>,T extends Transform<${o},any> = null> = ${grpcMethodType}<"${url}",${i},${o},S,DS,T>`
+    return `export  type ${pascal(md.name)}<S extends GRPCSerializer<${i}>,DS extends GRPCDeSerializer<${o}>,T extends Transform<${o},any> | null = null> = ${grpcMethodType}<"${url}",${i},${o},S,DS,T>`
 }
 
 
@@ -752,13 +773,13 @@ const convertServiceMethodToGrpCRequestCreator = ({ md, apiName, baseUrl, servic
     if (responseStream) {
         rc = `
          static ${name}(req:${req}) {
-              return { type: FetchVariants.POST,url: {path:${url}} ,body:req }
+              return { type: FetchVariants.POST,url: {path:"${url}"} ,body:req }
           }
         `
     } else {
         rc = `
          static ${name}(req:${req},optimisticResponse?:${resp}) {
-              return {type: FetchVariants.POST, url: {path:${url}} ,body:req, optimisticResponse}
+              return {type: FetchVariants.POST, url: {path:"${url}"} ,body:req, optimisticResponse}
           }
         `
     }
@@ -825,6 +846,7 @@ const generateTypesForProtoFile = (input: GenerateProtoFileInput) => {
     let serializersOutputPath = ""
     let serializersTypesImportName = ""
     const serializersImports: string[] = []
+    let nameSpaceName = apiName
     if (root) {
         typesOutputPath = ConfigUtils.getGrpcApiOutputFilePathForTypes(apiName)
         serializersOutputPath = ConfigUtils.getGrpcOutputFilePathForSerializersTypes(apiName)
@@ -833,13 +855,15 @@ const generateTypesForProtoFile = (input: GenerateProtoFileInput) => {
         serializersImports.push(`import ${serializersTypesImportName} from "${rp}"`)
         // serializersTypesPath = 
     } else {
+        const fs = file.split("/")
+        nameSpaceName = fs[fs.length - 1].replace(".proto", "")
         typesOutputPath = join(typesConfig.baseOutputPath, file.split("/").join(sep).replace(".proto", ".ts"))
         serializersOutputPath = join(serializersConfig.baseOutputPath, file.split("/").join(sep).replace(".proto", ".ts"))
         serializersTypesImportName = `${file.split("/").slice(0, -1).join("_")}_types`
         const rp = relative(serializersOutputPath, typesOutputPath).split(sep).slice(1).join("/").replace(".ts", "")
         serializersImports.push(`import ${serializersTypesImportName} from "${rp}"`)
     }
-
+    const serializersClassName = `${pascal(nameSpaceName)}Serializers`
     serializersImports.push(`
      //@ts-ignore 
      import * as pbf from "pbf"
@@ -877,6 +901,7 @@ const generateTypesForProtoFile = (input: GenerateProtoFileInput) => {
             typesResults.push(`export type ${value.name} = ${mt}`)
             const sr = convertMessageDefToSerializeDeserializeClass({
                 md: value as any, typesTracking: typesConfig.typesTracking,
+                parentClassName: serializersClassName,
                 file, imports: dottedImports, typesImportName: serializersTypesImportName
             })
             serializationResults.push(`static ${value.name} = ${sr}`)
@@ -911,14 +936,13 @@ const generateTypesForProtoFile = (input: GenerateProtoFileInput) => {
     typesResults.push(...Object.values(enums))
 
     // return results;
-    let nameSpaceName = apiName
+
     if (!root) {
-        const fs = file.split("/")
-        nameSpaceName = fs[fs.length - 1].replace(".proto", "")
+
     }
 
     if (isServiceExist) {
-        typesImports.push(`import { GRPCSerializer,GRPCDeSerializer, GRPCUnary,GRPCResponseStream} from "@typesafe-store/store"`)
+        typesImports.push(`import { GRPCSerializer,GRPCDeSerializer, GRPCUnary,GRPCResponseStream,Transform} from "@typesafe-store/store"`)
     }
 
     typesImports.push(...[...new Set(typesPublicImports)])
@@ -933,23 +957,30 @@ const generateTypesForProtoFile = (input: GenerateProtoFileInput) => {
   `
     FileUtils.writeFileSync(typesOutputPath, typesOutputCode)
 
+    // serlizares write
+    serializersImports.push(`
+      //@ts-ignore
+      import Pbf from "pbf"
+    `)
     const serliazersOutputCode = `
       ${[...typesImports, ...serializersImports].join("\n")}
 
-      class ${pascal(nameSpaceName)}Serializers {
+      class ${serializersClassName} {
           ${serializationResults.join("\n")}
       } 
-      export default ${pascal(nameSpaceName)}
+      export default ${serializersClassName}
     `
     FileUtils.writeFileSync(serializersOutputPath, serliazersOutputCode)
-    if (root) {
+    if (root) { // request creators file 
+        const clsName = `${pascal(nameSpaceName)}RequestCreators`
         const rcOutPut = `
         import ${apiName}_types from "../types"
-        import { FetchVariants} from @typesafe-store/store
+        import { FetchVariants} from "@typesafe-store/store"
         
-        class ${pascal(nameSpaceName)} {
+        class ${clsName} {
             ${requestCreators.join("\n")}
         }
+        export default ${clsName}
       `
         const rcFile = ConfigUtils.getGrpcApiOutputFilePathForRequestCreators(apiName)
         FileUtils.writeFileSync(rcFile, rcOutPut)

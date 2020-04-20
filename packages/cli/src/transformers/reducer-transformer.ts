@@ -1475,6 +1475,9 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
         responseTypeNode = declaredTypeArgument[2];
         if (ts.isTupleTypeNode(responseTypeNode)) {
             graphql = `{multiOp:true}`
+            if (typeOpNode) {
+                throw new Error(`TypeOps are not supported on multi graphql operation`)
+            }
         }
 
     }
@@ -1597,24 +1600,21 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
             opNodeType = opNodeType.getNonNullableType()
 
             const indexType = opNodeType.getNumberIndexType()
+
             if (!indexType) {
                 throw new Error("Target opnode should be an array type")
             }
-            const isAssignable = AstUtils.isAssignableTo(respType, indexType)
-            if (!isAssignable) {
+
+            if (typeOpNodeNext.startsWith("DeleteFromList<") || typeOpNodeNext.startsWith("DeleteFromListAndDiscard")) { // if delete we just need to check for id in target response not all fields 
+                if (respType.getProperties().filter(p => p.escapedName === "id" || p.escapedName === "_id").length === 0) {
+                    throw new Error(`Delete Response must contain id/_id field`)
+                }
+            }
+            else if (!AstUtils.isAssignableTo(respType, indexType)) {
                 throw new Error(`${responseTypeNode.getText()} is not assignable to ${targetTypeNode.getText()}`)
             }
-            console.log("is assignable result : ", isAssignable);
 
             let idField: string | undefined = undefined
-
-            // indexType.getProperties().some(p => {
-            //     const name = p.escapedName
-            //     if (name === "id" || name === "_id") {
-            //         idField = name
-            //         return true;
-            //     }
-            // })
 
             const { node: cnode, props } = getObjectAccessAndIdentifier(targetTypeNode as any)
             console.log("pa ", props, cnode.getSourceFile().fileName);

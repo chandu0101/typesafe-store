@@ -2,10 +2,15 @@ import { SyncActionOffload } from "../offload";
 import { FetchActionMeta } from "../fetch";
 import { WebSocketActionmeta } from "../websockets";
 
-export type ActionInternalMeta = { kind: "Data", data: any, processed?: boolean }
-    | { knind: "State", data: any, processed?: boolean }
-    | { kind: "DataAndTypeOps", data: any, processed?: boolean, typeOp: NonNullable<FetchActionMeta["typeops"]> }
-    | { kind: "DiscardDataDoTypeOps", data: any, processed?: boolean, typeOp: NonNullable<FetchActionMeta["typeops"]> }
+export type DataAndTypeOps = {
+    kind: "DataAndTypeOps", data: any, processed: boolean, optimisticFailed?: any,
+    optimisticSuccess?: any,
+    typeOp: NonNullable<FetchActionMeta["typeops"]>
+}
+
+export type ActionInternalMeta = { kind: "Data", data: any, processed: boolean }
+    | { kind: "State", data: any, processed: boolean }
+    | DataAndTypeOps
 
 export type Action = Readonly<{
     name: any;

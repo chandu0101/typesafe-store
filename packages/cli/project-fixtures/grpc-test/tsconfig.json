@@ -69,5 +69,12 @@
   "typesafe-store": {
     "storePath": "./src/store",
     "framework": "vanilla",
+    "grpcApis": [
+      {
+        "name": "addressBook",
+        "url": "",
+        "proto": "./address.proto"
+      }
+    ]
   }
 }

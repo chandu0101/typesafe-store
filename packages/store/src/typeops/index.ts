@@ -1,7 +1,7 @@
 import { Fetch, FetchPut } from "../fetch"
 
 
-type TypeOpEntity = ({ id: string } | { _id: string })[] | undefined | null
+export type TypeOpEntity = ({ id: string } | { _id: string })[] | undefined | null
 
 export type AppendToList<T extends TypeOpEntity> = {}
 

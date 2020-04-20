@@ -97,7 +97,7 @@ service Greeter {
   // server streaming call
   rpc SayRepeatHello (RepeatHelloRequest) returns (stream HelloReply);
   // unary call - response after a length delay
-  rpc SayHelloAfterDelay (HelloRequest) returns (repeated HelloReply);
+  rpc SayHelloAfterDelay (HelloRequest) returns (HelloReply);
 }
 
 service Greeter2 {

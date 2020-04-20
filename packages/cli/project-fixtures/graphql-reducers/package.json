@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@typesafe-store/store": "file:../../../store",
-    "@typesafe-store/transformer": "file:../..",
+    "@typesafe-store/cli": "file:../..",
     "uuid": "^7.0.2"
   }
 }

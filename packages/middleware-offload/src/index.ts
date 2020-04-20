@@ -4,6 +4,7 @@ import {
     FetchVariants, Json, TypeSafeStore, Action, FetchRequest, FUrl
 } from "@typesafe-store/store"
 
+//TODO fetch should align fetch-middleware , import scripts from pbf
 
 
 type WorkerInput = { kind: "Fetch", input: { url: string, options: RequestInit, workerFunction?: string } }

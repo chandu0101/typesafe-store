@@ -30,6 +30,7 @@ export type FetchAsyncData<D, U extends FUrl, B extends FetchBody, FV extends Fe
     loading?: boolean;
     error?: E;
     data?: D;
+    optimistic?: boolean
     completed?: boolean,
     _fmeta?: FetchRequest<FV, U, B, D>
 }>;

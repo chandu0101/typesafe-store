@@ -1,25 +1,423 @@
 {
-  "package": "sample",
+  "package": "tutorial",
+  "imports": [
+    {
+      "path": "f1/f1types.proto",
+      "public": false
+    }
+  ],
   "syntax": "proto3",
   "root": {
     "name": "",
     "fullName": "",
     "syntaxType": "ProtoRoot",
     "nested": {
-      "sample": {
-        "name": "sample",
-        "fullName": ".sample",
+      "tutorial": {
+        "options": {
+          "java_package": "com.example.tutorial",
+          "java_outer_classname": "AddressBookProtos",
+          "csharp_namespace": "Google.Protobuf.Examples.AddressBook"
+        },
+        "name": "tutorial",
+        "fullName": ".tutorial",
         "syntaxType": "NamespaceDefinition",
         "nested": {
-          "Sample": {
-            "name": "Sample",
-            "fullName": ".sample.Sample",
+          "PhoneType2": {
+            "name": "PhoneType2",
+            "fullName": ".tutorial.PhoneType2",
+            "comment": null,
+            "syntaxType": "EnumDefinition",
+            "values": {
+              "MOBILE": 0,
+              "HOME": 1,
+              "WORK": 2
+            }
+          },
+          "Person": {
+            "name": "Person",
+            "fullName": ".tutorial.Person",
+            "comment": null,
+            "syntaxType": "MessageDefinition",
+            "nested": {
+              "PhoneType": {
+                "name": "PhoneType",
+                "fullName": ".tutorial.Person.PhoneType",
+                "comment": null,
+                "syntaxType": "EnumDefinition",
+                "values": {
+                  "MOBILE": 0,
+                  "HOME": 1,
+                  "WORK": 2
+                }
+              },
+              "PhoneNumber": {
+                "name": "PhoneNumber",
+                "fullName": ".tutorial.Person.PhoneNumber",
+                "comment": null,
+                "syntaxType": "MessageDefinition",
+                "nested": {
+                  "PhoneNumber2": {
+                    "name": "PhoneNumber2",
+                    "fullName": ".tutorial.Person.PhoneNumber.PhoneNumber2",
+                    "comment": null,
+                    "syntaxType": "MessageDefinition",
+                    "fields": {
+                      "number2": {
+                        "name": "number2",
+                        "fullName": ".tutorial.Person.PhoneNumber.PhoneNumber2.number2",
+                        "comment": null,
+                        "type": {
+                          "value": "string",
+                          "syntaxType": "BaseType"
+                        },
+                        "id": 1,
+                        "required": false,
+                        "optional": true,
+                        "repeated": false,
+                        "map": false
+                      }
+                    }
+                  }
+                },
+                "fields": {
+                  "number": {
+                    "name": "number",
+                    "fullName": ".tutorial.Person.PhoneNumber.number",
+                    "comment": null,
+                    "type": {
+                      "value": "string",
+                      "syntaxType": "BaseType"
+                    },
+                    "id": 1,
+                    "required": false,
+                    "optional": true,
+                    "repeated": false,
+                    "map": false
+                  },
+                  "type": {
+                    "name": "type",
+                    "fullName": ".tutorial.Person.PhoneNumber.type",
+                    "comment": null,
+                    "type": {
+                      "value": "PhoneType",
+                      "syntaxType": "Identifier",
+                      "resolvedValue": ".tutorial.Person.PhoneType"
+                    },
+                    "id": 2,
+                    "required": false,
+                    "optional": true,
+                    "repeated": false,
+                    "map": false
+                  },
+                  "number2": {
+                    "name": "number2",
+                    "fullName": ".tutorial.Person.PhoneNumber.number2",
+                    "comment": null,
+                    "type": {
+                      "value": "PhoneNumber2",
+                      "syntaxType": "Identifier",
+                      "resolvedValue": ".tutorial.Person.PhoneNumber.PhoneNumber2"
+                    },
+                    "id": 3,
+                    "required": false,
+                    "optional": true,
+                    "repeated": false,
+                    "map": false
+                  }
+                }
+              },
+              "SampleMessage": {
+                "name": "SampleMessage",
+                "fullName": ".tutorial.Person.SampleMessage",
+                "comment": null,
+                "syntaxType": "MessageDefinition",
+                "fields": {
+                  "name": {
+                    "name": "name",
+                    "fullName": ".tutorial.Person.SampleMessage.name",
+                    "comment": null,
+                    "type": {
+                      "value": "string",
+                      "syntaxType": "BaseType"
+                    },
+                    "id": 4,
+                    "required": false,
+                    "optional": true,
+                    "repeated": false,
+                    "map": false
+                  },
+                  "sub_message": {
+                    "name": "sub_message",
+                    "fullName": ".tutorial.Person.SampleMessage.sub_message",
+                    "comment": null,
+                    "type": {
+                      "value": "PhoneNumber",
+                      "syntaxType": "Identifier",
+                      "resolvedValue": ".tutorial.Person.PhoneNumber"
+                    },
+                    "id": 9,
+                    "required": false,
+                    "optional": true,
+                    "repeated": false,
+                    "map": false
+                  }
+                },
+                "oneofs": {
+                  "test_oneof": {
+                    "name": "test_oneof",
+                    "fullName": ".tutorial.Person.SampleMessage.test_oneof",
+                    "comment": null,
+                    "oneof": [
+                      "name",
+                      "sub_message"
+                    ]
+                  }
+                }
+              }
+            },
+            "fields": {
+              "name": {
+                "name": "name",
+                "fullName": ".tutorial.Person.name",
+                "comment": null,
+                "type": {
+                  "value": "string",
+                  "syntaxType": "BaseType"
+                },
+                "id": 1,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": false
+              },
+              "id": {
+                "name": "id",
+                "fullName": ".tutorial.Person.id",
+                "comment": "Unique ID number for this person.",
+                "type": {
+                  "value": "int32",
+                  "syntaxType": "BaseType"
+                },
+                "id": 2,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": false
+              },
+              "email": {
+                "name": "email",
+                "fullName": ".tutorial.Person.email",
+                "comment": "Unique ID number for this person.",
+                "type": {
+                  "value": "string",
+                  "syntaxType": "BaseType"
+                },
+                "id": 3,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": false
+              },
+              "bf": {
+                "name": "bf",
+                "fullName": ".tutorial.Person.bf",
+                "comment": null,
+                "type": {
+                  "value": "bytes",
+                  "syntaxType": "BaseType"
+                },
+                "id": 6,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": false
+              },
+              "projects": {
+                "name": "projects",
+                "fullName": ".tutorial.Person.projects",
+                "comment": null,
+                "type": {
+                  "value": "string",
+                  "syntaxType": "BaseType"
+                },
+                "id": 7,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": true,
+                "keyType": {
+                  "value": "string",
+                  "syntaxType": "BaseType"
+                }
+              },
+              "helloEnum": {
+                "name": "helloEnum",
+                "fullName": ".tutorial.Person.helloEnum",
+                "comment": null,
+                "type": {
+                  "value": "f1.HelloEnum",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".f1.HelloEnum"
+                },
+                "id": 8,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": false
+              },
+              "ipC": {
+                "name": "ipC",
+                "fullName": ".tutorial.Person.ipC",
+                "comment": null,
+                "type": {
+                  "value": "f1.F1CM",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".f1.F1CM"
+                },
+                "id": 9,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": false
+              },
+              "mapEnum": {
+                "name": "mapEnum",
+                "fullName": ".tutorial.Person.mapEnum",
+                "comment": null,
+                "type": {
+                  "value": "f1.HelloEnum",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".f1.HelloEnum"
+                },
+                "id": 10,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": true,
+                "keyType": {
+                  "value": "string",
+                  "syntaxType": "BaseType"
+                }
+              },
+              "phones": {
+                "name": "phones",
+                "fullName": ".tutorial.Person.phones",
+                "comment": null,
+                "type": {
+                  "value": "PhoneNumber",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.Person.PhoneNumber"
+                },
+                "rule": "repeated",
+                "id": 4,
+                "required": false,
+                "optional": true,
+                "repeated": true,
+                "map": false
+              },
+              "last_updated": {
+                "name": "last_updated",
+                "fullName": ".tutorial.Person.last_updated",
+                "comment": "google.protobuf.Timestamp last_updated = 5;",
+                "type": {
+                  "value": "f1.Hello",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".f1.Hello"
+                },
+                "id": 5,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": false
+              },
+              "mapMessage": {
+                "name": "mapMessage",
+                "fullName": ".tutorial.Person.mapMessage",
+                "comment": null,
+                "type": {
+                  "value": "PhoneNumber",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.Person.PhoneNumber"
+                },
+                "id": 11,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": true,
+                "keyType": {
+                  "value": "string",
+                  "syntaxType": "BaseType"
+                }
+              },
+              "mapOneOfMessage": {
+                "name": "mapOneOfMessage",
+                "fullName": ".tutorial.Person.mapOneOfMessage",
+                "comment": null,
+                "type": {
+                  "value": "SampleMessage",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.Person.SampleMessage"
+                },
+                "id": 12,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": true,
+                "keyType": {
+                  "value": "string",
+                  "syntaxType": "BaseType"
+                }
+              },
+              "oneofMessageField": {
+                "name": "oneofMessageField",
+                "fullName": ".tutorial.Person.oneofMessageField",
+                "comment": null,
+                "type": {
+                  "value": "SampleMessage",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.Person.SampleMessage"
+                },
+                "id": 13,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": false
+              }
+            }
+          },
+          "AddressBook": {
+            "name": "AddressBook",
+            "fullName": ".tutorial.AddressBook",
+            "comment": "Our address book file is just one of these.",
+            "syntaxType": "MessageDefinition",
+            "fields": {
+              "people": {
+                "name": "people",
+                "fullName": ".tutorial.AddressBook.people",
+                "comment": null,
+                "type": {
+                  "value": "Person",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.Person"
+                },
+                "rule": "repeated",
+                "id": 1,
+                "required": false,
+                "optional": true,
+                "repeated": true,
+                "map": false
+              }
+            }
+          },
+          "HelloRequest": {
+            "name": "HelloRequest",
+            "fullName": ".tutorial.HelloRequest",
             "comment": null,
             "syntaxType": "MessageDefinition",
             "fields": {
               "name": {
                 "name": "name",
-                "fullName": ".sample.Sample.name",
+                "fullName": ".tutorial.HelloRequest.name",
                 "comment": null,
                 "type": {
                   "value": "string",
@@ -33,20 +431,19 @@
               }
             }
           },
-          "Sample2": {
-            "name": "Sample2",
-            "fullName": ".sample.Sample2",
+          "RepeatHelloRequest": {
+            "name": "RepeatHelloRequest",
+            "fullName": ".tutorial.RepeatHelloRequest",
             "comment": null,
             "syntaxType": "MessageDefinition",
             "fields": {
-              "sample": {
-                "name": "sample",
-                "fullName": ".sample.Sample2.sample",
+              "name": {
+                "name": "name",
+                "fullName": ".tutorial.RepeatHelloRequest.name",
                 "comment": null,
                 "type": {
-                  "value": "Sample",
-                  "syntaxType": "Identifier",
-                  "resolvedValue": ".sample.Sample"
+                  "value": "string",
+                  "syntaxType": "BaseType"
                 },
                 "id": 1,
                 "required": false,
@@ -54,12 +451,12 @@
                 "repeated": false,
                 "map": false
               },
-              "sf": {
-                "name": "sf",
-                "fullName": ".sample.Sample2.sf",
+              "count": {
+                "name": "count",
+                "fullName": ".tutorial.RepeatHelloRequest.count",
                 "comment": null,
                 "type": {
-                  "value": "string",
+                  "value": "int32",
                   "syntaxType": "BaseType"
                 },
                 "id": 2,
@@ -67,6 +464,136 @@
                 "optional": true,
                 "repeated": false,
                 "map": false
+              }
+            }
+          },
+          "HelloReply": {
+            "name": "HelloReply",
+            "fullName": ".tutorial.HelloReply",
+            "comment": null,
+            "syntaxType": "MessageDefinition",
+            "fields": {
+              "message": {
+                "name": "message",
+                "fullName": ".tutorial.HelloReply.message",
+                "comment": null,
+                "type": {
+                  "value": "string",
+                  "syntaxType": "BaseType"
+                },
+                "id": 1,
+                "required": false,
+                "optional": true,
+                "repeated": false,
+                "map": false
+              }
+            }
+          },
+          "Greeter": {
+            "name": "Greeter",
+            "fullName": ".tutorial.Greeter",
+            "comment": null,
+            "syntaxType": "ServiceDefinition",
+            "methods": {
+              "SayHello": {
+                "name": "SayHello",
+                "fullName": ".tutorial.Greeter.SayHello",
+                "comment": "unary call",
+                "requestType": {
+                  "value": "HelloRequest",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.HelloRequest"
+                },
+                "responseType": {
+                  "value": "HelloReply",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.HelloReply"
+                }
+              },
+              "SayRepeatHello": {
+                "name": "SayRepeatHello",
+                "fullName": ".tutorial.Greeter.SayRepeatHello",
+                "comment": "server streaming call",
+                "requestType": {
+                  "value": "RepeatHelloRequest",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.RepeatHelloRequest"
+                },
+                "responseType": {
+                  "value": "HelloReply",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.HelloReply"
+                },
+                "responseStream": true
+              },
+              "SayHelloAfterDelay": {
+                "name": "SayHelloAfterDelay",
+                "fullName": ".tutorial.Greeter.SayHelloAfterDelay",
+                "comment": "unary call - response after a length delay",
+                "requestType": {
+                  "value": "HelloRequest",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.HelloRequest"
+                },
+                "responseType": {
+                  "value": "HelloReply",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.HelloReply"
+                }
+              }
+            }
+          },
+          "Greeter2": {
+            "name": "Greeter2",
+            "fullName": ".tutorial.Greeter2",
+            "comment": null,
+            "syntaxType": "ServiceDefinition",
+            "methods": {
+              "SayHello2": {
+                "name": "SayHello2",
+                "fullName": ".tutorial.Greeter2.SayHello2",
+                "comment": "unary call",
+                "requestType": {
+                  "value": "HelloRequest",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.HelloRequest"
+                },
+                "responseType": {
+                  "value": "HelloReply",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.HelloReply"
+                }
+              },
+              "SayRepeatHello2": {
+                "name": "SayRepeatHello2",
+                "fullName": ".tutorial.Greeter2.SayRepeatHello2",
+                "comment": "server streaming call",
+                "requestType": {
+                  "value": "RepeatHelloRequest",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.RepeatHelloRequest"
+                },
+                "responseType": {
+                  "value": "HelloReply",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.HelloReply"
+                },
+                "responseStream": true
+              },
+              "SayHelloAfterDelay2": {
+                "name": "SayHelloAfterDelay2",
+                "fullName": ".tutorial.Greeter2.SayHelloAfterDelay2",
+                "comment": "unary call - response after a length delay",
+                "requestType": {
+                  "value": "HelloRequest",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.HelloRequest"
+                },
+                "responseType": {
+                  "value": "HelloReply",
+                  "syntaxType": "Identifier",
+                  "resolvedValue": ".tutorial.HelloReply"
+                }
               }
             }
           }

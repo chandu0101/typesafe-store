@@ -266,7 +266,7 @@ export class ConfigUtils extends ConfigValidation {
     }
 
     static getGraphqlOperationVariableNamePrefix(file: string) {
-        let p = file.replace(this.getGraphqlApisFolder(), "").split(sep).slice(2)
+        let p = file.replace(this.getGraphqlApisFolder(), "").split(sep).slice(3)
         const f = p[0]
         if (f === "queries" || f === "mutations" || f === "subscriptions") {
             p = p.slice(1)
@@ -303,19 +303,30 @@ export class ConfigUtils extends ConfigValidation {
     private static isTsFile(file: string) {
         return file.endsWith(".ts")
     }
-    static getOutputPathForGraphqlTypes(apiName: string) {
+    static getGraphqlOutputPathForTypes(apiName: string) {
         return join(this.getConfig().apisPath, GRAPHQL_APIS_FOLDER, apiName, APIS_TYPES_FOLDER, "index.ts")
     }
 
-    static getOutputPathForGraphqlRequestCreators(apiName: string) {
+    static getGraphqlOutputPathForlRequestCreators(apiName: string) {
         return join(this.getConfig().apisPath, GRAPHQL_APIS_FOLDER, apiName, API_REQUEST_CREATORS_FOLDER, "index.ts")
     }
 
     static getGraphqlOutputFolderForTypes(apiName: string) {
         return join(this.getConfig().apisPath, GRAPHQL_APIS_FOLDER, apiName, APIS_TYPES_FOLDER)
     }
+    static getGraphqlOutputFolderForOperations(apiName: string) {
+        return join(this.getConfig().apisPath, GRAPHQL_APIS_FOLDER, apiName, GRAPHQL_OPERATIONS_FOLDER)
+    }
+
+    static getGraphqlOutputFolderForRequestCreators(apiName: string) {
+        return join(this.getConfig().apisPath, GRAPHQL_APIS_FOLDER, apiName, API_REQUEST_CREATORS_FOLDER)
+    }
+
     static getGraphqlApisFolder() {
         return join(this.getConfig().apisPath, GRAPHQL_APIS_FOLDER)
+    }
+    static getGraphqlOutputPathForTagFunction(apiName: string, tag: string) {
+        return join(this.getConfig().apisPath, GRAPHQL_APIS_FOLDER, apiName, `${tag}.ts`)
     }
     static isReducersSourceFile(file: string) {
         return this.isTsFile(file) && file.includes(this.getConfig().reducersPath) && !file.includes(this.getConfig().reducersGeneratedPath)
