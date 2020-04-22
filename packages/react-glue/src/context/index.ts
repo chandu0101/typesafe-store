@@ -1,5 +1,5 @@
 
-import * as React from "react"
+import React from "react"
 //@ts-ignore
 import { ReducerGroup, TypeSafeStore } from "@typesafe-store/store"
 import { Subscription } from "../subscription"

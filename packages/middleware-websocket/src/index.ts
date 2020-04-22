@@ -9,14 +9,17 @@ import {
 
 const TS_WEBSOCKET_GLOBAL_GROUP = "TS_WEBSOCKET_GLOBAL"
 
+
 /**
+ *  onOpenMessage : If you want to send a message onopen  connection
  *  parseMessage: parse web socket response message and give back id that is passed in createMessage
  */
-type TSWebSocketOptions = {
+export type TSWebSocketOptions = {
     protocols?: string[], headers?: Json, reconnect?: boolean,
     reconnectTimes?: number,
     createMessage?: (messagePassedFromAction: any, id: string) => WebSocketMessage,
-    parseMessage?: (data: any) => [any, string]
+    parseMessage?: (data: any) => [any, string],
+    onOpenMessage?: () => WebSocketMessage,
 }
 
 type WebSocketGlobalAction = Action & { payload: string }
@@ -30,7 +33,7 @@ type ClientsType = Record<string, TSWebSocket>
 
 const isWebSocketAction = (action: Action, rg: GenericReducerGroup) => {
     const actionMeta = rg.m.a[action.name]
-    return actionMeta && actionMeta.ws || action.ActionInternalMeta === TS_WEBSOCKET_GLOBAL_GROUP
+    return actionMeta && actionMeta.ws || action.group === TS_WEBSOCKET_GLOBAL_GROUP
 }
 
 export const createGlobalSocketCloseAction = (url: string): any => {
@@ -99,6 +102,10 @@ class TSWebSocket {
                 type: GraphqlMessages.CONNECTION_INIT,
                 payload: { headears: this.options.headers }
             }))
+        } else { // generic
+            if (this.options.onOpenMessage) {
+                this.ws.send(this.options.onOpenMessage())
+            }
         }
 
     }
@@ -180,7 +187,7 @@ class TSWebSocket {
                 // as resolver errors are returned in GQL.DATA messages.
                 const a = this.getActionFromId(data.id)
                 if (a) {
-                    this.store.dispatch({ ...a, _internal: { processed: true, data: { error: data.payload } } })
+                    this.store.dispatch({ ...a, _internal: { processed: true, kind: "Data", data: { error: data.payload } } })
                     //TODO do we need remove subscription from here ...
                 }
                 break
@@ -206,12 +213,12 @@ class TSWebSocket {
     }
     private removeFromSubscriptions = (a: Action) => {
         let prevLenth = this.subscriptions.length
-        this.subscriptions = this.subscriptions.filter(sa => sa.name !== a.name && sa.ActionInternalMeta !== a.ActionInternalMeta)
+        this.subscriptions = this.subscriptions.filter(sa => sa.name !== a.name && sa.group !== a.group)
         return prevLenth !== this.subscriptions.length
     }
 
     private dispatchActionToStore = (a: Action, data: any) => {
-        this.store.dispatch({ ...a, _internal: { processed: true, data } })
+        this.store.dispatch({ ...a, _internal: { processed: true, data, kind: "Data" } })
     }
 
     private handleOnError = (e: Event) => {
@@ -241,7 +248,7 @@ class TSWebSocket {
         }
 
     }
-    private getId = (action: Action) => `${action.ActionInternalMeta}.${action.name}`
+    private getId = (action: Action) => `${action.group}.${action.name}`
 
     handleUnSubscribe = (a: Action) => {
         const isRemoved = this.removeFromSubscriptions(a)
@@ -273,7 +280,7 @@ class TSWebSocket {
                 this.handleUnSubscribe(action)
                 return
             }
-            this.dispatchActionToStore({ name: action.name, ActionInternalMeta: action.ActionInternalMeta }, { loading: true })
+            this.dispatchActionToStore({ name: action.name, group: action.group }, { loading: true })
             if (!this.isReady) {
                 this.queue.push(action)
                 return
@@ -295,13 +302,13 @@ class TSWebSocket {
                 }
                 this.ws.send(this.options.createMessage(action.ws.message, id))
             }
-            this.subscriptions.push({ name: action.name, ActionInternalMeta: action.ActionInternalMeta })
+            this.subscriptions.push({ name: action.name, group: action.group })
         }
     }
 }
 
 const isWebSocketGlobalAction = (action: Action): action is WebSocketGlobalAction => {
-    return action.ActionInternalMeta === TS_WEBSOCKET_GLOBAL_GROUP
+    return action.group === TS_WEBSOCKET_GLOBAL_GROUP
 }
 
 const handleWebSocketAction = ({ action, clients, rg, store, options }: { clients: ClientsType, action: WebSocketAction | WebSocketGlobalAction, store: TypeSafeStore<any>, rg: GenericReducerGroup, options: CreateWebSocketMiddlewareOptions }) => {
@@ -340,7 +347,7 @@ export function createWebSocketMiddleware<R extends Record<string, ReducerGroup<
         if (action._internal && action._internal.processed) { // if already processed by other middlewares just pass through
             return next(action)
         }
-        const rg = store.getReducerGroup(action.ActionInternalMeta)
+        const rg = store.getReducerGroup(action.group)
         if (isWebSocketAction(action, rg)) {
             handleWebSocketAction({ clients, options, action: action as any, rg, store })
         } else {

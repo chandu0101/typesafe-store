@@ -33,7 +33,7 @@ const getVariableUsageOfNode = (node: ts.Node) => {
 }
 
 
-const isSeelctorVariableDeclarationStatement = (node: ts.Node) => {
+const isSelectorVariableDeclarationStatement = (node: ts.Node) => {
     let result = false
     if (ts.isVariableStatement(node)) {
         const decl = node.declarationList.declarations[0]
@@ -52,6 +52,24 @@ const isSeelctorVariableDeclarationStatement = (node: ts.Node) => {
     return result;
 }
 
+const isSelectorEVariableDeclarationStatement = (node: ts.Node) => {
+    let result = false
+    if (ts.isVariableStatement(node)) {
+        const decl = node.declarationList.declarations[0]
+        if (decl.initializer && ts.isCallExpression(decl.initializer)) {
+            const exp = decl.initializer.expression
+            if (ts.isIdentifier(exp)) {
+                const isSeelctorCall = exp.getText() === "createSelectorE"
+                if (isSeelctorCall) {
+                    const arg = (decl.initializer as ts.CallExpression).arguments[0]
+                    result = ts.isArrowFunction(arg) || ts.isFunctionExpression(arg)
+                }
+            }
+
+        }
+    }
+    return result;
+}
 
 type DependenciesOfObject = { parent: string, values: { value: string, childDeps?: DependenciesOfObject }[] }
 
@@ -71,6 +89,22 @@ const isNodeFurtherTracable = (node: ts.Node) => {
     }
 
     return result
+}
+
+const isObjectkeysValuesCallExpression = (node: ts.CallExpression) => {
+    let result = false
+    const exp = node.expression
+    if (ts.isPropertyAccessExpression(exp)) {
+        const name = exp.name.getText()
+        if (name === "keys" || name === "values") {
+            const o = exp.expression.getText()
+            if (o === "Object") {
+                result = true
+            }
+        }
+    }
+
+    return result;
 }
 
 /**
@@ -98,7 +132,8 @@ const getPropertyAccessvalueAndItsParent = (pa: ts.Identifier): { value: string,
             }
             return
         } else if (ts.isCallExpression(node)) {
-            if (isNodeFurtherTracable(tempNode)) {
+            const isObjetCall = isObjectkeysValuesCallExpression(node)
+            if (!isObjetCall && isNodeFurtherTracable(tempNode)) {
                 pn = node
             }
             return
@@ -243,12 +278,14 @@ const getReturnTypeOfFunction = (f: ts.ArrowFunction | ts.FunctionExpression) =>
 }
 
 
-const getSelectorFromFunction = (f: ts.ArrowFunction | ts.FunctionExpression, name: string) => {
+const getSelectorFromFunction = (f: ts.ArrowFunction | ts.FunctionExpression, name: string, ext: boolean) => {
     if (!f.type) {
         throw new Error(`For selectors you must specify return type`)
     }
+    if (ext && f.parameters.length < 2) {
+        throw new Error("createSelectorE should be a function state and external input ")
+    }
     const stateParam = f.parameters[0]
-    const extInputParam = f.parameters.length === 1 ? undefined : f.parameters[1]
     const variableUsage = getVariableUsageOfNode(f)
     const dg = getDependenciesOfObject(stateParam.name, { variableUsage })
     console.log("Dependency graph : ", JSON.stringify(dg));
@@ -256,22 +293,24 @@ const getSelectorFromFunction = (f: ts.ArrowFunction | ts.FunctionExpression, na
     console.log("Final Dependency Result : ", pg);
     const sType = stateParam.type!.getText()
     const rType = f.type!.getText()
-    const extInputType = extInputParam ? extInputParam.type!.getText() : "undefined"
-    return `export const ${name}:Selector<${sType},${extInputType},${rType}> = {fn:${f.getText()},dependencies:${JSON.stringify(pg)}}`
+    let result = `export const ${name}:Selector<${sType},${rType}> = {fn:${f.getText()},dependencies:${JSON.stringify(pg)}}`
+    if (ext) {
+        const extInputType = f.parameters[1].type!.getText()
+        result = `export const ${name}:SelectorE<${sType},${extInputType},${rType}> = {fne:${f.getText()},dependencies:${JSON.stringify(pg)}}`
+    }
+    return result
 }
 
-const getSelectorFromFunctionExpress = (fe: ts.FunctionExpression) => {
-
-}
-
-const createSelctorSelectorNode = (node: ts.VariableStatement) => {
+const createSelctorSelectorNode = (node: ts.VariableStatement, ext: boolean) => {
     const decl = node.declarationList.declarations[0]
     const name = decl.name.getText()
     const ce = decl.initializer! as ts.CallExpression
     const arg = ce.arguments[0]
     let result = ""
     if (ts.isArrowFunction(arg) || ts.isFunctionExpression(arg)) {
-        result = getSelectorFromFunction(arg, name)
+        result = getSelectorFromFunction(arg, name, ext)
+    } else {
+        throw new Error(`You should specify array function or normal function for createSelector`)
     }
     return ts.createIdentifier(result)
 }
@@ -296,9 +335,13 @@ const isSeelctorAlreadyImported = (id: ts.ImportDeclaration) => {
 const selectorTransformer: ts.TransformerFactory<ts.SourceFile> = context => {
     const visit: ts.Visitor = node => {
         node = ts.visitEachChild(node, visit, context);
-        if (isSeelctorVariableDeclarationStatement(node)) {
+        if (isSelectorVariableDeclarationStatement(node)) {
             console.log("seelctor found and processing");
-            return createSelctorSelectorNode(node as any);
+            return createSelctorSelectorNode(node as any, false);
+        }
+        if (isSelectorEVariableDeclarationStatement(node)) {
+            console.log("seelctor found and processing");
+            return createSelctorSelectorNode(node as any, true);
         }
         if (ts.isImportDeclaration(node)) {
             isSeelctorAlreadyImported(node)
@@ -322,7 +365,7 @@ const transformFile = (file: string) => {
         const transformedContent = printer.printFile(newSf)
         let imports: string[] = []
         if (!selectorAlreadyImported) {
-            imports.push(`import {Selector} from "@typesafe-store/store"`)
+            imports.push(`import {Selector,SelectorE} from "@typesafe-store/store"`)
         }
         const output = `
            ${CommonUtils.dontModifyMessage()}

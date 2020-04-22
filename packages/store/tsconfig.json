@@ -3,6 +3,7 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "build",
+    "target": "ES5",
     "lib": [
       "DOM"
     ],

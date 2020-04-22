@@ -1,0 +1,40 @@
+{
+  "name": "@typesafe-store/middleware-devtools",
+  "description": "type safe store reducer transformer",
+  "version": "0.1.0",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chandu0101/typesafe-store",
+    "directory": "packages/middleware-rest"
+  },
+  "bugs": {
+    "url": "https://github.com/chandu0101/typesafe-store/issues"
+  },
+  "homepage": "https://github.com/chandu0101/typesafe-store",
+  "license": "MIT",
+  "keywords": [
+    "typescript",
+    "ast",
+    "transformers"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "build/index.js",
+    "types": "build/index.d.ts"
+  },
+  "scripts": {
+    "test": "jest",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@typesafe-store/store": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^24.0.20",
+    "jest": "^24.9.0",
+    "ts-jest": "^24.1.0"
+  }
+}

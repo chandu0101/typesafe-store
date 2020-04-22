@@ -3,7 +3,7 @@ import { Action } from "../reducer"
 
 
 
-export type WebSocketActionmeta = { isGraphql?: boolean, dtf?: (data: any) => any }
+export type WebSocketActionMeta = { isGraphql?: boolean, dtf?: (data: any) => any }
 
 export type WebSocketAction = Action & { ws: WebSocketRequest<string, WebSocketMessage> }
 
@@ -17,7 +17,7 @@ export type WebSocketResponse<R> = R | WebSocketMessageTransformer<R>
 
 export type WebSocketFieldValue<U extends string, M extends WebSocketMessage, R, E> = {
     data?: R, error?: E,
-    loading?: boolean, completed?: boolean, _wsmeta: WebSocketRequest<U, M>
+    loading?: boolean, completed?: boolean, _wsmeta?: WebSocketRequest<U, M>
 }
 
 export type TSWebSocket<U extends string, M extends WebSocketMessage, R, E> = WebSocketFieldValue<U, M, R, E>

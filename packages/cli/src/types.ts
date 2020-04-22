@@ -211,7 +211,7 @@ export type TypeSafeStoreConfigExtra = TypeSafeStoreConfig & {
     apisPath: string,
     reducersGeneratedPath: string,
     workersPath: string,
-    seelctorsPath: string,
+    selectorsPath: string,
     selectorsGeneratedPath: string,
     tsBuildInfoPath?: string
 }

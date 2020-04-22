@@ -1,6 +1,6 @@
 import { SyncActionOffload } from "../offload";
 import { FetchActionMeta } from "../fetch";
-import { WebSocketActionmeta } from "../websockets";
+import { WebSocketActionMeta } from "../websockets";
 
 export type DataAndTypeOps = {
     kind: "DataAndTypeOps", data: any, processed: boolean, optimisticFailed?: any,
@@ -55,7 +55,7 @@ export type ReducerGroup<
 export type ActionMeta<S> = {
     f?: FetchActionMeta,
     offload?: SyncActionOffload<S>,
-    ws?: WebSocketActionmeta
+    ws?: WebSocketActionMeta
 }
 
 /**

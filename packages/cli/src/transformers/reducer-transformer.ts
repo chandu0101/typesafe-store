@@ -23,6 +23,7 @@ import { type } from "os";
 
 
 const STATE_PARAM_NAME = "_trg_satate"
+const ACTION_PARAM_NAME = "_trg_action"
 const WORKER_RESPONSE_PARAM_NAME = "_wr"
 
 const PAYLOAD_VARIABLE_NAME = "_trg_payload"
@@ -244,11 +245,11 @@ const processMethods = ({ group, stateName }: { group: string, stateName: string
                 const payloadType = actionType.payload!
                 let v = "";
                 if (paramsLenth === 1) {
-                    v = `const ${m.parameters[0].name.getText()} = (action as any).payload as (${payloadType})`;
+                    v = `const ${m.parameters[0].name.getText()} = (${ACTION_PARAM_NAME} as any).payload as (${payloadType})`;
                 } else {
                     v = `const { ${m.parameters
                         .map(p => p.name.getText())
-                        .join(",")} } = (action as any).payload as (${payloadType})`;
+                        .join(",")} } = (${ACTION_PARAM_NAME} as any).payload as (${payloadType})`;
                 }
                 reservedStatements.push(v);
             }
@@ -1060,6 +1061,8 @@ const invalidateObjectWithList = ({
         let access = m.access?.[0].name
         if (m.isOptionalAccess) {
             access = access ? `![${access}]` : "!";
+        } else {
+            access = access ? `[${access}]` : undefined
         }
         const expand = Object.keys(obj).map(s => `${s}:${invalidateObjectWithList({ input: obj[s], traversed: traversed.concat({ name: v1, access }) })}`).join(", ")
         if (m.type === MetaType.ARRAY) {
@@ -1183,7 +1186,14 @@ const invalidateObject = ({
                 return result;
             }
         } else {
-            const r = `{...${v},${newValue.name}:${newValue.value}}`;
+            let r = ""
+            if (v1t.meta.access) {
+                const access = v1t.meta.access[0].name
+                r = `{ ...${v}, [${access}]: {...${v}[${access}],${newValue.name}:${newValue.value} }}`
+            } else {
+                r = `{...${v},${newValue.name}:${newValue.value}}`;
+            }
+
             if (v1t.meta.isOptionalAccess || v1t.meta.isTypeOptional) {
                 console.log(`Optional found1 : ,v1 = ${v1}, v = ${v}`);
                 return `${v} ? ${r} : ${v}`;
@@ -1196,6 +1206,8 @@ const invalidateObject = ({
         let access = v1t.meta.access?.[0].name
         if (v1t.meta.isOptionalAccess) {
             access = access ? `![${access}]` : "!";
+        } else {
+            access = access ? `[${access}]` : undefined
         }
         const v2exapnd = invalidateObject({
             map: { input: input.slice(1), values, newValue },
@@ -1210,12 +1222,17 @@ const invalidateObject = ({
             }
             expand = `[...${v}.map((${TSTORE_TEMP_V},_i) => _i === ${v1t.meta.access?.[0].name} ? ${obs} : ${TSTORE_TEMP_V})]`;
         } else {
-            expand = `{ ...${v},${v2}:${v2exapnd} }`;
+            if (access) {
+                expand = `{ ...${v}, ${access}: {...${v}${access} ,${v2}:${v2exapnd}}  }`;
+            } else {
+                expand = `{ ...${v},${v2}:${v2exapnd} }`;
+            }
             if (v1t.meta.isOptionalAccess || v1t.meta.isTypeOptional) {
                 expand = `${v} ? ${expand} : ${v}`;
             }
         }
-        if (v2t.meta.isOptionalAccess || v2t.meta.isTypeOptional) {
+        if (v2t.meta.isOptionalAccess || v2t.meta.isTypeOptional) { //TODO testcase for this to triggger
+
             console.log(`Optional found2 : ,v2 = ${v2}, v = ${v}`);
             return `${v} ? ${expand} : ${v}`;
         }
@@ -1238,8 +1255,8 @@ function buildFunction({
 }) {
     if (caseClauses.length > 0) {
         return `
-    (${STATE_PARAM_NAME}:${group}State,action:${group}Action) => {
-       const t = action.name
+    (${STATE_PARAM_NAME}:${group}State,${ACTION_PARAM_NAME}:${group}Action) => {
+       const t = ${ACTION_PARAM_NAME}.name
        switch(t) {
          ${caseClauses.join("\n")}
        }
@@ -1393,6 +1410,31 @@ type ProcessFetchResult = {
     typeOps?: string
 }
 
+const processWebSocket = (lpd: LocalPropertyDecls, group: string): { meta: string, payload: String } => {
+    console.log("******** processWebSocket");
+    const fieldTypeNode = lpd.pd.type!
+    let opNode: ts.TypeReferenceNode = fieldTypeNode as any
+    if (ts.isIntersectionTypeNode(fieldTypeNode)) {
+        opNode = fieldTypeNode.types[0] as any
+    }
+    const symb = AstUtils.getTypeChecker().getSymbolAtLocation(opNode.typeName)
+    if (!symb) {
+        throw new Error(`field ${group}.${lpd.pd.name} fist type should  be TSWebSocket`)
+    }
+    const decl = symb.declarations[0]
+    const declTypeNode: ts.TypeReferenceNode = (decl as any).type
+    const declTypeNodeText = declTypeNode.getText()
+    let meta: { isGraphql?: boolean, dtf?: string } = {}
+    const actionPayload = `NonNullable<${opNode.typeName.getText()}["_wsmeta"]>`
+    if (declTypeNodeText.startsWith("GraphqlSubscription<")) {
+        meta.isGraphql = true;
+    }
+
+    return { meta: JSON.stringify(meta), payload: actionPayload }
+
+}
+
+
 //TODO form FetchRequest from type arguments dont depend on _fmeta
 const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetchResult => {
     const OFFLOAD_ASYNC = "OffloadAsync"
@@ -1426,7 +1468,7 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
     let bodyType: FetchActionMeta["body"] = undefined
     let responseTypeNode: ts.TypeNode = null as any
     let grpcMeta: string | undefined = undefined
-    let actionPayload = `NoNullable<${opNode.typeName.getText()}["_fmeta"]>`
+    let actionPayload = `NonNullable<${opNode.typeName.getText()}["_fmeta"]>`
     let typeOpsResult: string | undefined = "";
     if (declaredTypeNodeText.startsWith("GRPCUnary<") || declaredTypeNodeText.startsWith("GRPCResponseStream<")) { // grpc 
         isGrpc = true;
@@ -1733,6 +1775,7 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
  */
 const getAsyncActionTypeAndMeta = (group: string): [string, { name: string, value: string }[]] => {
     const fetchProps: { name: string, value: string }[] = []
+    const webSocketProps: { name: string, value: string }[] = []
     const promiseProps: string[] = []
     const asyncType = propDecls
         .filter(isAsyncPropDeclaration)
@@ -1746,7 +1789,7 @@ const getAsyncActionTypeAndMeta = (group: string): [string, { name: string, valu
             if (tpe.startsWith("Promise<")) {
                 promiseProps.push(name)
                 result = `{name:"${name}",group:"${group}", promise: () => ${p.typeStr} }`;
-            } else if (tpe.includes("_fmeta")) {
+            } else if (tpe.includes("_fmeta") || tpe.includes("FetchAsyncData")) {
                 const fetchResult = processFetchProp2(p, group)
                 const meta: any = { response: fetchResult.responseType }
                 meta.offload = fetchResult.offload
@@ -1754,16 +1797,21 @@ const getAsyncActionTypeAndMeta = (group: string): [string, { name: string, valu
                 meta.graphql = fetchResult.graphql
                 meta.typeops = fetchResult.typeOps
                 meta.grpc = fetchResult.grpcMeta
-                fetchProps.push({ name, value: JSON.stringify(meta) })
+                fetchProps.push({ name, value: `{f: ${JSON.stringify(meta)} }` })
                 result = `{name:"${
                     name
                     }",group:"${group}", fetch: ${fetchResult.actionPayload}  }`;
+            } else if (tpe.includes("_wsmeta") || tpe.includes("WebSocketFieldValue")) {
+                const wr = processWebSocket(p, group)
+                webSocketProps.push({ name, value: `{ws: ${wr.meta}}` })
+                result = `{name:"${
+                    name
+                    }",group:"${group}", ws: ${wr.payload}  }`;
             }
-
             return result;
         }).join(" | ");
 
-    const meta = [...fetchProps,
+    const meta = [...fetchProps, ...webSocketProps,
     ...promiseProps.map(p => ({ name: p, value: `{}` }))]
 
     return [asyncType, meta]
@@ -1816,13 +1864,14 @@ export function getTypeForPropertyAccess(
     input: string[],
     mTypes: { name: string; type: ts.Type }[] = memberTypes
 ): ts.Type {
-    // console.log("**getTypeForPropertyAccess : ", "input: ", input, mTypes.length);
+    console.log("**getTypeForPropertyAccess : ", "input: ", input, mTypes.length);
     let t = mTypes.find(mt => mt.name === input[0])!.type;
-    // console.log("Type : ", AstUtils.typeToString(t));
+
+    console.log("Type : ", AstUtils.typeToString(t));
     if (input.length === 1) {
         return t;
     } else {
-        const nt = AstUtils.getNonNullableType(t)
+        const nt = t.getNonNullableType()
         if (AstUtils.isArrayType(nt)) {
             // console.log("**** ok its array type : ", input[0]);
             if (AstUtils.isTypeReference(nt)) {
@@ -1831,6 +1880,11 @@ export function getTypeForPropertyAccess(
             } else {
                 t = (nt as any).elementType;
                 // console.log("its regular array type :", t);
+            }
+        } else {
+            const props = t.getProperties()
+            if (props.length === 0) { // Record<string,any>
+                t = t.getStringIndexType()!
             }
         }
         return getTypeForPropertyAccess(input.slice(1), AstUtils.getMembersOfType(t, classDecl));
@@ -1886,7 +1940,10 @@ export const getPropDeclsFromTypeMembers = (): LocalPropertyDecls[] => {
 
 export function isAsyncPropDeclaration(input: LocalPropertyDecls) {
     const tpe = input.typeStr
-    return tpe.includes("_fmeta") || tpe.startsWith("Promise<");
+    console.log("isAsyncPropDeclaration", tpe);
+    return tpe.includes("_fmeta")
+        || tpe.includes("FetchAsyncData")
+        || tpe.includes("WebSocketFieldValue") || tpe.includes("_wsmeta") || tpe.startsWith("Promise<");
 }
 
 export const getMethodsFromTypeMembers = () => {

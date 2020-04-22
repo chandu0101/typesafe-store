@@ -1,12 +1,12 @@
-import * as React from "react"
+import React from "react"
 import { Selector, UnsubscribeOptions } from "@typesafe-store/store"
 import { TypeSafeStoreContext } from "../context"
 import { useIsomorphicLayoutEffect } from "../utils/useIsomorphicLayoutEffect"
 
-export type UseSelectorOptions<S, E, R> = { selector: Selector<S, E, R>, extInput: E, resetStateOnUnsubscribe?: boolean }
+export type UseSelectorOptions = { resetStateOnUnsubscribe?: boolean }
 
 
-export default function useSelector<S, E, R>({ selector, resetStateOnUnsubscribe, extInput }: UseSelectorOptions<S, E, R>): R {
+export default function useSelector<S, R>(selector: Selector<S, R>, options?: UseSelectorOptions): R {
 
     const forceUpdate = React.useReducer(() => ({}), {})[1] as () => void
 
@@ -14,7 +14,7 @@ export default function useSelector<S, E, R>({ selector, resetStateOnUnsubscribe
 
     const unSubscribeListener = React.useMemo<(options?: UnsubscribeOptions) => any>(() => {
         const listener = () => {
-            selectedStateRef.current = selector.fn(context.store.state, extInput)
+            selectedStateRef.current = selector.fn(context.store.state)
             forceUpdate()
         }
         const unsubscribeListener = context.subscription.listenSelector(selector, listener, "")
@@ -23,19 +23,17 @@ export default function useSelector<S, E, R>({ selector, resetStateOnUnsubscribe
 
 
     const selectedStateRef = React.useRef<R>()
-    const latestSelectorRef = React.useRef<Selector<S, E, R>>()
-    const selectorExtInputRef = React.useRef<E>()
+    const latestSelectorRef = React.useRef<Selector<S, R>>()
 
-    if (latestSelectorRef.current !== selector || selectorExtInputRef.current !== extInput) {
+    if (latestSelectorRef.current !== selector) {
         latestSelectorRef.current = selector
-        selectorExtInputRef.current = extInput
-        selectedStateRef.current = selector.fn(context.store.state, extInput)
+        selectedStateRef.current = selector.fn(context.store.state)
     }
 
     useIsomorphicLayoutEffect(() => {
 
         return () => {
-            unSubscribeListener({ resetToDefault: resetStateOnUnsubscribe })
+            unSubscribeListener({ resetToDefault: options && options.resetStateOnUnsubscribe })
         }
     }, [unSubscribeListener])
 

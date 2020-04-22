@@ -161,7 +161,7 @@ export class ConfigUtils extends ConfigValidation {
         const compilerOptions = co
         const config: TypeSafeStoreConfigExtra = {
             ...tStoreCnofig, reducersPath: "", reducersGeneratedPath: "",
-            seelctorsPath: "",
+            selectorsPath: "",
             selectorsGeneratedPath: "",
             workersPath: "",
             apisPath: ""
@@ -171,9 +171,9 @@ export class ConfigUtils extends ConfigValidation {
 
         config.reducersGeneratedPath = join(config.reducersPath, GENERATED_FOLDER)
 
-        config.seelctorsPath = join(config.seelctorsPath, SELECTORS_FOLDER)
+        config.selectorsPath = join(config.selectorsPath, SELECTORS_FOLDER)
 
-        config.selectorsGeneratedPath = join(config.seelctorsPath, GENERATED_FOLDER)
+        config.selectorsGeneratedPath = join(config.selectorsPath, GENERATED_FOLDER)
         config.apisPath = join(config.storePath, APIS_FOLDER_NAME)
         config.workersPath = join(config.storePath, WORKERS_FOLDER)
 
@@ -329,7 +329,11 @@ export class ConfigUtils extends ConfigValidation {
         return join(this.getConfig().apisPath, GRAPHQL_APIS_FOLDER, apiName, `${tag}.ts`)
     }
     static isReducersSourceFile(file: string) {
-        return this.isTsFile(file) && file.includes(this.getConfig().reducersPath) && !file.includes(this.getConfig().reducersGeneratedPath)
+        const config = this.getConfig()
+        const rtype = join(config.reducersPath, "types")
+        const thelers = join(config.reducersPath, "helpers")
+        return this.isTsFile(file) && file.includes(config.reducersPath)
+            && !file.includes(config.reducersGeneratedPath) && !file.includes(rtype) && !file.includes(thelers)
     }
 
     static isGraphqlOperationsSourceFile(file: string) {
@@ -342,7 +346,11 @@ export class ConfigUtils extends ConfigValidation {
         return false
     }
     static isSelectorsSourceFile(file: string) {
-        return this.isTsFile(file) && file.includes(this.getConfig().seelctorsPath) && !file.includes(this.getConfig().selectorsGeneratedPath)
+        const config = this.getConfig()
+        const stype = join(config.selectorsPath, "types")
+        const shelepers = join(config.selectorsPath, "helpers")
+        return this.isTsFile(file) && file.includes(config.selectorsPath)
+            && !file.includes(config.selectorsGeneratedPath) && !file.includes(stype) && !file.includes(shelepers)
     }
 
     static getOutputPathForReducerSourceFile(file: string) {

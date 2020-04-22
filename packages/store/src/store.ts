@@ -1,7 +1,7 @@
 import { ReducerGroup, Action, ActionInternalMeta, DataAndTypeOps } from "./reducer"
 import { PersistanceStorage, StorageWriteMode } from "./storage"
 import compose from "./compose"
-import { Selector } from "./selector"
+import { Selector, SelectorE } from "./selector"
 import { TypeOpEntity } from "./typeops"
 import { Navigation, NAVIGATION_REDUCER_GROUP_NAME, Location, NavigationAction } from "./navigation"
 import { TStoreUtils } from "./utils"
@@ -22,7 +22,9 @@ export type GetStateFromReducers<T extends Record<string, ReducerGroup<any, any,
     [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? S : any }
 
 
-export type GetActionFromReducers<T> = { [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? AA extends undefined ? A : A & AA : never }[keyof T]
+export type GetActionFromReducers<T> = { [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? AA extends undefined ? A : A | AA : never }[keyof T]
+
+export type GetActionFromReducers2<T> = { [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? AA extends undefined ? A : A | AA : never }[keyof T]
 
 export type MiddleWare<R extends Record<string, ReducerGroup<any, any, any, any>>> = (store: TypeSafeStore<R>) =>
     (next: Dispatch<GetActionFromReducers<R>>) => (action: GetActionFromReducers<R>) => any
@@ -43,18 +45,18 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     readonly storage?: PersistanceStorage<R, GetStateFromReducers<R>>
 
-    private _globalListener?: Callback
+    private _globalListener?: (action: Action, stateKeys: { name: string, prevValue: any }[]) => any
+
+    private _globalCompleteHandlers: Callback[] = []
 
     private typeOpsMata: Record<string, any> = {}
 
     _unsubscribeNavigationListener?: () => void
 
-    readonly selectorListeners: Record<keyof GetStateFromReducers<R>, { selector: Selector<GetStateFromReducers<R>, any, any>, listener: Callback, tag?: string }[]> = {} as any
-
-    /**
-     *  used for framework integrations
-     */
-    _globalListenerData?: { prevState: any, stateKeys: string[] }
+    readonly selectorListeners: Record<keyof GetStateFromReducers<R>, {
+        selector: Selector<GetStateFromReducers<R>, any>
+        | SelectorE<GetStateFromReducers<R>, any, any>, listener: Callback, tag?: string
+    }[]> = {} as any
 
     /**
      *  use this when you set a persitance storage and to know whether state is loaded from storage or not
@@ -92,7 +94,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
     }
 
 
-    private checkNavigationReducerAttached() {
+    private checkNavigationReducerAttached = () => {
         if (process.env.NODE_ENV !== "production") {
             const nv = this.reducers["navigation"]
             if (!nv || nv.g !== NAVIGATION_REDUCER_GROUP_NAME) {
@@ -125,7 +127,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
      *   
      * @param skipStateSet when preparing store with storage don't override satate,just do other work stateKey to regudcer group mapping
      */
-    private prepareNormalStore(skipStateSet?: boolean) {
+    private prepareNormalStore = (skipStateSet?: boolean) => {
         for (const stateKey in this.reducers) {
             const rg = this.reducers[stateKey]
             if (rg) { // suport lazy reducers need more thinking :s 
@@ -142,7 +144,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         }
     }
 
-    async prepareStoreWithStorage(storage: PersistanceStorage<R, GetStateFromReducers<R>>, ) {
+    prepareStoreWithStorage = async (storage: PersistanceStorage<R, GetStateFromReducers<R>>, ) => {
         try {
             const sState = await storage.getState(this.reducers)
             if (sState) {
@@ -156,7 +158,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         }
     }
 
-    private defaultDispatch(a: Action) {
+    private defaultDispatch = (a: Action) => {
 
         const { group, name, _internal } = a;
         const stateKey = this.reducerGroupToStateKeyMap[group]
@@ -169,6 +171,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         const ps = this._state[stateKey]
         let s: typeof ps = ps
         let stateKeysModifiedByTypeOps: string[] = []
+        let prevStateOfStateKeysModifiedByTypeOps: Record<string, any> = {}
         if (_internal && _internal.processed) { // processed by middlewares (example: fetch,graphql)
             if (_internal.kind === "Data") {
                 s = { ...ps, [name]: _internal.data }
@@ -182,6 +185,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                 if (entry.length > 0) {
                     const sk = this.getStateKeyForGroup(entry[0])
                     stateKeysModifiedByTypeOps.push(sk)
+                    prevStateOfStateKeysModifiedByTypeOps[sk] = this._state[sk]
                 }
                 const typeOpStateKey = this.getStateKeyForGroup(entry[0])
                 const typeOpState = this._state[typeOpStateKey]
@@ -533,12 +537,14 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         else {
             s = rg.r(ps, a)
         }
-        if (s !== ps) {
-            (this._state as any)[stateKey] = s
-            // notify listeners 
-            const changedStateKeys = TStoreUtils.removeDuplicatesInArray([stateKey, ...stateKeysModifiedByTypeOps])
-            this.notifyStorageOrListeners({ stateKeys: changedStateKeys, action: a, ps: ps })
-        }
+        (this._state as any)[stateKey] = s
+        // notify listeners 
+        const changedStateKeys = TStoreUtils.removeDuplicatesInArray([stateKey, ...stateKeysModifiedByTypeOps])
+        this.notifyStorageOrListeners({
+            stateKeys: changedStateKeys.map(ck => ck === stateKey ? { name: stateKey, prevValue: ps } :
+                { name: ck, prevValue: prevStateOfStateKeysModifiedByTypeOps[ck] }),
+            action: a, ps: ps
+        })
     }
 
     private setPropAccessImmutable = (obj: any, propAccess: string[], value: (prev: any) => any): any | undefined => {
@@ -581,7 +587,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         }
     }
 
-    private async notifyStorageOrListeners({ stateKeys, action, ps }: { stateKeys: string[], action: Action, ps: any }) {
+    private notifyStorageOrListeners = async ({ stateKeys, action, ps }: { stateKeys: { name: string, prevValue: any }[], action: Action, ps: any }) => {
         if (this.storage && this.storage.options.writeMode === StorageWriteMode.REQUIRED) {
             await this.notifyStorage(stateKeys, action)
             this.notifyListeners({ stateKeys, action, ps })
@@ -593,30 +599,32 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         }
     }
 
-    private notifyStorage(stateKeys: string[], action: Action) {
+    private notifyStorage = (stateKeys: { name: string, prevValue: any }[], action: Action) => {
         const data = stateKeys.reduce((pv, ck) => {
-            pv[ck] = JSON.stringify(this._state[ck])
+            pv[ck.name] = JSON.stringify(this._state[ck.name])
             return pv;
         }, {} as Record<string, string>)
         return this.storage!.dataChanged(data)
     }
 
 
-    private notifyListeners({ stateKeys, action, ps }: { stateKeys: string[], action: Action, ps: any }) {
+    private notifyListeners = ({ stateKeys, action, ps }: { stateKeys: { name: string, prevValue: any }[], action: Action, ps: any }) => {
         if (this._globalListener) {
-            this._globalListenerData = { prevState: ps, stateKeys }
-            this._globalListener(action)
+            this._globalListener(action, stateKeys)
         } else {
             stateKeys.forEach(stateKey => {
-                const slrs = this.selectorListeners[stateKey]
+                const slrs = this.selectorListeners[stateKey.name]
                 slrs.forEach(slr => {
-                    if (this.isSelectorDependenciesChanged(this._state[stateKey], ps, slr.selector, stateKey)) {
+                    if (this.isSelectorDependenciesChanged(this._state[stateKey.name], stateKey.prevValue, slr.selector, stateKey.name)) {
                         slr.listener(action)
                     }
                 })
             })
 
         }
+        this._globalCompleteHandlers.forEach(c => {
+            c(action)
+        })
     }
 
 
@@ -647,11 +655,11 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         let result = false
         let pvProcessed: any | undefined = pv
         let cvProcessed: any | undefined = cv
-        objAccess.split(".").forEach(v => {
+        result = objAccess.split(".").some(v => {
             if (pvProcessed && cvProcessed) {
                 const lvp = pvProcessed[v]
                 if (!lvp) {
-                    return result
+                    return false
                 }
                 const lvc = cvProcessed[v]
                 if (lvp !== lvc) {
@@ -664,18 +672,22 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         return result
     }
 
-    isSelectorDependenciesChanged = (currentSate: any, prevState: any, selector: Selector<any, any, any>, keyChanged: string): boolean => {
+    isSelectorDependenciesChanged = (currentSate: any, prevState: any, selector: Selector<any, any> | SelectorE<any, any, any>, keyChanged: string): boolean => {
         const deps = selector.dependencies as Record<string, string[]>
         let result = false
-        Object.entries(deps).forEach(([key, value]) => {
+        if (currentSate === prevState) {
+            return false
+        }
+        result = Object.entries(deps).some(([key, value]) => {
             if (keyChanged === key) {
                 if (value.length > 0) {
-                    value.forEach(oa => {
+                    const lr = value.some(oa => {
                         const oaChanged = this.isObjectKeysChanged(prevState, currentSate, oa)
                         if (oaChanged) {
                             return true
                         }
                     })
+                    return lr;
                 } else {
                     if (currentSate !== prevState) {
                         return true
@@ -692,7 +704,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
      * @param listener 
      * @param tag component name in which 
      */
-    subscribeSelector<SR>(selector: Selector<GetStateFromReducers<R>, any, SR>, listener: Callback, tag?: string) {
+    subscribeSelector = <SR>(selector: Selector<GetStateFromReducers<R>, SR> | SelectorE<GetStateFromReducers<R>, any, SR>, listener: Callback, tag?: string) => {
 
         const keys = Object.keys(selector.dependencies)
 
@@ -754,7 +766,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
     /** 
      *  
      */
-    resetSelectorDepsToDefaultSate = (selector: Selector<GetStateFromReducers<R>, any, any>) => {
+    resetSelectorDepsToDefaultSate = (selector: Selector<GetStateFromReducers<R>, any> | SelectorE<GetStateFromReducers<R>, any, any>) => {
         Object.entries(selector.dependencies).forEach(([key, values]) => {
             const stateKey = key as any
             const sls = this.selectorListeners[stateKey]
@@ -781,28 +793,35 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
      *  used for framework integrationions
      * @param callback 
      */
-    _subscribeGlobal(callback: Callback) {
+    _subscribeGlobal = (callback: (action: Action, stateKeys: { name: string, prevValue: any }[]) => any) => {
         this._globalListener = callback
         return () => {
             this._globalListener = undefined
-            this._globalListenerData = undefined
         }
     }
 
 
+    _addCompleteHook = (callback: Callback) => {
+        this._globalCompleteHandlers.push(callback)
+        return () => {
+            this._globalCompleteHandlers = this._globalCompleteHandlers.filter(h => h !== callback)
+        }
+    }
+
 }
 
 
-type X = NonNullable<undefined | string>
+// type X = NonNullable<undefined | string>
 // type A1 = undefined
+// type A1Sync = { name: "a3", group: "g1", ws: string }
 // type A2 = { name: "a2", group: "g2" }
 // type G1S = { books: { name: string }[] }
-// const g1: ReducerGroup<G1S, A2, "g1", undefined> = { r: null as any, g: "g1", ds: null as any, m: {} }
-// const g2: ReducerGroup<G1S, A2, "g2", undefined> = { r: null as any, g: "g2", ds: null as any, m: {} }
+// const g1: ReducerGroup<G1S, A2, "g1", A1Sync> = { r: null as any, g: "g1", ds: null as any, m: { a: {} } }
+// const g2: ReducerGroup<G1S, A2, "g2", undefined> = { r: null as any, g: "g2", ds: null as any, m: { a: {} } }
 // const sr = { g1, g2 }
 // const store = new TypeSafeStore({ reducers: sr, middleWares: [] })
 
-// type AT = GetActionFromReducers<typeof sr>
+// type AT = GetActionFromReducers2<typeof sr>
 // store.dispatch({name:})
 // store.subscribe(["g1",], null as any)
 

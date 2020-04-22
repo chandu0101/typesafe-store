@@ -1,4 +1,4 @@
-import * as React from 'react'
+import React from 'react'
 
 // Under React Native, we know that we always want to use useLayoutEffect
 

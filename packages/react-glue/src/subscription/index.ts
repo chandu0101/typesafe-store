@@ -1,22 +1,27 @@
 
 
-//@ts-ignore
-import { TypeSafeStore, ReducerGroup, Selector, Action, GetStateFromReducers, } from "@typesafe-store/store"
+import { TypeSafeStore, ReducerGroup, Selector, Action, GetStateFromReducers, SelectorE, } from "@typesafe-store/store"
 import { getBatch } from "../utils/batch"
-
 
 
 export class Subscription<R extends Record<string, ReducerGroup<any, any, any, any>>> {
 
-    globalListener = (action: Action) => {
-        const changedData = this.store._globalListenerData!
+    globalListener = (action: Action, stateKeys: { name: string, prevValue: any }[]) => {
+        console.log("globalListener called :", action);
+        console.log("state keys :", stateKeys);
         const changedListeners: any[] = []
-        this.store.selectorListeners[changedData.stateKey].forEach(sl => {
-            const changed = this.store.isSelectorDependenciesChanged(this.store.state[changedData.stateKey], changedData.prevState, sl.selector, changedData.stateKey)
-            if (changed) {
-                changedListeners.push(sl.listener)
-            }
+        stateKeys.forEach(stateKey => {
+            this.store.selectorListeners[stateKey.name].forEach(sl => {
+                console.log("selector : ", sl, this.store.state[stateKey.prevValue]);
+                const changed = this.store.isSelectorDependenciesChanged(this.store.state[stateKey.name], stateKey.prevValue, sl.selector,
+                    stateKey.name)
+                console.log("changed", changed);
+                if (changed) {
+                    changedListeners.push(sl.listener)
+                }
+            })
         })
+
         const batch = getBatch()
         batch(() => {
             changedListeners.forEach(l => {
@@ -24,14 +29,14 @@ export class Subscription<R extends Record<string, ReducerGroup<any, any, any, a
             })
         })
 
-        this.store._globalListenerData = undefined
     }
     private globalUnsubscribeFn: () => any
     constructor(private readonly store: TypeSafeStore<R>) {
         this.globalUnsubscribeFn = store._subscribeGlobal(this.globalListener)
     }
 
-    listenSelector<SR>(selector: Selector<GetStateFromReducers<R>, any, SR>, listener: () => any, tag: string) {
+    listenSelector<SR>(selector: Selector<GetStateFromReducers<R>, SR> | SelectorE<GetStateFromReducers<R>, any, SR>,
+        listener: () => any, tag: string) {
         return this.store.subscribeSelector(selector, listener, tag)
     }
 

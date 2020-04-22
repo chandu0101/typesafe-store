@@ -1,7 +1,7 @@
 
 //@ts-ignore
 import { ReducerGroup, TypeSafeStore } from "@typesafe-store/store"
-import * as React from "react"
+import React from "react"
 import { TypeSafeStoreContext, TypeSafeStoreContextType } from "../context"
 import { Subscription } from "../subscription"
 
@@ -12,7 +12,7 @@ import { Subscription } from "../subscription"
 type ProviderProps<R extends Record<string, ReducerGroup<any, any, any, any>>> = {
     store: TypeSafeStore<R>,
     children: React.ReactNode,
-    loadingComponent: React.ReactNode
+    loadingComponent?: React.ReactNode
 }
 
 

@@ -3,10 +3,10 @@
   "compilerOptions": {
     "rootDir": "src",
     "lib": [
-      "WebWorker",
       "dom"
     ],
     "outDir": "build",
+    "target": "ES5",
     "sourceMap": true,
     "composite": true,
     "declaration": true,
@@ -14,7 +14,7 @@
   },
   "references": [
     {
-      "path": "../store/build"
+      "path": "../store"
     }
   ],
 }

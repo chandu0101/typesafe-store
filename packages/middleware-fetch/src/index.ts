@@ -35,12 +35,14 @@ function getUrl(url: FUrl): string {
 function getOptions<FV extends FetchVariants, U extends FUrl, B extends FetchBody>(
     fRequest: FetchRequest<FV, U, B, any>, meta: FetchActionMeta) {
     const options: RequestInit = { method: fRequest.type }
-
+    options.headers = {}
     if (fRequest.body) {
         if (meta.grpc) {
+            options.headers["Content-Type"] = "application/grpc-web+proto"
             options.body = GrpcUtils.frameRequest(meta.grpc.sf(fRequest.body))
         }
         else if (meta.body === "string") {
+            options.headers["Content-Type"] = "application/json"
             options.body = JSON.stringify(fRequest.body)
         } else {
             options.body = fRequest.body as any

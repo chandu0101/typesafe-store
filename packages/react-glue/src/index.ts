@@ -1,6 +1,7 @@
 import Provider from './components/Provider'
 
 import useSelector from './hooks/useSelector'
+import useSelectorE from './hooks/useSelectorE'
 import useDispatch from './hooks/useDispatch'
 import useStore from './hooks/useStore'
 
@@ -14,5 +15,6 @@ export {
   batch,
   useSelector,
   useStore,
+  useSelectorE,
   useDispatch
 }

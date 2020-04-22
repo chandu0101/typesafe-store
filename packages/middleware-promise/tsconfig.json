@@ -3,6 +3,9 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "build",
+    "lib": [
+      "DOM"
+    ],
     "sourceMap": true,
     "declaration": true,
     "composite": true,
