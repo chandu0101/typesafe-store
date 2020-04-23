@@ -372,10 +372,11 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                         }
 
                     } else {
-                        s = { ...ps, [name]: _internal.data }
+                        s = { ...ps, [name]: ai.data }
                     }
                 } else if (typeOpName === "PaginateAppend") {
                     const existingData = ps[name].data
+                    console.log("************ PaginateAppend", existingData, ai);
                     let no: any = ai.data
                     const propAccess = entry[1] ? entry[1].split(".") : []
                     if (optimisticFail) { // revert back state changes
@@ -403,7 +404,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                         s = { ...ps, [name]: ai.data }
                     } else if (ai.data.data) { // success response 
                         const data = ai.data.data
-
+                        console.log("************########********** success case :", propAccess);
                         if (propAccess.length > 0) {
                             const newData = this.setPropAccessImmutable(data, propAccess, (newD: any) => {
                                 if (ai.optimisticSuccess) {
@@ -419,14 +420,23 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                                     })
                                     return na;
                                 } else {
-                                    const exitingList = this.getPropAccess(existingData, propAccess)
+                                    let exitingList: any | undefined = undefined
+                                    console.log(" in side : existingData: ", existingData);
+                                    if (existingData) {
+                                        exitingList = this.getPropAccess(existingData, propAccess)
+                                        console.log("Entered here ");
+                                    }
+                                    console.log("******* existing list : ", exitingList, newD);
                                     if (exitingList) {
-                                        return [...exitingList, ...newD]
+                                        const result = [...exitingList, ...newD]
+                                        console.log("appending new data", result);
+                                        return result
                                     } else {
-                                        newD
+                                        return newD
                                     }
                                 }
                             })
+                            console.log("************** newData: ", newData);
                             no = { ...ai.data, data: newData }
                         } else {
                             if (ai.optimisticSuccess) {
@@ -450,11 +460,13 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                             }
                         }
                         s = { ...ps, [name]: no }
-                    } else { // In Pagination scenario if request fails keep the old data but pass error
+                    } else { // In Pagination scenario if request loading / fails keep the old data but pass error/
+                        console.log("Entered loading/error ");
                         s = { ...ps, [name]: { ...ai.data, data: existingData } }
                     }
                 } else if (typeOpName === "PaginatePrepend") {
                     const existingData = ps[name].data
+                    console.log("************ PaginatePrepend", existingData, ai);
                     let no: any = ai.data
                     const propAccess = entry[1] ? entry[1].split(".") : []
                     if (optimisticFail) { // revert back state changes
@@ -481,6 +493,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                         }
                         s = { ...ps, [name]: ai.data }
                     } else if (ai.data.data) { // success response 
+                        console.log("************########********** success case :", propAccess);
                         const data = ai.data.data
                         if (propAccess.length > 0) {
                             const newData = this.setPropAccessImmutable(data, propAccess, (newD: any) => {
@@ -497,15 +510,23 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                                     })
                                     return na;
                                 } else {
-                                    const exitingList = this.getPropAccess(existingData, propAccess)
+                                    let exitingList: any[] = []
+                                    if (!existingData) {
+                                        exitingList = []
+                                    } else {
+                                        exitingList = this.getPropAccess(existingData, propAccess)
+                                        console.log("entered here ");
+                                    }
+                                    console.log("******** existing list ", exitingList, newD);
                                     if (exitingList) {
                                         return [...newD, ...exitingList,]
                                     } else {
-                                        newD
+                                        return newD
                                     }
                                 }
                             })
                             no = { ...ai.data, data: newData }
+                            console.log("*********############************ success props > 0 ", no);
                         } else {
                             if (ai.optimisticSuccess) {
                                 const ids = ai.optimisticSuccess.map((d: any) => d.id || d._id) as string[]
@@ -529,6 +550,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                         }
                         s = { ...ps, [name]: no }
                     } else { // In Pagination scenario if request fails keep the old data but pass error
+                        console.log("*********############************ loading or error ", existingData);
                         s = { ...ps, [name]: { ...ai.data, data: existingData } }
                     }
                 }
@@ -550,8 +572,15 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
     private setPropAccessImmutable = (obj: any, propAccess: string[], value: (prev: any) => any): any | undefined => {
         let newO = { ...obj }
         propAccess.some((key, i) => {
-            if (i === propAccess.length - 1) {
-                obj[key] = value(newO[key])
+            if (i === propAccess.length - 1 && i === 0) {
+                const newValue = value(obj[key])
+                newO = { ...obj, [key]: newValue }
+                return true
+            }
+            else if (i === propAccess.length - 1) {
+                const newValue = value(obj[key])
+                console.log("*** setPropAccessImmutablenewValue ...........", newValue);
+                obj[key] = newValue
             } else {
                 const v = newO[key]
                 if (!v) {
@@ -820,7 +849,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 // const g2: ReducerGroup<G1S, A2, "g2", undefined> = { r: null as any, g: "g2", ds: null as any, m: { a: {} } }
 // const sr = { g1, g2 }
 // const store = new TypeSafeStore({ reducers: sr, middleWares: [] })
-
+// type S = typeof store.state
 // type AT = GetActionFromReducers2<typeof sr>
 // store.dispatch({name:})
 // store.subscribe(["g1",], null as any)

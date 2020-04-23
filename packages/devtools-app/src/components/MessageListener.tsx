@@ -14,10 +14,11 @@ const MessageListener: React.FC<MessageListenerProps> = ({ }) => {
 
     const wsMessage = useSelector(devToolsMessageSelector)
     const dispatch = useAppDispatch()
-
+    console.log("Rendering :", "MessageListener");
     if (wsMessage.error) {
         console.log("Error from ws :", wsMessage.error);
     } else if (wsMessage.data) {
+        console.log("got message :");
         const message = wsMessage.data
         if (message.kind === "AppConnection") {
             dispatch({ group: "AppReducer", name: "initializeApp", payload: message.appName })

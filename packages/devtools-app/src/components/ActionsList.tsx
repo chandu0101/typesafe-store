@@ -1,5 +1,6 @@
 import React from 'react'
 import { useSelector } from '@typesafe-store/react';
+import { actionsSelector } from '../store/selectors/generated/app-gen';
 // import { actionsSelector } from '../store/selectors/generated/app-gen';
 
 
@@ -7,9 +8,9 @@ import { useSelector } from '@typesafe-store/react';
 type ActionsListProps = {};
 
 export const ActionsList: React.FC<ActionsListProps> = ({ }) => {
-
-    // const actions = useSelector(actionsSelector)
-    const actions = []
+    console.log("rendering action list");
+    const actions = useSelector(actionsSelector)
+    // const actions = []
     return (
         <div>
             Actions :

@@ -1469,7 +1469,7 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
     let responseTypeNode: ts.TypeNode = null as any
     let grpcMeta: string | undefined = undefined
     let actionPayload = `NonNullable<${opNode.typeName.getText()}["_fmeta"]>`
-    let typeOpsResult: string | undefined = "";
+    let typeOpsResult: string | undefined = undefined;
     if (declaredTypeNodeText.startsWith("GRPCUnary<") || declaredTypeNodeText.startsWith("GRPCResponseStream<")) { // grpc 
         isGrpc = true;
         // let grpcOpNode: ts.TypeReferenceNode = null as any
@@ -1556,11 +1556,37 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
     if (typeOpNode) { // compare typeops node properties exist in respose type of operation 
         // console.log("typeop node :", typeOpNode.getText());
 
-        const getObjectAccessAndIdentifier = (input: ts.IndexedAccessTypeNode, props: string[] = []): { props: string[], node: ts.TypeReferenceNode } => {
-            const ot = input.objectType
-            props.unshift(input.indexType.getText().slice(1, -1))
-            if (ts.isIndexedAccessTypeNode(ot)) {
-                return getObjectAccessAndIdentifier(ot as any, props)
+        const isNonNullableIndexType = (node: ts.TypeNode): ts.IndexedAccessTypeNode | undefined => {
+            let result: ts.IndexedAccessTypeNode | undefined = undefined
+            const name = node.getText()
+            console.log("name : ", name);
+            if (name.startsWith("NonNullable<")) {
+                const ta = (node as ts.TypeReferenceNode).typeArguments![0]
+                if (ts.isIndexedAccessTypeNode(ta)) {
+                    result = ta
+                }
+            }
+            return result;
+        }
+        /**
+         * 
+         * @param input 
+         * @param props 
+         */
+        const getObjectAccessAndIdentifier = (input: ts.TypeNode, props: string[] = []): { props: string[], node: ts.TypeReferenceNode } => {
+            let ot: ts.TypeNode = input
+            if (ts.isIndexedAccessTypeNode(input)) {
+                ot = input.objectType
+                props.unshift(input.indexType.getText().slice(1, -1))
+            } else {
+                const ib = isNonNullableIndexType(input)
+                if (ib) {
+                    props.unshift(ib.indexType.getText().slice(1, -1))
+                    ot = ib.objectType
+                }
+            }
+            if (ts.isIndexedAccessTypeNode(ot) || isNonNullableIndexType(ot)) {
+                return getObjectAccessAndIdentifier(ot, props)
             } else {
                 return { props, node: ot as any }
             }
@@ -1574,17 +1600,23 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
 
             if (args) {
                 const indexedNode: ts.TypeNode = args[0] as any
-                if (!ts.isArrayTypeNode(indexedNode)) {
+                if (!AstUtils.isNodeArrayType(indexedNode)) {
                     throw new Error(`PaginateAppend/PaginatePrepend allowed for array types only , ${indexedNode.getText()} is not an array type`)
                 }
-                const { props, node } = getObjectAccessAndIdentifier(indexedNode as any)
-                console.log(" Paginated : props:", props, node.getText());
-                const parentClass = lpd.pd.parent.name?.getText()
-                console.log("parentClass :", parentClass);
-                if (props[0] !== name || parentClass !== node.getText()) {
-                    throw new Error(`Array object should be inside target field of class`)
+                console.log("Kind : ", indexedNode.kind);
+                if (ts.isIndexedAccessTypeNode(indexedNode) || isNonNullableIndexType(indexedNode)) {
+                    let { props, node } = getObjectAccessAndIdentifier(indexedNode)
+                    console.log(" Paginated : props:", props, node.getText());
+                    if (!transformFunctionQueryNode || props[0] === "data") { // if parent is data then we exclude data field 
+                        props = props.slice(1)
+                    }
+                    //TODO  compare response type to indexed type isAssignable and better way to 
+                    if (props.length > 0) {
+                        propsAcess = { [group]: props.join(".") }
+                    }
+                } else {
+                    throw new Error(`Paginated type arg should be an indexed type Obje["field1"] or NonNullable<Obj>["field1"]  ,${indexedNode.getText()} `)
                 }
-                propsAcess = { [group]: props.join(".") }
 
             } else {
                 if (!ts.isArrayTypeNode(responseTypeNode)) {
@@ -1655,9 +1687,6 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
             else if (!AstUtils.isAssignableTo(respType, indexType)) {
                 throw new Error(`${responseTypeNode.getText()} is not assignable to ${targetTypeNode.getText()}`)
             }
-
-            let idField: string | undefined = undefined
-
             const { node: cnode, props } = getObjectAccessAndIdentifier(targetTypeNode as any)
             console.log("pa ", props, cnode.getSourceFile().fileName);
             let csymb = AstUtils.getTypeChecker().getSymbolAtLocation(cnode.typeName)
@@ -1675,16 +1704,14 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
                 const group = `${ConfigUtils.getPrefixPathForReducerGroup(path)}${cnode.getText()}`
                 propsAcess = { [group]: props.join(".") }
             }
-            if (!opName.length) {
-                const t = typeOpNode!.getText()
-                const i = t.indexOf("<")
-                opName = t.substr(0, i)
-            }
-
-            typeOpsResult = JSON.stringify({ name: opName, obj: propsAcess, idField })
         }
 
-
+        if (!opName.length) {
+            const t = typeOpNode!.getText()
+            const i = t.indexOf("<")
+            opName = t.substr(0, i)
+        }
+        typeOpsResult = `{ name:"${opName}", ${propsAcess ? `obj:${JSON.stringify(propsAcess)}` : ""} }`
 
     }
     if (transformFunctionQueryNode && offload) {// try to get response type of this function
@@ -1764,7 +1791,7 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
 
     return {
         name, actionPayload, bodyType, responseType: metaResponseType, grpcMeta, graphql, offload,
-        tf: transformFunctionQueryNode?.exprName.getText()
+        tf: transformFunctionQueryNode?.exprName.getText(), typeOps: typeOpsResult
     }
 
 }
@@ -1790,17 +1817,12 @@ const getAsyncActionTypeAndMeta = (group: string): [string, { name: string, valu
                 promiseProps.push(name)
                 result = `{name:"${name}",group:"${group}", promise: () => ${p.typeStr} }`;
             } else if (tpe.includes("_fmeta") || tpe.includes("FetchAsyncData")) {
-                const fetchResult = processFetchProp2(p, group)
-                const meta: any = { response: fetchResult.responseType }
-                meta.offload = fetchResult.offload
-                meta.tf = fetchResult.tf
-                meta.graphql = fetchResult.graphql
-                meta.typeops = fetchResult.typeOps
-                meta.grpc = fetchResult.grpcMeta
-                fetchProps.push({ name, value: `{f: ${JSON.stringify(meta)} }` })
+                const fr = processFetchProp2(p, group)
+                const metas = `{response:"${fr.responseType}"${fr.offload ? `,offload: ${fr.offload}` : ""}${fr.tf ? `,tf: ${fr.tf}` : ""}${fr.graphql ? `,graphql:${fr.graphql}` : ""}${fr.typeOps ? `,typeOps: ${fr.typeOps}` : ""}${fr.grpcMeta ? `,grpc: ${fr.grpcMeta}` : ""}}`
+                fetchProps.push({ name, value: `{f: ${metas} }` })
                 result = `{name:"${
                     name
-                    }",group:"${group}", fetch: ${fetchResult.actionPayload}  }`;
+                    }",group:"${group}", fetch: ${fr.actionPayload}  }`;
             } else if (tpe.includes("_wsmeta") || tpe.includes("WebSocketFieldValue")) {
                 const wr = processWebSocket(p, group)
                 webSocketProps.push({ name, value: `{ws: ${wr.meta}}` })

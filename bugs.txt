@@ -1,4 +1,11 @@
 
+Store : 
 
-GRPC : 
-for message type we are getting default value : 0 , it should be undefined - check later
+InTypeOps scenarios if we modify same state field in type op then we hsould coordinate with (pc,s)
+
+Cli :
+check for tsconfig propertyInitializers / stric 
+
+Rest : 
+If open API spec specifies error then we should get error in resp.notok case ?
+

@@ -23,6 +23,7 @@ class AppReducer {
         this.route = route
     }
 
+
     initializeApp(appName: string) {
         this.appName = appName
         this.appsData[appName] = { actions: [], state: null }

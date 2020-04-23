@@ -4,12 +4,15 @@
     "rootDir": "src",
     "outDir": "build",
     "sourceMap": true,
+    "lib": [
+      "DOM"
+    ],
     "composite": true,
     "plugins": []
   },
   "references": [
     {
-      "path": "../store/build"
+      "path": "../store"
     }
   ],
 }

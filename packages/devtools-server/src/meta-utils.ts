@@ -5,11 +5,10 @@ import { DevToolServerGlobalMeta, Message } from "./types";
 export class MetaUtils {
 
     static getConfig(): DevToolServerGlobalMeta {
-        if (global.devToolServerMeta) {
-            return global.devToolServerMeta
-        } else {
-            return { connections: [] }
+        if (!global.devToolServerMeta) {
+            global.devToolServerMeta = { connections: [] }
         }
+        return global.devToolServerMeta
     }
 
     static addConnection(con: TSDevToolsServerConnection) {
@@ -17,8 +16,10 @@ export class MetaUtils {
     }
 
     static broadcastMessageToDevTools(m: Message) {
+        console.log("broad casting  message : ", m);
         const connections = this.getConfig().connections
         connections.forEach(con => {
+            console.log("con", con.ws.OPEN, con.type, con.id);
             if (con.type === "DevTools" && con.id && con.ws.OPEN) {
                 const newM = { ...m, id: con.id }
                 con.ws.send(JSON.stringify(newM))

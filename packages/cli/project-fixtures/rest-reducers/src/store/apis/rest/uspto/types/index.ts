@@ -1,6 +1,6 @@
 
 // this file is auto generated on 2020-04-19T20:28:33.927Z, don't modify it 
-import { FUrl, Fetch, FetchPost, Transform } from "@typesafe-store/store"
+import { FUrl, Fetch, FetchPost, FetchTransform } from "@typesafe-store/store"
 
 namespace uspto {
   export interface DataSetList {
@@ -29,7 +29,7 @@ namespace uspto {
 
 
   export namespace requests {
-    export type ListDataSets<T extends Transform<{
+    export type ListDataSets<T extends FetchTransform<{
       readonly total?: number
       readonly apis?: {
         /**
@@ -70,8 +70,8 @@ namespace uspto {
         readonly apiDocumentationUrl?: string
       }[]
     }, unknown, T>
-    export type ListSearchableFields<T extends Transform<string, any> | null = null> = Fetch<{ path: "{scheme}://developer.uspto.gov/ds-api/{dataset}/{version}/fields", params: { dataset: string, version: string } }, string, string, T>
-    export type PerformSearch<T extends Transform<{
+    export type ListSearchableFields<T extends FetchTransform<string, any> | null = null> = Fetch<{ path: "{scheme}://developer.uspto.gov/ds-api/{dataset}/{version}/fields", params: { dataset: string, version: string } }, string, string, T>
+    export type PerformSearch<T extends FetchTransform<{
       [key: string]: { [key: string]: any }
     }[], any> | null = null> = FetchPost<{ path: "{scheme}://developer.uspto.gov/ds-api/{dataset}/{version}/records", params: { dataset: string, version: string } }, null, {
       [key: string]: { [key: string]: any }

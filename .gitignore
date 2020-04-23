@@ -20,6 +20,8 @@
 /packages/*/package-lock.json
 /examples/*/node_modules/
 /examples/*/build/
+/examples/react/*/node_modules/
+/examples/react/*/build/
 
 
 # misc

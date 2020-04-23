@@ -5,12 +5,14 @@ import App from './App';
 import * as serviceWorker from './serviceWorker';
 import { store } from "./store"
 import { Provider } from "@typesafe-store/react"
+import MessageListener from './components/MessageListener';
 
 console.log("Hello ");
 ReactDOM.render(
   <React.StrictMode>
     <Provider store={store} >
       <App />
+      <MessageListener />
     </Provider>
 
   </React.StrictMode>,

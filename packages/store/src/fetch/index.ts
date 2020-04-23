@@ -16,8 +16,8 @@ export type FetchResponse = Record<string, any> | void | ArrayBuffer | Blob | st
 
 export type FetchBody = Record<string, any> | null | BodyInit
 
-
-export const enum FetchVariants {
+// we can not use const because end user may use isolatedModules flag, probably just go with union :s
+export enum FetchVariants {
     GET = "GET",
     POST = "POST",
     PATCH = "PATCH",
@@ -35,7 +35,7 @@ export type FetchAsyncData<D, U extends FUrl, B extends FetchBody, FV extends Fe
     _fmeta?: FetchRequest<FV, U, B, D>
 }>;
 
-export type FetchRequest<FV extends FetchVariants, U extends FUrl, B extends FetchBody, D> = { type: FV, url: U, body?: B, optimisticResponse?: D }
+export type FetchRequest<FV extends FetchVariants, U extends FUrl, B extends FetchBody, D> = { type: FV, url: U, body?: B, headers?: Record<string, string>, optimisticResponse?: D }
 
 export type FetchAction = Action & { fetch: FetchRequest<FetchVariants, FUrl, FetchBody, any> }
 
@@ -46,18 +46,20 @@ export type FetchAction = Action & { fetch: FetchRequest<FetchVariants, FUrl, Fe
 export type FetchActionMeta = {
     response: "json" | "text" | "blob" | "arrayBuffer" | "void" | "stream",
     body?: "string" // if json body use this flag to JSON.strigify()
-    tf?: (d: any) => any,
+    tf?: (d: any, req?: FetchRequest<any, any, any, any>) => any,
     offload?: boolean,
     graphql?: { multiOp?: boolean },
     completed?: boolean
-    typeops?: {
+    typeOps?: {
         name: TypeOpsType,
         obj?: Record<string, string>,
     },
     grpc?: { sf: (d: any) => Uint8Array, dsf: (i: Uint8Array) => any }
 }
 
-export type Transform<D, T> = (input: D) => T;
+type ReqReq<D, T> = (input: D, req: FetchRequest<any, any, any, T>) => T;
+
+export type FetchTransform<D, T> = (input: D) => T | ReqReq<D, T>
 
 /**
  *  path  static path of API (Example : "books", "updateBooks")
@@ -78,8 +80,8 @@ export type Fetch<
     U extends FUrl,
     R extends FetchResponse,
     E,
-    T extends Transform<R, any> | null = null
-    > = T extends Transform<R, infer PR> ? FetchAsyncData<PR, U, null, FetchVariants.GET, E> : FetchAsyncData<R, U, null, FetchVariants.GET, E>
+    T extends FetchTransform<R, any> | null = null
+    > = T extends FetchTransform<R, infer PR> ? FetchAsyncData<PR, U, null, FetchVariants.GET, E> : FetchAsyncData<R, U, null, FetchVariants.GET, E>
 
 /**
  *  U: url string static/dynamic
@@ -91,8 +93,8 @@ export type FetchPost<
     B extends FetchBody,
     R extends FetchResponse,
     E,
-    T extends Transform<R, any> | null = null
-    > = T extends Transform<R, infer PR> ? FetchAsyncData<PR, U, B, FetchVariants.POST, E> : FetchAsyncData<R, U, B, FetchVariants.POST, E>
+    T extends FetchTransform<R, any> | null = null
+    > = T extends FetchTransform<R, infer PR> ? FetchAsyncData<PR, U, B, FetchVariants.POST, E> : FetchAsyncData<R, U, B, FetchVariants.POST, E>
 
 /**
  *  U: url string static/dynamic
@@ -104,8 +106,8 @@ export type FetchPut<
     B extends FetchBody,
     R extends FetchResponse,
     E,
-    T extends Transform<R, any> | null = null
-    > = T extends Transform<R, infer PR> ? FetchAsyncData<PR, U, B, FetchVariants.PUT, E> : FetchAsyncData<R, U, B, FetchVariants.PUT, E>;
+    T extends FetchTransform<R, any> | null = null
+    > = T extends FetchTransform<R, infer PR> ? FetchAsyncData<PR, U, B, FetchVariants.PUT, E> : FetchAsyncData<R, U, B, FetchVariants.PUT, E>;
 
 /**
  *  U: url string static/dynamic
@@ -118,8 +120,8 @@ export type FetchPatch<
     B extends FetchBody,
     R extends FetchResponse,
     E,
-    T extends Transform<R, any> | null = null
-    > = T extends Transform<R, infer PR> ? FetchAsyncData<PR, U, B, FetchVariants.PATCH, E> : FetchAsyncData<R, U, B, FetchVariants.PATCH, E>;
+    T extends FetchTransform<R, any> | null = null
+    > = T extends FetchTransform<R, infer PR> ? FetchAsyncData<PR, U, B, FetchVariants.PATCH, E> : FetchAsyncData<R, U, B, FetchVariants.PATCH, E>;
 
 /**
  *  U: url string static/dynamic
@@ -131,6 +133,6 @@ export type FetchDelete<
     B extends FetchBody,
     R extends FetchResponse,
     E,
-    T extends Transform<R, any> | null = null
-    > = T extends Transform<R, infer PR> ? FetchAsyncData<PR, U, B, FetchVariants.DELETE, E> : FetchAsyncData<R, U, B, FetchVariants.DELETE, E>;
+    T extends FetchTransform<R, any> | null = null
+    > = T extends FetchTransform<R, infer PR> ? FetchAsyncData<PR, U, B, FetchVariants.DELETE, E> : FetchAsyncData<R, U, B, FetchVariants.DELETE, E>;
 

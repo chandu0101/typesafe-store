@@ -96,7 +96,7 @@ const isObjectkeysValuesCallExpression = (node: ts.CallExpression) => {
     const exp = node.expression
     if (ts.isPropertyAccessExpression(exp)) {
         const name = exp.name.getText()
-        if (name === "keys" || name === "values") {
+        if (name === "keys" || name === "values" || name === "entires") {
             const o = exp.expression.getText()
             if (o === "Object") {
                 result = true

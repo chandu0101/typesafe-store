@@ -26,7 +26,8 @@
   },
   "scripts": {
     "test": "jest",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "start": "node ./build/index.js"
   },
   "dependencies": {
     "ws": "^7.2.3"

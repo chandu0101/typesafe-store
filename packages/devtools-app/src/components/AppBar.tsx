@@ -21,7 +21,7 @@ const AppBar: React.FC<AppBarProps> = ({ }) => {
         <div className="app-bar">
             <div>TypeSafe Store Dev Toolss</div>
             <div>
-                {appNames.length && <select value={appName.length} onChange={handleAppNameChange}>
+                {appNames.length > 0 && <select value={appName.length} onChange={handleAppNameChange}>
                     {appNames.map(a => <option key={a} value={a}>a</option>)}
                 </select>}
             </div>

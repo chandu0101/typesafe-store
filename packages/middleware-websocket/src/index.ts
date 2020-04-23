@@ -103,9 +103,11 @@ class TSWebSocket {
                 payload: { headears: this.options.headers }
             }))
         } else { // generic
+            this.isReady = true;
             if (this.options.onOpenMessage) {
                 this.ws.send(this.options.onOpenMessage())
             }
+            this.processQueue()
         }
 
     }

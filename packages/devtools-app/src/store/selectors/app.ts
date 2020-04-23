@@ -14,3 +14,9 @@ const appNameSelector = createSelector((state: AppState): string => state.app.ap
 const appNamesSelector = createSelector((state: AppState): string[] => Object.keys(state.app.appsData))
 
 const devToolsMessageSelector = createSelector((state: AppState): devToolsServerTypes.operations.GetMessage => state.app.wsMessage)
+
+
+const actionsSelector = createSelector((state: AppState): Action[] => {
+    const appName = state.app.appName
+    return appName.length ? state.app.appsData[appName].actions : []
+})

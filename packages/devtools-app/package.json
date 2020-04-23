@@ -10,6 +10,7 @@
     "@types/node": "^12.0.0",
     "@types/react": "^16.9.0",
     "@types/react-dom": "^16.9.0",
+    "@typesafe-store/middleware-devtools": "file:../middleware-devtools",
     "@typesafe-store/middleware-websockets": "/Users/chandu0101/Desktop/kode/programming/typescript_projects/typesafe-store/packages/middleware-websocket",
     "@typesafe-store/react": "file:../react-glue",
     "@typesafe-store/store": "file:../store",
@@ -17,7 +18,7 @@
     "react-dom": "^16.13.1"
   },
   "scripts": {
-    "start": "webpack-dev-server --mode development",
+    "start": "webpack-dev-server --mode development --open",
     "dev": "tstore",
     "build": "webpack",
     "clean": "rm -rf node_modules yarn.lock package-lock.json",

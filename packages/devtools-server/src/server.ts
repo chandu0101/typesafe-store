@@ -12,7 +12,7 @@ export class TSDevToolsServerConnection {
 
     type?: ConnectionInitialteMessage["type"]
     id!: string
-
+    appName!: string
     constructor(public readonly ws: WS) {
         ws.onopen = this.handleOpen
         ws.onmessage = this.handleMessage
@@ -26,8 +26,12 @@ export class TSDevToolsServerConnection {
 
     handleMessage = (e: WebSockoket.MessageEvent) => {
         const m = JSON.parse(e.data as string) as Message
+        console.log("Server on message : ", m, this.type);
         if (m.kind === "InitiateConnection") {
             this.type = m.type
+            if (m.appName) {
+                this.appName = m.appName
+            }
         } else if (m.kind === "StartMessage") {
             this.id = m.id
         } else if (m.kind === "Action") {
@@ -40,11 +44,11 @@ export class TSDevToolsServerConnection {
     }
 
     handleError = (e: WebSockoket.ErrorEvent) => {
-        console.log("on error : ", e);
+        console.log("on error : ", e.message);
     }
 
     handleClose = (e: WebSockoket.CloseEvent) => {
-        console.log("on close event : ", e);
+        console.log("on close event : ", e.reason);
         MetaUtils.removeConnection(this)
     }
 }

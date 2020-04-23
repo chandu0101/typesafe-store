@@ -294,6 +294,9 @@
     peer "^0.5.2"
     tsutils "^3.17.1"
 
+"@typesafe-store/middleware-devtools@file:../middleware-devtools":
+  version "0.1.0"
+
 "@typesafe-store/middleware-websockets@file:../middleware-websocket":
   version "0.1.0"
 

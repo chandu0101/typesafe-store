@@ -1,6 +1,6 @@
 
 // this file is auto generated on 2020-04-19T20:28:33.943Z, don't modify it 
-import { FUrl, Fetch, FetchPost, FetchDelete, Transform } from "@typesafe-store/store"
+import { FUrl, Fetch, FetchPost, FetchDelete, FetchTransform } from "@typesafe-store/store"
 
 namespace petstore_extend {
   export type Pet = {
@@ -23,7 +23,7 @@ namespace petstore_extend {
 
 
   export namespace requests {
-    export type FindPets<T extends Transform<{
+    export type FindPets<T extends FetchTransform<{
       readonly name: string
       readonly tag?: string
     } & {
@@ -47,7 +47,7 @@ namespace petstore_extend {
       readonly code: number
       readonly message: string
     }, T>
-    export type AddPet<T extends Transform<{
+    export type AddPet<T extends FetchTransform<{
       readonly name: string
       readonly tag?: string
     } & {
@@ -64,7 +64,7 @@ namespace petstore_extend {
       readonly code: number
       readonly message: string
     }, T>
-    export type FindPetById<T extends Transform<{
+    export type FindPetById<T extends FetchTransform<{
       readonly name: string
       readonly tag?: string
     } & {
@@ -78,7 +78,7 @@ namespace petstore_extend {
       readonly code: number
       readonly message: string
     }, T>
-    export type DeletePet<T extends Transform<void, any> | null = null> = FetchDelete<{ path: "http://petstore.swagger.io/api/pets/{id}", params: { id: number } }, null, void, {
+    export type DeletePet<T extends FetchTransform<void, any> | null = null> = FetchDelete<{ path: "http://petstore.swagger.io/api/pets/{id}", params: { id: number } }, null, void, {
       readonly code: number
       readonly message: string
     }, T>

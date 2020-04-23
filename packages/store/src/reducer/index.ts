@@ -5,7 +5,7 @@ import { WebSocketActionMeta } from "../websockets";
 export type DataAndTypeOps = {
     kind: "DataAndTypeOps", data: any, processed: boolean, optimisticFailed?: any,
     optimisticSuccess?: any,
-    typeOp: NonNullable<FetchActionMeta["typeops"]>
+    typeOp: NonNullable<FetchActionMeta["typeOps"]>
 }
 
 export type ActionInternalMeta = { kind: "Data", data: any, processed: boolean }
