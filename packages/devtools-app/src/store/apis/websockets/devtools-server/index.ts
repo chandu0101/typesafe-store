@@ -11,7 +11,7 @@ const devToolsServerOptions: TSWebSocketOptions = {
         return [mp, mp.id]
     },
     onOpenMessage: () => {
-        const m: devToolsServerTypes.ConnectionInitialteMessage = { kind: "InitiateConnection", type: "DevTools" }
+        const m: devToolsServerTypes.DevToolsConnectionInitialteMessage = { kind: "InitiateDevToolsConnection", type: "DevTools", }
         return JSON.stringify(m);
     }
 }

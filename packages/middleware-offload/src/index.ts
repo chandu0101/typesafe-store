@@ -47,7 +47,7 @@ class TSWorker {
     private handleOutput = (wo: WorkerOutput) => {
         if (wo.kind === "Fetch") {
             if (wo.status === "Processing") {
-                this.store.dispatch({ ...this.action, _internal: { processed: true, data: { loading: true } } })
+                this.store.dispatch({ ...this.action, _internal: { processed: true, kind: "Data", data: { loading: true } } })
             } else if (wo.status === "Success") {
                 const result = wo.result!
                 let data = {}
@@ -56,7 +56,7 @@ class TSWorker {
                 } else {
                     data = { data: result.data }
                 }
-                this.store.dispatch({ ...this.action, _internal: { processed: true, data } })
+                this.store.dispatch({ ...this.action, _internal: { processed: true, kind: "Data", data } })
                 this.isRunning = false
                 this.handleDone()
             } else if (wo.status === "Error") {
@@ -69,10 +69,10 @@ class TSWorker {
                 // do nothing
             } else if (wo.status === "Success") {
                 const result = wo.result
-                const stateKey = this.store.getStateKeyForGroup(this.action.ActionInternalMeta)
+                const stateKey = this.store.getStateKeyForGroup(this.action.group)
                 const state = this.store.state[stateKey]
                 const newState = this.actionMeta.offload!.workerResponseToState(state, result)
-                this.store.dispatch({ ...this.action, _internal: { processed: true, state: newState } })
+                this.store.dispatch({ ...this.action, _internal: { processed: true, kind: "State", data: newState } })
                 this.isRunning = false
                 this.handleDone()
             } else if (wo.status === "Error") {
@@ -102,12 +102,12 @@ class TSWorker {
         }
     }
     private createWorkerFunctionName() {
-        const { name, ActionInternalMeta: group } = this.action
+        const { name, group } = this.action
         return `${group.split("/").join("_")}_${name}`
     }
 
     private handleSyncAction(action: Action, actionMeta: ActionMeta<any>) {
-        const stateKey = this.store.getStateKeyForGroup(action.ActionInternalMeta)
+        const stateKey = this.store.getStateKeyForGroup(action.group)
         const estate = this.store.state[stateKey]
         const state = actionMeta.offload!.stateToWorkerIn(estate)
         const workerFunction = this.createWorkerFunctionName()
@@ -134,7 +134,7 @@ class TSWorker {
         return path
     }
 
-    private getFetchOptions(fr: FetchRequest<FetchVariants, FUrl, Json | null>) {
+    private getFetchOptions(fr: FetchRequest<FetchVariants, FUrl, any, any>) {
         const options: RequestInit = { method: fr.type }
         if (fr.body) {
             options.body = JSON.stringify(fr.body)
@@ -197,7 +197,7 @@ export function createOffloadMiddleware<R extends Record<string, ReducerGroup<an
         if (action._internal && action._internal.processed) { // if already processed by other middlewares just pass through
             return next(action)
         }
-        const rg = store.getReducerGroup(action.ActionInternalMeta)
+        const rg = store.getReducerGroup(action.group)
         if (isOffloadAction(action, rg)) {
             handleOffloadAction({ workers, queue, options, action, rg, store })
         } else {

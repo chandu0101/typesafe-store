@@ -10,7 +10,7 @@
     "@types/node": "^12.0.0",
     "@types/react": "^16.9.0",
     "@types/react-dom": "^16.9.0",
-    "@typesafe-store/middleware-devtools": "/Users/chandu0101/Desktop/kode/programming/typescript_projects/typesafe-store/packages/middleware-devtools",
+    "@typesafe-store/middleware-devtools": "file:../../../packages/middleware-devtools",
     "@typesafe-store/middleware-fetch": "file:../../../packages/middleware-fetch",
     "@typesafe-store/react": "/Users/chandu0101/Desktop/kode/programming/typescript_projects/typesafe-store/packages/react-glue",
     "@typesafe-store/store": "file:../../../packages/store",

@@ -24,8 +24,6 @@ export type GetStateFromReducers<T extends Record<string, ReducerGroup<any, any,
 
 export type GetActionFromReducers<T> = { [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? AA extends undefined ? A : A | AA : never }[keyof T]
 
-export type GetActionFromReducers2<T> = { [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? AA extends undefined ? A : A | AA : never }[keyof T]
-
 export type MiddleWare<R extends Record<string, ReducerGroup<any, any, any, any>>> = (store: TypeSafeStore<R>) =>
     (next: Dispatch<GetActionFromReducers<R>>) => (action: GetActionFromReducers<R>) => any
 
@@ -47,7 +45,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     private _globalListener?: (action: Action, stateKeys: { name: string, prevValue: any }[]) => any
 
-    private _globalCompleteHandlers: Callback[] = []
+    private _globalCompleteHandlers: ((action: Action, stateKeys: { name: string, prevValue: any }[]) => any)[] = []
 
     private typeOpsMata: Record<string, any> = {}
 
@@ -174,7 +172,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         let prevStateOfStateKeysModifiedByTypeOps: Record<string, any> = {}
         if (_internal && _internal.processed) { // processed by middlewares (example: fetch,graphql)
             if (_internal.kind === "Data") {
-                s = { ...ps, [name]: _internal.data }
+                s = { ...s, [name]: _internal.data }
             } else if (_internal.kind === "State") {
                 s = _internal.data
             } else if (_internal.kind === "DataAndTypeOps") {
@@ -182,13 +180,18 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                 const typeOpName = ai.typeOp.name
                 const optimisticFail = ai.optimisticFailed
                 const entry = ai.typeOp.obj ? Object.entries(ai.typeOp.obj!)[0] : []
+                let typeOpStateKey: string | undefined = undefined
+                let typeOpState: any | undefined = undefined
                 if (entry.length > 0) {
-                    const sk = this.getStateKeyForGroup(entry[0])
-                    stateKeysModifiedByTypeOps.push(sk)
-                    prevStateOfStateKeysModifiedByTypeOps[sk] = this._state[sk]
+                    const skGroup = entry[0]
+                    if (skGroup !== group) {
+                        typeOpStateKey = this.getStateKeyForGroup(skGroup)
+                        stateKeysModifiedByTypeOps.push(typeOpStateKey)
+                        prevStateOfStateKeysModifiedByTypeOps[typeOpStateKey] = this._state[typeOpStateKey]
+                    } else {
+                        typeOpState = s;
+                    }
                 }
-                const typeOpStateKey = this.getStateKeyForGroup(entry[0])
-                const typeOpState = this._state[typeOpStateKey]
                 if (typeOpName === "AppendToList" || typeOpName === "AppendToListAndDiscard") {
                     const discard = typeOpName === "AppendToListAndDiscard"
                     if (optimisticFail) { // revert back state changes
@@ -201,9 +204,13 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                             }
                         })
                         if (result) {
-                            (this._state as any)[typeOpStateKey] = result
+                            if (typeOpStateKey) {
+                                (this._state as any)[typeOpStateKey] = result
+                            } else {
+                                s = result;
+                            }
                         }
-                        s = { ...ps, [name]: ai.data }
+                        s = { ...s, [name]: ai.data }
                     } else if (ai.data.data) { // success response 
                         const data = ai.data.data
                         const result = this.setPropAccessImmutable(typeOpState, entry[1].split("."), (prev: TypeOpEntity) => {
@@ -218,15 +225,18 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                             }
                         })
                         if (result) {
-                            (this._state as any)[typeOpStateKey] = result
+                            if (typeOpStateKey) {
+                                (this._state as any)[typeOpStateKey] = result
+                            }
+
                         }
                         if (discard) {
-                            s = { ...ps, [name]: {} } // Note: Currently we only support types ops on Fetch fields so we can assume that value is object
+                            s = { ...s, [name]: {} } // Note: Currently we only support types ops on Fetch fields so we can assume that value is object
                         } else {
-                            s = { ...ps, [name]: ai.data }
+                            s = { ...s, [name]: ai.data }
                         }
                     } else {
-                        s = { ...ps, [name]: _internal.data }
+                        s = { ...s, [name]: _internal.data }
                     }
                 } else if (typeOpName === "PrependToList" || typeOpName === "PrependToListAndDiscard") {
                     const discard = typeOpName === "PrependToListAndDiscard"
@@ -240,9 +250,13 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                             }
                         })
                         if (result) {
-                            (this._state as any)[typeOpStateKey] = result
+                            if (typeOpStateKey) {
+                                (this._state as any)[typeOpStateKey] = result
+                            } else {
+                                s = result
+                            }
                         }
-                        s = { ...ps, [name]: ai.data }
+                        s = { ...s, [name]: ai.data }
                     } else if (ai.data.data) { // success response 
                         const data = ai.data.data
                         const result = this.setPropAccessImmutable(typeOpState, entry[1].split("."), (prev: TypeOpEntity) => {
@@ -257,16 +271,20 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                             }
                         })
                         if (result) {
-                            (this._state as any)[typeOpStateKey] = result
+                            if (typeOpStateKey) {
+                                (this._state as any)[typeOpStateKey] = result
+                            } else {
+                                s = result
+                            }
                         }
                         if (discard) {
-                            s = { ...ps, [name]: {} } // Note: Currently we only support types ops on Fetch fields so we can assume that value is object
+                            s = { ...s, [name]: {} } // Note: Currently we only support types ops on Fetch fields so we can assume that value is object
                         } else {
-                            s = { ...ps, [name]: ai.data }
+                            s = { ...s, [name]: ai.data }
                         }
 
                     } else {
-                        s = { ...ps, [name]: _internal.data }
+                        s = { ...s, [name]: _internal.data }
                     }
                 } else if (typeOpName === "UpdateList" || typeOpName === "UpdateListAndDiscard") {
                     const discard = typeOpName === "UpdateListAndDiscard"
@@ -280,9 +298,13 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                             }
                         })
                         if (result) {
-                            (this._state as any)[typeOpStateKey] = result
+                            if (typeOpStateKey) {
+                                (this._state as any)[typeOpStateKey] = result
+                            } else {
+                                s = result
+                            }
                         }
-                        s = { ...ps, [name]: ai.data }
+                        s = { ...s, [name]: ai.data }
                     } else if (ai.data.data) { // success response 
                         const data = ai.data.data
                         const result = this.setPropAccessImmutable(typeOpState, entry[1].split("."), (prev: TypeOpEntity) => {
@@ -294,21 +316,24 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                             }
                         })
                         if (result) {
-                            (this._state as any)[typeOpStateKey] = result
+                            if (typeOpStateKey) {
+                                (this._state as any)[typeOpStateKey] = result
+                            } else {
+                                s = result
+                            }
                         }
                         if (discard) {
-                            s = { ...ps, [name]: {} } // Note: Currently we only support types ops on Fetch fields so we can assume that value is object
+                            s = { ...s, [name]: {} } // Note: Currently we only support types ops on Fetch fields so we can assume that value is object
                         } else {
-                            s = { ...ps, [name]: ai.data }
+                            s = { ...s, [name]: ai.data }
                         }
 
                     } else {
-                        s = { ...ps, [name]: _internal.data }
+                        s = { ...s, [name]: _internal.data }
                     }
                 } else if (typeOpName === "DeleteFromList" || typeOpName === "DeleteFromListAndDiscard") {
                     const discard = typeOpName === "DeleteFromListAndDiscard"
                     if (optimisticFail) { // revert back state changes
-
                         const result = this.setPropAccessImmutable(typeOpState, entry[1].split("."), (prev: TypeOpEntity) => {
                             if (!prev) {
                                 return prev;
@@ -328,9 +353,13 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                             }
                         })
                         if (result) {
-                            (this._state as any)[typeOpStateKey] = result
+                            if (typeOpStateKey) {
+                                (this._state as any)[typeOpStateKey] = result
+                            } else {
+                                s = result
+                            }
                         }
-                        s = { ...ps, [name]: ai.data }
+                        s = { ...s, [name]: ai.data }
                     } else if (ai.data.data) { // success response 
                         const data = ai.data.data
                         const result = this.setPropAccessImmutable(typeOpState, entry[1].split("."), (prev: TypeOpEntity) => {
@@ -363,7 +392,11 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                             }
                         })
                         if (result) {
-                            (this._state as any)[typeOpStateKey] = result
+                            if (typeOpStateKey) {
+                                (this._state as any)[typeOpStateKey] = result
+                            } else {
+                                s = result
+                            }
                         }
                         if (discard) {
                             s = { ...ps, [name]: {} } // Note: Currently we only support types ops on Fetch fields so we can assume that value is object
@@ -548,10 +581,10 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                                 }
                             }
                         }
-                        s = { ...ps, [name]: no }
+                        s = { ...s, [name]: no }
                     } else { // In Pagination scenario if request fails keep the old data but pass error
                         console.log("*********############************ loading or error ", existingData);
-                        s = { ...ps, [name]: { ...ai.data, data: existingData } }
+                        s = { ...s, [name]: { ...ai.data, data: existingData } }
                     }
                 }
             }
@@ -652,7 +685,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
         }
         this._globalCompleteHandlers.forEach(c => {
-            c(action)
+            c(action, stateKeys)
         })
     }
 
@@ -772,24 +805,21 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         }
     }
 
-
-
-    //TODO we need to invalidate currentState
     private resetObjectAccess = (stateKey: string, objAccess: string) => {
         const currentState = this._state[stateKey]
         const defaultSatate = this.reducers[stateKey].ds
         let v: any = defaultSatate
         const oaa = objAccess.split(".").slice(1)
         const exv: string[] = []
-        oaa.forEach(oa => {
+        oaa.some(oa => {
             if (v[oa]) {
                 v = v[oa]
                 exv.push(oa)
             } else {
-                return
+                return true;
             }
         })
-        TStoreUtils.setNestedKey(currentState, exv, v)
+        this.setPropAccessImmutable(currentState, exv, (prv: any) => v)
     }
 
     /** 
@@ -829,8 +859,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         }
     }
 
-
-    _addCompleteHook = (callback: Callback) => {
+    _addCompleteHook = (callback: (action: Action, stateKeys: { name: string, prevValue: any }[]) => any) => {
         this._globalCompleteHandlers.push(callback)
         return () => {
             this._globalCompleteHandlers = this._globalCompleteHandlers.filter(h => h !== callback)

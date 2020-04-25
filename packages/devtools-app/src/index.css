@@ -12,16 +12,38 @@ code {
     monospace;
 }
 
+input:focus,
+select:focus,
+textarea:focus,
+button:focus {
+    outline: none;
+}
+
+:root {
+  --primary-color: #ff9800;
+}
+
 
 .nav-bar {
   display: flex;
   flex-direction: column;
-  width: 100px;;
+  align-items: center;
+  width: 100px;
+  height: calc(100vh - 64px);
+  background-color: #dcdcdc;
 }
 
+.nav-bar__item {
+  margin-top: 30px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+
+}
 .nav-bar__item-selected {
   font-weight: bold;
-  color: red;
+  color:#9c27b0;
 }
 .app-layout {
    display: flex;
@@ -43,5 +65,75 @@ code {
 
 .app-bar {
    display: flex;
-   justify-content: space-around;
+   height: 64px;
+   align-items: center;
+   background:var(--primary-color);
+
+   color: white;
+}
+.logo {
+  font-weight: bold;
+  font-size: 20px;
+   margin-left: 30px;
+}
+.app-bar__right {
+  margin-left: auto;
+  margin-right: 40px;;
+}
+
+.actions-container {
+   display: flex;
+   flex:1;
+}
+
+.actions-container__list {
+  display: flex;
+  flex:1;
+  flex-direction: column;
+}
+
+.actions-container__state {
+  flex:1
+}
+
+.action-tile {
+  border-bottom: 1px solid #ececec;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.setting-pannel {
+   margin-top : 20px;
+   right: 15px;
+   position: absolute;
+   padding: 30px;
+   background-color:#eaeaea;
+}
+
+.setting-pannel input {
+   padding: 10px;
+   font-size: 14px;
+   margin: 10px;
+}
+.setting-pannel button {
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 14px;
+  background: var(--primary-color);
+  box-shadow: 0 2px 4px grey;
+  color: white;
+  font-weight: bold;
+}
+
+.action-tile-details {
+    padding-top: 20px;
+    padding-bottom: 20px;;
+}
+
+.action-tile__title {
+  display: flex;;
+}
+
+.action-tile-details__buttons {
+  display: flex;
 }

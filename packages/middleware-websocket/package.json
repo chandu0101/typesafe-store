@@ -1,5 +1,5 @@
 {
-  "name": "@typesafe-store/middleware-websockets",
+  "name": "@typesafe-store/middleware-websocket",
   "description": "type safe store reducer transformer",
   "version": "0.1.0",
   "main": "build/index.js",

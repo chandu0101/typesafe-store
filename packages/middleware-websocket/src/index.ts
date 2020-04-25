@@ -26,7 +26,9 @@ type WebSocketGlobalAction = Action & { payload: string }
 
 type TSWebSocketMetaOptions = { isGraphql?: boolean }
 
-type CreateWebSocketMiddlewareOptions = { urlOptions: Record<string, TSWebSocketOptions> }
+const DYNAMIC_URL_OPTIONS_KEY = "dynamic"
+
+type CreateWebSocketMiddlewareOptions = { urlOptions: (url: string) => TSWebSocketOptions }
 type GenericReducerGroup = ReducerGroup<any, any, any, any>
 
 type ClientsType = Record<string, TSWebSocket>
@@ -38,6 +40,10 @@ const isWebSocketAction = (action: Action, rg: GenericReducerGroup) => {
 
 export const createGlobalSocketCloseAction = (url: string): any => {
     return { name: "close", group: TS_WEBSOCKET_GLOBAL_GROUP, payload: url }
+}
+
+export const createGlobalSocketOpenAction = (url: string): any => {
+    return { name: "open", group: TS_WEBSOCKET_GLOBAL_GROUP, payload: url }
 }
 
 const enum GraphqlMessages {
@@ -70,15 +76,30 @@ class TSWebSocket {
     }
 
     private connect = () => {
-        let protocols = this.metaOptions.isGraphql ? ["graphql-ws"] : []
-        if (this.options.protocols) {
-            protocols = this.options.protocols
+        try {
+            let protocols = this.metaOptions.isGraphql ? ["graphql-ws"] : []
+            if (this.options.protocols) {
+                protocols = this.options.protocols
+            }
+            this.isReady = false
+            this.ws = new WebSocket(this.url, protocols)
+            this.ws.onopen = this.handleOpen
+            this.ws.onmessage = this.handleOnMessage
+            this.ws.onerror = this.handleOnError
+            this.ws.onclose = this.handleOnClose
+        } catch (error) { // when url invalid it will through DOMException
+            this.doCleanup(error)
         }
-        this.ws = new WebSocket(this.url, protocols)
-        this.ws.onopen = this.handleOpen
-        this.ws.onmessage = this.handleOnMessage
-        this.ws.onerror = this.handleOnError
-        this.ws.onclose = this.handleOnClose
+
+    }
+
+    private doCleanup = (error: any) => {
+        [...this.subscriptions, ...this.queue].forEach(sa => {
+            this.dispatchActionToStore(sa, { error: error, completed: true })
+        })
+        this.subscriptions = []
+        this.queue = []
+        this.isReady = false
     }
 
     private tryReconnect = () => {
@@ -238,13 +259,7 @@ class TSWebSocket {
         if (this.isForceClose || !this.options.reconnect || (this.options.reconnect && this.options.reconnectTimes! < this.reconnectedTimes)) {
             // The code 1000 (Normal Closure) is special, and results in no error or payload.
             const error = e.code === 1000 ? null : new Error(e.reason);
-
-            [...this.subscriptions, ...this.queue].forEach(sa => {
-                this.dispatchActionToStore(sa, { error: error, completed: true })
-            })
-            this.subscriptions = []
-            this.queue = []
-            this.isReady = false
+            this.doCleanup(error)
         } else {
             this.tryReconnect()
         }
@@ -271,6 +286,8 @@ class TSWebSocket {
         if (action.name === "close") {
             this.isForceClose = true
             this.ws.close()
+        } else if (action.name === "open") {
+            this.connect()
         }
     }
 
@@ -323,7 +340,7 @@ const handleWebSocketAction = ({ action, clients, rg, store, options }: { client
         url = action.ws.url
     }
     let client: TSWebSocket = clients[url] as any
-    if (!client && isGlobal && action.name === "close") {
+    if (!client && isGlobal && (action.name === "close" || action.name === "open")) {
         console.log("do nothig or throw error ? ");
         return
     }
@@ -334,8 +351,8 @@ const handleWebSocketAction = ({ action, clients, rg, store, options }: { client
             metaOptions.isGraphql = true;
         }
     }
-    const uoptions = options.urlOptions[url]
     if (!client) {
+        let uoptions = options.urlOptions(url)
         client = new TSWebSocket(url, uoptions, metaOptions, store)
         clients[url] = client
     }

@@ -37,7 +37,7 @@ module.exports = {
     },
     devtool: "source-map",
     devServer: {
-        port: 9000,
+        port: 9001,
         // contentBase: path.join(__dirname, "public"),
         // publicPath: path.join(__dirname, "public"),
         historyApiFallback: true

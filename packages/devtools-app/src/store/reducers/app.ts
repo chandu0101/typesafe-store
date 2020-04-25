@@ -6,14 +6,17 @@ import devToolsServerTypes from "../apis/websockets/devtools-server/types"
 
 class AppReducer {
 
-
     route: reducerTypes.app.Route = "actions"
 
-    appName: reducerTypes.app.AppName = ""
+    wsUrl: string = "wss://locahost:8998"
+
+    appName?: reducerTypes.app.AppName
 
     appsData: Record<reducerTypes.app.AppName, reducerTypes.app.AppData> = {}
 
     wsMessage: devToolsServerTypes.operations.GetMessage = {}
+
+    wsSendMessage: devToolsServerTypes.operations.SendMessage = {}
 
     setAppName(name: string) {
         this.appName = name
@@ -23,19 +26,25 @@ class AppReducer {
         this.route = route
     }
 
+    setWsUrl(url: string) {
+        this.wsUrl = url
+        this.appsData = {}
+        this.appName = undefined
+        this.wsMessage = {}
+        this.wsSendMessage = {}
+    }
 
     initializeApp(appName: string) {
         this.appName = appName
-        this.appsData[appName] = { actions: [], state: null }
+        this.appsData[appName] = { actions: [], name: appName, status: "Connected" }
     }
 
-    addAction(appName: string, action: Action) {
+    addAction(appName: string, action: reducerTypes.app.DAction) {
         this.appsData[appName].actions.push(action)
     }
 
-
-    replaceState(appName: string, state: any) {
-        this.appsData[appName].state = state
+    resetApp(appName: string, actions: reducerTypes.app.DAction[]) {
+        this.appsData[appName].actions = actions
     }
 
 }

@@ -1,5 +1,5 @@
 import { WS, TSDevToolsServerConnection } from "./server";
-import { DevToolServerGlobalMeta, Message } from "./types";
+import { DevToolServerGlobalMeta, Message, ActionMessage } from "./types";
 
 
 export class MetaUtils {
@@ -23,6 +23,22 @@ export class MetaUtils {
             if (con.type === "DevTools" && con.id && con.ws.OPEN) {
                 const newM = { ...m, id: con.id }
                 con.ws.send(JSON.stringify(newM))
+            }
+        })
+    }
+
+    static broadCastMessageToApp(m: ActionMessage) {
+        const appName = m.appName
+        const connection = this.getConfig().connections.find(c => c.appName === appName)
+        if (connection) {
+            connection.ws.send(JSON.stringify(m))
+        }
+    }
+
+    static isDevtoolsAppStarted() {
+        return this.getConfig().connections.some(c => {
+            if (c.type === "DevTools") {
+                return true
             }
         })
     }

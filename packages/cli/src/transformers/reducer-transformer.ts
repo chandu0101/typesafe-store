@@ -163,8 +163,10 @@ const createReducerFunction = (cd: ts.ClassDeclaration) => {
            export type ${typeName}Action = ${actionType}
   
            export type ${typeName}AsyncAction = ${asyncActionType}
+
+           export type ${typeName}GroupType =  ReducerGroup<${typeName}State,${typeName}Action,"${typeName}",${typeName}AsyncAction>
   
-           export const ${typeName}Group: ReducerGroup<${typeName}State,${typeName}Action,"${typeName}",${typeName}AsyncAction> = { r: ${f},g:"${typeName}",ds:${defaultState},m:${meta}}
+           export const ${typeName}Group: ${typeName}GroupType  = { r: ${f},g:"${typeName}",ds:${defaultState},m:${meta}}
   
           `
         );

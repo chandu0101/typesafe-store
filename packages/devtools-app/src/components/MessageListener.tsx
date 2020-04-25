@@ -2,7 +2,7 @@ import React, { useEffect } from 'react'
 import { createGlobalSocketCloseAction } from '@typesafe-store/middleware-websockets';
 import DevToolServerRequestCreator from '../store/apis/websockets/devtools-server/requests';
 import { useSelector } from '@typesafe-store/react';
-import { devToolsMessageSelector } from '../store/selectors/generated/app-gen';
+import { devToolsMessageSelector, wsUrlSeelctor } from '../store/selectors/generated/app-gen';
 import { useAppDispatch } from '../hooks/app-dispatch';
 import devToolsServerTypes from '../store/apis/websockets/devtools-server/types';
 
@@ -12,20 +12,22 @@ type MessageListenerProps = {};
 
 const MessageListener: React.FC<MessageListenerProps> = ({ }) => {
 
+    const url = useSelector(wsUrlSeelctor)
     const wsMessage = useSelector(devToolsMessageSelector)
     const dispatch = useAppDispatch()
     console.log("Rendering :", "MessageListener");
     if (wsMessage.error) {
         console.log("Error from ws :", wsMessage.error);
     } else if (wsMessage.data) {
-        console.log("got message :");
         const message = wsMessage.data
-        if (message.kind === "AppConnection") {
+        console.log("got message :", message);
+        if (message.kind === "InitiateAppConnection") {
+            console.log("dispatching AppConnection action", message.appName);
             dispatch({ group: "AppReducer", name: "initializeApp", payload: message.appName })
         } else if (message.kind == "Action") {
             dispatch({
                 group: "AppReducer", name: "addAction",
-                payload: { action: message.action, appName: message.appName }
+                payload: { action: { ...message.action, state: message.stateChanged }, appName: message.appName }
             })
         }
     }
@@ -35,13 +37,13 @@ const MessageListener: React.FC<MessageListenerProps> = ({ }) => {
         dispatch({
             group: "AppReducer",
             name: "wsMessage",
-            ws: DevToolServerRequestCreator.createMessageRequest(sm)
+            ws: DevToolServerRequestCreator.createMessageRequest(sm, url)
         })
 
         return () => { // on unmount close connection
-            createGlobalSocketCloseAction(DevToolServerRequestCreator.url)
+            createGlobalSocketCloseAction(url)
         }
-    }, [])
+    }, [url])
     return (
         <div> </div>);
 }

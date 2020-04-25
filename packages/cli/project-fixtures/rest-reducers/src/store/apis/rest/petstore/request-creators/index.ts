@@ -1,5 +1,5 @@
 
-         import petstore_types from "../types"
+         import petstoreTypes from "../types"
 import {FetchVariants} from "@typesafe-store/store"
 
          class PetstoreRequestCreators {
@@ -9,11 +9,7 @@ import {FetchVariants} from "@typesafe-store/store"
    * How many items to return at one time (max 100)
    */
   limit:number  | undefined
-                   }, optimisticResponse ?: {
-  readonly id: number
-  readonly name: string
-  readonly tag?: string
-}[]}) {
+                   }, optimisticResponse ?: petstoreTypes.requests.listPets.ListPetsResponse}) {
                          return {
                            type:FetchVariants.GET , url : {path:"http://petstore.swagger.io/v1/pets", queryParams: input.queryParams}
                               ,optimisticResponse:input.optimisticResponse
@@ -29,11 +25,7 @@ import {FetchVariants} from "@typesafe-store/store"
                      }
                 
 
-                   static  showPetByIdRequest(input: {pathParams: { petId :string }, optimisticResponse ?: {
-  readonly id: number
-  readonly name: string
-  readonly tag?: string
-}}) {
+                   static  showPetByIdRequest(input: {pathParams: { petId :string }, optimisticResponse ?: petstoreTypes.requests.showPetById.ShowPetByIdResponse}) {
                          return {
                            type:FetchVariants.GET , url : {path:"http://petstore.swagger.io/v1/pets/{petId}",params:input.pathParams}
                               ,optimisticResponse:input.optimisticResponse

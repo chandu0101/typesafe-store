@@ -11,16 +11,18 @@
     "@types/react": "^16.9.0",
     "@types/react-dom": "^16.9.0",
     "@typesafe-store/middleware-devtools": "file:../middleware-devtools",
-    "@typesafe-store/middleware-websockets": "/Users/chandu0101/Desktop/kode/programming/typescript_projects/typesafe-store/packages/middleware-websocket",
+    "@typesafe-store/middleware-websocket": "file:../middleware-websocket",
     "@typesafe-store/react": "file:../react-glue",
     "@typesafe-store/store": "file:../store",
     "react": "^16.13.1",
-    "react-dom": "^16.13.1"
+    "react-dom": "^16.13.1",
+    "react-icons": "^3.10.0",
+    "react-json-tree": "^0.11.2"
   },
   "scripts": {
     "start": "webpack-dev-server --mode development --open",
     "dev": "tstore",
-    "build": "webpack",
+    "build": "NODE_ENV=production && webpack --mode production",
     "clean": "rm -rf node_modules yarn.lock package-lock.json",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -41,6 +43,8 @@
     ]
   },
   "devDependencies": {
+    "@types/react-icons": "^3.0.0",
+    "@types/react-json-tree": "^0.6.11",
     "@typesafe-store/cli": "file:../cli",
     "css-loader": "^3.5.2",
     "html-webpack-plugin": "^3.2.0",

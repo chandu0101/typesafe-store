@@ -1,5 +1,5 @@
 
-         import petstore_extend_types from "../types"
+         import petstore_extendTypes from "../types"
 import {FetchVariants} from "@typesafe-store/store"
 
          class PetstoreExtendRequestCreators {
@@ -12,12 +12,7 @@ import {FetchVariants} from "@typesafe-store/store"
    * maximum number of results to return
    */
   limit:number  | undefined
-                   }, optimisticResponse ?: {
-  readonly name: string
-  readonly tag?: string
-} & {
-  readonly id: number
-}[]}) {
+                   }, optimisticResponse ?: petstore_extendTypes.requests.findPets.FindPetsResponse}) {
                          return {
                            type:FetchVariants.GET , url : {path:"http://petstore.swagger.io/api/pets", queryParams: input.queryParams}
                               ,optimisticResponse:input.optimisticResponse
@@ -25,15 +20,7 @@ import {FetchVariants} from "@typesafe-store/store"
                      }
                 
 
-                   static  addPetRequest(input: {body: {
-  readonly name: string
-  readonly tag?: string
-}, optimisticResponse ?: {
-  readonly name: string
-  readonly tag?: string
-} & {
-  readonly id: number
-}}) {
+                   static  addPetRequest(input: {body: petstore_extendTypes.requests.addPet.AddPetBody, optimisticResponse ?: petstore_extendTypes.requests.addPet.AddPetResponse}) {
                          return {
                            type:FetchVariants.POST , url : {path:"http://petstore.swagger.io/api/pets"}
                              , body: input.body ,optimisticResponse:input.optimisticResponse
@@ -41,12 +28,7 @@ import {FetchVariants} from "@typesafe-store/store"
                      }
                 
 
-                   static  findPetByIdRequest(input: {pathParams: { id :number }, optimisticResponse ?: {
-  readonly name: string
-  readonly tag?: string
-} & {
-  readonly id: number
-}}) {
+                   static  findPetByIdRequest(input: {pathParams: { id :number }, optimisticResponse ?: petstore_extendTypes.requests.findPetById.FindPetByIdResponse}) {
                          return {
                            type:FetchVariants.GET , url : {path:"http://petstore.swagger.io/api/pets/{id}",params:input.pathParams}
                               ,optimisticResponse:input.optimisticResponse

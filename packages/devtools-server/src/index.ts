@@ -19,9 +19,7 @@ function main(options?: DevToolsServerOption) {
 
 
     console.log("started devtools server");
-    // client1.send("client2 message ")
 
-    // client2.send("client2 message")
 
 }
 

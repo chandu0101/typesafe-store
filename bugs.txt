@@ -1,11 +1,11 @@
 
 Store : 
 
-InTypeOps scenarios if we modify same state field in type op then we hsould coordinate with (pc,s)
 
 Cli :
 check for tsconfig propertyInitializers / stric 
 
+
 Rest : 
-If open API spec specifies error then we should get error in resp.notok case ?
+If open API spec specifies error then we should get error in resp.notok case ? reducer-transformer get errorTYpe 
 

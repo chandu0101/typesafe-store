@@ -2,7 +2,7 @@ import { AppReducerGroup } from "./reducers/generated/app-gen";
 import { TypeSafeStore, GetStateFromReducers, GetActionFromReducers } from "@typesafe-store/store";
 import createFetchMiddleware from "@typesafe-store/middleware-fetch";
 import { GITHUB_REST_API_URL, githubApiUrlOptions } from "./apis/rest/github";
-
+import { createDevToolsMiddleware } from "@typesafe-store/middleware-devtools"
 
 const reducers = { app: AppReducerGroup }
 
@@ -12,7 +12,9 @@ const fm = createFetchMiddleware<typeof reducers>({
     }
 })
 
-export const store = new TypeSafeStore({ reducers, middleWares: [fm] })
+const devToolsMiddleware = createDevToolsMiddleware<typeof reducers>({ appName: () => "REACT_REAL_WORLD" })
+
+export const store = new TypeSafeStore({ reducers, middleWares: [devToolsMiddleware, fm] })
 
 export type AppState = GetStateFromReducers<typeof reducers>
 

@@ -386,7 +386,7 @@ function generatePathTypes(spec: OpenAPIObject, apiName: string): { types: strin
     const operationIds: string[] = []
     let pathResults: string[] = []
     const requestCreators: string[] = []
-    const typesImportName = `${apiName.replace(/-/g, "_")}_types`
+    const typesImportName = `${apiName.replace(/-/g, "_")}Types`
     Object.entries(paths).forEach(([route, po]: [string, PathItemObject]) => {
         Object.entries(po).forEach(([verb, op]: [string, OperationObject]) => {
             if (["get", "post", "put", "delete", "patch"].includes(verb)) {
@@ -397,7 +397,7 @@ function generatePathTypes(spec: OpenAPIObject, apiName: string): { types: strin
                     throw new Error(`${ERROR_READING_OPENAPI_SPEC} :  ${op.operationId} is already taken by another operation, please provide a unique operation `)
                 }
                 operationIds.push(op.operationId)
-                const name = pascal(op.operationId)
+                const operationId = op.operationId
                 const { query: queryParams = [], header: headerParams = [], path: pathParams = [] } = groupBy([...(po.parameters || []), ...(op.parameters || [])].map<ParameterObject>(p => {
                     if (isReference(p)) {
                         return get(schemaComponents, p.$ref.replace("#/components/", "").replace("/", "."))
@@ -434,34 +434,31 @@ function generatePathTypes(spec: OpenAPIObject, apiName: string): { types: strin
                 if (requestBodyTypes === "void") {
                     requestBodyTypes = "null"
                 }
+                let operationIdPascal = pascal(operationId)
+                const operationResponseType = `export type ${operationIdPascal}Response = ${responseTypes}`
+                const operationRequestBodyType = `export type ${operationIdPascal}Body = ${requestBodyTypes}`
+                const operationIdErrorType = `export type ${operationIdPascal}Error = ${errorTypes}`
+                const operationIdNamespace = camel(operationId)
                 let type = ""
                 const path = `${serverPath}${route}`
                 const urlType = `{path:"${path}"${pathParamsType ? `,params:${pathParamsType}` : ""}${queryParamsType ? `, queryParams:${queryParamsType}` : ""}}`
 
                 if (verb === "get") {
-                    type = `Fetch<${urlType},${responseTypes},${errorTypes},T>`
+                    type = `Fetch<${urlType},${operationIdPascal}Response,${operationIdPascal}Error,T>`
                 } else {
-                    type = `Fetch${pascal(verb)}<${urlType},${requestBodyTypes},${responseTypes},${errorTypes},T>`
+                    type = `Fetch${pascal(verb)}<${urlType},${operationIdPascal}Body,${operationIdPascal}Response,${operationIdPascal}Error,T>`
                 }
                 let rcResponseType: string | undefined = ""
-                const respInit = ["Blob", "ArrayBuffer", "string"]
                 if (responseTypes === "void" || responseTypes === "null" || responseTypes === "undefined") {
                     rcResponseType = undefined
-                } else if (respInit.includes(responseTypes)) {
-                    rcResponseType = responseTypes
-                } else if (responseTypes.trim().startsWith("{")) {
-                    rcResponseType = responseTypes
                 } else {
-                    rcResponseType = `${typesImportName}.${responseTypes}`
+                    rcResponseType = `${typesImportName}.requests.${operationIdNamespace}.${operationIdPascal}Response`
                 }
-                const bodyInit = ["Blob", "BufferSource", "FormData", "URLSearchParams", "ReadableStream<Uint8Array>", "string"];
                 let rcBodyType: string | undefined = undefined
                 if (requestBodyTypes === "null" || requestBodyTypes === "undefined" || requestBodyTypes === "void") {
                     rcBodyType = undefined
-                } else if (bodyInit.includes(requestBodyTypes) || requestBodyTypes.trim().startsWith("{")) {
-                    rcBodyType = requestBodyTypes
                 } else {
-                    rcBodyType = `${typesImportName}.${requestBodyTypes}`
+                    rcBodyType = `${typesImportName}.requests.${operationIdNamespace}.${operationIdPascal}Body`
                 }
 
                 let paramsA = [{ name: "pathParams", value: pathParamsType },
@@ -478,7 +475,7 @@ function generatePathTypes(spec: OpenAPIObject, apiName: string): { types: strin
                 }
 
                 const requestCreator = `
-                   static  ${camel(name)}Request(${params}) {
+                   static  ${camel(operationId)}Request(${params}) {
                          return {
                            type:FetchVariants.${verb.toUpperCase()} , url : {path:"${path}"${pathParamsType ? ",params:input.pathParams" : ""}${queryParamsType ? `, queryParams: input.queryParams` : ""}}
                              ${rcBodyType ? ", body: input.body" : ""} ${rcResponseType ? ",optimisticResponse:input.optimisticResponse" : ""}
@@ -486,7 +483,15 @@ function generatePathTypes(spec: OpenAPIObject, apiName: string): { types: strin
                      }
                 `
                 requestCreators.push(requestCreator)
-                pathResults.push(`export type ${name}<T extends Transform<${responseTypes}, any> | null = null> = ${type}`)
+                const pathResult = `
+                  export namespace ${operationIdNamespace} {
+                     ${operationRequestBodyType}
+                     ${operationResponseType}
+                     ${operationIdErrorType}
+                     export type Request<T extends FetchTransform<${operationIdPascal}Response, any> | null = null> = ${type}
+                  }
+                `
+                pathResults.push(pathResult)
             }
         })
     })
@@ -497,6 +502,7 @@ function generatePathTypes(spec: OpenAPIObject, apiName: string): { types: strin
     `
     return { types, requestCreators }
 }
+
 
 
 export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): Promise<[boolean, string]> {
@@ -566,18 +572,19 @@ export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): 
             fetchImports.push("FetchPatch")
         }
         const nameSpaceName = rApi.name.replace(/-/g, "_")
+        const nameSpaceNameTypes = `${nameSpaceName}Types`
         const output = `
          ${CommonUtils.dontModifyMessage()} 
-         import {${fetchImports.join(",")},Transform}  from "@typesafe-store/store"
+         import {${fetchImports.join(",")},FetchTransform}  from "@typesafe-store/store"
 
-          namespace ${nameSpaceName} {
+          namespace ${nameSpaceNameTypes} {
              ${schemas}
              ${reqBodies}
              ${responses}
              ${pathTypes}
          }
 
-         export default ${nameSpaceName}
+         export default ${nameSpaceNameTypes}
         `
 
         const outFile = ConfigUtils.getRestApiOutputFilePathForTypes(rApi.name)
@@ -585,7 +592,7 @@ export async function generateTypesForRestApiConfig(restApis: RestApiConfig[]): 
 
         const rcOutFile = ConfigUtils.getRestApiOutputFilePathForRequestCreators(rApi.name)
         const rcImports = []
-        rcImports.push(`import ${nameSpaceName}_types from "../types"`)
+        rcImports.push(`import ${nameSpaceNameTypes} from "../types"`)
         rcImports.push(`import {FetchVariants} from "@typesafe-store/store"`)
         const className = `${pascal(nameSpaceName)}RequestCreators`
         const rcOut = `
