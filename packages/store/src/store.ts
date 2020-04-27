@@ -1,7 +1,7 @@
 import { ReducerGroup, Action, ActionInternalMeta, DataAndTypeOps } from "./reducer"
-import { PersistanceStorage, StorageWriteMode } from "./storage"
+import { PersistanceStorage, } from "./storage"
 import compose from "./compose"
-import { Selector, SelectorE } from "./selector"
+import { Selector, SelectorE, SelectorDepenacyValue } from "./selector"
 import { TypeOpEntity } from "./typeops"
 import { Navigation, NAVIGATION_REDUCER_GROUP_NAME, Location, NavigationAction } from "./navigation"
 import { TStoreUtils } from "./utils"
@@ -41,7 +41,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     private reducerGroupToStateKeyMap: Record<string, string> = {}
 
-    readonly storage?: PersistanceStorage<R, GetStateFromReducers<R>>
+    readonly storage?: PersistanceStorage<R>
 
     private _globalListener?: (action: Action, stateKeys: { name: string, prevValue: any }[]) => any
 
@@ -70,7 +70,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
             reducers: R,
             middleWares: MiddleWare<R>[],
             navigation?: Navigation,
-            storage?: PersistanceStorage<R, GetStateFromReducers<R>>
+            storage?: PersistanceStorage<R>
         }) {
         this.reducers = reducers
         const mchain = middleWares.map(m => m(this))
@@ -125,7 +125,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
      *   
      * @param skipStateSet when preparing store with storage don't override satate,just do other work stateKey to regudcer group mapping
      */
-    private prepareNormalStore = (skipStateSet?: boolean) => {
+    private prepareNormalStore = (storageData?: Partial<GetStateFromReducers<R>>) => {
         for (const stateKey in this.reducers) {
             const rg = this.reducers[stateKey]
             if (rg) { // suport lazy reducers need more thinking :s 
@@ -134,20 +134,26 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                     throw new Error(`This reducer ${rg.g} already assigned to ${assignedToAnotherStateKey}`)
                 }
                 this.reducerGroupToStateKeyMap[rg.g] = stateKey
-                if (!skipStateSet) {
+                if (!storageData) {
                     this._state[stateKey] = rg.ds
+                } else {
+                    const sd = storageData[stateKey]
+                    if (sd) {
+                        this._state[stateKey] = { ...rg.ds, ...sd }
+                    } else {
+                        this._state[stateKey] = rg.ds
+                    }
                 }
             }
 
         }
     }
 
-    prepareStoreWithStorage = async (storage: PersistanceStorage<R, GetStateFromReducers<R>>, ) => {
+    prepareStoreWithStorage = async (storage: PersistanceStorage<R>, ) => {
         try {
-            const sState = await storage.getState(this.reducers)
+            const sState = await storage.getState(Object.keys(this.reducers))
             if (sState) {
-                this._state = sState
-                this.prepareNormalStore(true)
+                this.prepareNormalStore(sState)
             } else { // first time 
                 this.prepareNormalStore()
             }
@@ -157,7 +163,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
     }
 
     private defaultDispatch = (a: Action) => {
-
+        console.log("defaultDispatch .... ", a)
         const { group, name, _internal } = a;
         const stateKey = this.reducerGroupToStateKeyMap[group]
         if (!stateKey) {
@@ -641,16 +647,20 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         return [id, idKey]
     }
 
-    private getPropAccess = (obj: any, propAccess: string[]): any => {
+    private getPropAccess = (obj: any, propAccess: string[]): any | undefined => {
         if (propAccess.length === 1) {
             return obj[propAccess[0]]
         } else {
-            return this.getPropAccess(obj[propAccess[0]], propAccess.slice(1))
+            const v = obj[propAccess[0]]
+            if (v === undefined || v === null) {
+                return undefined
+            }
+            return this.getPropAccess(v, propAccess.slice(1))
         }
     }
 
     private notifyStorageOrListeners = async ({ stateKeys, action, ps }: { stateKeys: { name: string, prevValue: any }[], action: Action, ps: any }) => {
-        if (this.storage && this.storage.options.writeMode === StorageWriteMode.REQUIRED) {
+        if (this.storage && this.storage.options.writeMode === "REQUIRED") {
             await this.notifyStorage(stateKeys, action)
             this.notifyListeners({ stateKeys, action, ps })
         } else {
@@ -661,9 +671,45 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         }
     }
 
+    private pickKeys = (obj: any, keys: string[]): any => {
+        return keys.reduce((pkr, pk) => {
+            pkr[pk] = obj[pk]
+            return pkr;
+        }, {} as Record<string, any>)
+    }
+
+    private excludeKeys = (obj: any, keys: string[]): any => {
+        return Object.keys(obj).reduce((pkr, pk) => {
+            if (!keys.includes(pk)) {
+                pkr[pk] = obj[pk]
+            }
+            return pkr;
+        }, {} as Record<string, any>)
+    }
+
+
     private notifyStorage = (stateKeys: { name: string, prevValue: any }[], action: Action) => {
+        const persistMode = this.storage!.options.persistMode
         const data = stateKeys.reduce((pv, ck) => {
-            pv[ck.name] = JSON.stringify(this._state[ck.name])
+            const rg = this.getReducerGroup(ck.name)
+            const eo = this._state[ck.name]
+            if (persistMode === "epxlicitPersist") {
+                if (rg.m.persist) {
+                    pv[ck.name] = JSON.stringify(this._state[ck.name])
+                } else if (rg.m.persistKeys) {
+                    const obj = this.pickKeys(eo, rg.m.persistKeys)
+                    pv[ck.name] = JSON.stringify(obj)
+                }
+            } else {
+                if (rg.m.dpersist) {
+                    // dont persist
+                } else if (rg.m.dpersistKeys) {
+                    const obj = this.excludeKeys(eo, rg.m.dpersistKeys)
+                    pv[ck.name] = JSON.stringify(obj)
+                } else {
+                    pv[ck.name] = JSON.stringify(this._state[ck.name])
+                }
+            }
             return pv;
         }, {} as Record<string, string>)
         return this.storage!.dataChanged(data)
@@ -684,7 +730,9 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
             })
 
         }
+        console.log("handlers", this._globalCompleteHandlers.length);
         this._globalCompleteHandlers.forEach(c => {
+            console.log("calling completion handler ", c);
             c(action, stateKeys)
         })
     }
@@ -714,16 +762,17 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
     }
 
     private isObjectKeysChanged = (pv: any, cv: any, objAccess: string) => {
+        console.log("isObjectKeysChanged********* ", pv, cv, objAccess);
         let result = false
         let pvProcessed: any | undefined = pv
         let cvProcessed: any | undefined = cv
         result = objAccess.split(".").some(v => {
             if (pvProcessed && cvProcessed) {
                 const lvp = pvProcessed[v]
-                if (!lvp) {
+                const lvc = cvProcessed[v]
+                if ((lvp === undefined || lvp === null) && (lvc === undefined || lvc === null)) {
                     return false
                 }
-                const lvc = cvProcessed[v]
                 if (lvp !== lvc) {
                     return true
                 }
@@ -734,10 +783,43 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         return result
     }
 
-    isSelectorDependenciesChanged = (currentSate: any, prevState: any, selector: Selector<any, any> | SelectorE<any, any, any>, keyChanged: string): boolean => {
-        const deps = selector.dependencies as Record<string, string[]>
+    isChildObjectsChanged = (currentState: any, prevState: any, oa: Record<string, Record<string, SelectorDepenacyValue>>) => {
+        const [keyI, valueI] = Object.entries(oa)[0]
+        const cv = this.getPropAccess(currentState, keyI.split("."))
+        const pv = this.getPropAccess(prevState, keyI.split("."))
+        if (cv === pv) {
+            return false
+        } else {
+            const result = Object.entries(valueI).some(([key, values]) => {
+                if (values.length > 0) {
+                    const results = values.some(v => {
+                        let oachanged = false
+                        if (typeof v === "string") {
+                            oachanged = this.isObjectKeysChanged(pv, cv, v)
+                        } else {
+                            oachanged = this.isChildObjectsChanged(cv, pv, v)
+                        }
+                        if (oachanged) {
+                            return true
+                        }
+                    })
+                    return results
+                } else {
+                    if (cv[key] !== pv[key]) {
+                        return true
+                    }
+                }
+            })
+            return result
+        }
+    }
+
+    isSelectorDependenciesChanged = (currentSate: any, prevState: any, selector: Selector<any, any> | SelectorE<any, any, any>, keyChanged: string, ): boolean => {
+        console.log("isSelectorDependenciesChanged ", currentSate, prevState, selector.dependencies, keyChanged);
+        const deps = selector.dependencies
         let result = false
         if (currentSate === prevState) {
+            console.log("same as previous");
             return false
         }
         result = Object.entries(deps).some(([key, value]) => {
@@ -749,7 +831,9 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                             return true
                         }
                     })
-                    return lr;
+                    if (lr === true) {
+                        return lr;
+                    }
                 } else {
                     if (currentSate !== prevState) {
                         return true

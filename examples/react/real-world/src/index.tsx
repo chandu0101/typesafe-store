@@ -7,6 +7,7 @@ import { BrowserRouter as Router, Route, Switch } from "react-router-dom"
 import App from './pages/App';
 import UserPage from './pages/UserPage';
 import ReposPage from './pages/ReposPage';
+import Sync from './components/Syn';
 
 console.log("Hello1 ");
 ReactDOM.render(
@@ -15,13 +16,13 @@ ReactDOM.render(
             <Provider store={store} >
                 <div>
                     <Route path="/" component={App} />
-                    <Switch>
+                    {/* <Switch>
                         <Route path="/:login/:name"
                             component={ReposPage} />
                         <Route path="/:login"
                             component={UserPage} />
-                    </Switch>
-
+                    </Switch> */}
+                    <Sync />
 
                 </div>
             </Provider>

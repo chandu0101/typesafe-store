@@ -9,11 +9,16 @@ namespace devToolsServerTypes {
 
     export type AppInitialConnectedMessage = { kind: "InitiateAppConnection", appName: string, type: "App" }
 
+    export type AppConnectDisConnectMessage = { kind: "AppConnectDisConnect", appName: string, mode: "open" | "close" }
+
+    export type AppCloseMessage = { kind: "AppClose", appName: string, }
+
     export type StartMessage = { kind: "StartMessage", id: string }
 
     export type ActionMessage = { kind: "Action", action: Action, stateChanged: Record<string, any>, id: String, appName: string }
 
-    export type Message = DevToolsConnectionInitialteMessage | AppInitialConnectedMessage | ActionMessage | StartMessage
+    export type Message = DevToolsConnectionInitialteMessage |
+        AppInitialConnectedMessage | ActionMessage | StartMessage | AppConnectDisConnectMessage | AppCloseMessage
 
 
 

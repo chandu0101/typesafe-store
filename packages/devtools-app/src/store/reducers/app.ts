@@ -8,7 +8,7 @@ class AppReducer {
 
     route: reducerTypes.app.Route = "actions"
 
-    wsUrl: string = "wss://locahost:8998"
+    wsUrl: string = "ws://localhost:8998"
 
     appName?: reducerTypes.app.AppName
 
@@ -43,8 +43,8 @@ class AppReducer {
         this.appsData[appName].actions.push(action)
     }
 
-    resetApp(appName: string, actions: reducerTypes.app.DAction[]) {
-        this.appsData[appName].actions = actions
+    resetApp(appName: string, actions: reducerTypes.app.DAction[], status: reducerTypes.app.AppConnectionStatus) {
+        this.appsData[appName] = { actions, status, name: appName }
     }
 
 }

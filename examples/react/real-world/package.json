@@ -12,7 +12,7 @@
     "@types/react-dom": "^16.9.0",
     "@typesafe-store/middleware-devtools": "file:../../../packages/middleware-devtools",
     "@typesafe-store/middleware-fetch": "file:../../../packages/middleware-fetch",
-    "@typesafe-store/react": "/Users/chandu0101/Desktop/kode/programming/typescript_projects/typesafe-store/packages/react-glue",
+    "@typesafe-store/react": "file:../../../packages/react-glue",
     "@typesafe-store/store": "file:../../../packages/store",
     "react": "^16.13.1",
     "react-dom": "^16.13.1",

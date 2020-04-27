@@ -1,5 +1,5 @@
 
-           // this file is auto generated on 2020-04-23T13:04:50.685Z, don't modify it
+           // this file is auto generated on 2020-04-26T02:50:55.388Z, don't modify it
            import {Selector,SelectorE} from "@typesafe-store/store"
            import { AppState } from "../.."
 import { createSelector } from "@typesafe-store/store"
@@ -28,7 +28,7 @@ export const userPageSelector:Selector<AppState,selectorTypes.UsersPage> = {fn:(
     }
 
     return result
-},dependencies:{"app":["user.loading..error..error..data..data","starred.data..data.repos..data.nextPage..loading..error"]}}
+},dependencies:{"app":["user","starred"]}}
 export const reposPageSelector:Selector<AppState,selectorTypes.ReposPage> = {fn:(state: AppState): selectorTypes.ReposPage => {
     let result: selectorTypes.ReposPage = { users: [] } as any
     const repoData = state.app.repo
@@ -51,7 +51,7 @@ export const reposPageSelector:Selector<AppState,selectorTypes.ReposPage> = {fn:
     }
 
     return result
-},dependencies:{"app":["repo.loading..error..error..data..data","stargazers.data..data.users..data.nextPage..loading..error"]}}
+},dependencies:{"app":["repo","stargazers"]}}
 export const repoSelector:Selector<AppState,githubRestApiTypes.requests.GetRepo> = {fn:(state: AppState): githubRestApiTypes.requests.GetRepo => state.app.repo,dependencies:{"app":["repo"]}}
 export const userSeelctor:Selector<AppState,githubRestApiTypes.requests.GetUSer> = {fn:(state: AppState): githubRestApiTypes.requests.GetUSer => state.app.user,dependencies:{"app":["user"]}}
 export const dummy = "";

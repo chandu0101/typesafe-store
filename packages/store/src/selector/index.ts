@@ -1,6 +1,7 @@
 
 
 
+export type SelectorDepenacyValue = (string | Record<string, Record<string, SelectorDepenacyValue>>)[]
 
 export type Selector<S, R> = {
     fn: (state: S) => R,

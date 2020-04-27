@@ -20,6 +20,8 @@ export * from "./grpc"
 
 export * from "./typeops"
 
+export * from "./promise"
+
 
 
 

@@ -128,6 +128,7 @@ const getPropertyAccessvalueAndItsParent = (pa: ts.Identifier): { value: string,
         }
         else if (ts.isVariableDeclaration(node)) {
             if (isNodeFurtherTracable(node)) {
+                console.log("****** selector transformer got variable decl ", node.getText());
                 pn = node
             }
             return
@@ -178,19 +179,20 @@ const getDepenciesOfIdentifier = (id: ts.Identifier, variableUsage: Map<ts.Ident
             console.log("***** getDepenciesOfIdentifier ", loc.getText(), loc.parent.getText());
             if (ts.isPropertyAccessExpression(loc.parent)) {
                 const { value: lv, pn } = getPropertyAccessvalueAndItsParent(loc)
-                if (pn) {
-                    if (ts.isVariableDeclaration(pn)) {
-                        result.push({ value: lv, childDeps: getDependenciesOfObject(pn.name, { parentObj: lv, variableUsage }) })
-                    } else if (ts.isCallExpression(pn)) {
-                        result.push({ value: lv, childDeps: getDepencyObjectForCallExpression(pn, lv) })
-                    }
-                } else {
-                    result.push({ value: lv })
-                }
-            } else if (ts.isCallExpression(loc.parent)) {
-                const dofb = getDepencyObjectForCallExpression(loc.parent, "")
-                result.push(...dofb.values)
+                // if (pn) {
+                //     if (ts.isVariableDeclaration(pn)) {
+                //         result.push({ value: lv, childDeps: getDependenciesOfObject(pn.name, { parentObj: lv, variableUsage }) })
+                //     } else if (ts.isCallExpression(pn)) {
+                //         result.push({ value: lv, childDeps: getDepencyObjectForCallExpression(pn, lv) })
+                //     }
+                // } else {
+                result.push({ value: lv })
+                // }
             }
+            //  else if (ts.isCallExpression(loc.parent)) {
+            //     const dofb = getDepencyObjectForCallExpression(loc.parent, "")
+            //     result.push(...dofb.values)
+            // }
         })
     }
 
@@ -230,43 +232,115 @@ const processChildDependecy = (cdo?: DependenciesOfObject): string => {
     return cdo.values.map(v => `${v.value}.${processChildDependecy(v.childDeps)}`).join(".")
 }
 
-const processDependencyObject = (dg: DependenciesOfObject) => {
-    const result: Map<string, Set<string>> = new Map()
+type O1 = (string | Record<string, Record<string, O1>>)[]
+
+//TODO  more efficient mapping
+const processDependencyObject2 = (dg: DependenciesOfObject): Record<string, O1> => {
+    const result: Record<string, O1> = {}
 
     dg.values.forEach(dgv => {
         const a = dgv.value.split(".")
         const k = a[0]
         let value = a.slice(1).join(".")
+        const mv = result[k]
+        //TODO  if child objects exist 
         if (dgv.childDeps) {
-            let cv = processChildDependecy(dgv.childDeps)
-            if (cv.length) {
-                if (cv.endsWith(".")) {
-                    cv = cv.substr(0, cv.length - 1)
-                }
-                value = value === "" ? cv : `${value}.${cv}`
+            const cv = processDependencyObject2(dgv.childDeps)
+            const cvf: Record<string, Record<string, O1>> = { [value]: cv }
+            if (!mv) {
+                const s = []
+                s.push(cvf)
+                result[k] = s
+            } else {
+                mv.push(cvf)
             }
-        }
-        const mv = result.get(k)
-        if (mv) {
-            if (value.length) {
-                mv.add(value)
-            }
+
         } else {
-            const s = new Set<string>()
-            if (value.length) {
-                s.add(value)
+            if (mv) {
+                if (value.length > 0) {
+                    let canAdd = true
+                    let na = mv.map(ev => {
+                        if (typeof ev === "string") {
+                            if (ev === value) {
+                                canAdd = false
+                                return ev
+                            } else if (value.startsWith(ev)) {
+                                canAdd = false
+                                return value
+                            } else {
+                                return ev
+                            }
+                        } else {
+                            return ev
+                        }
+                    })
+                    if (canAdd) {
+                        na.push(value)
+                    }
+                    na = [...new Set(na)]
+                    result[k] = na
+                }
+            } else {
+                const s = []
+                if (value.length > 0) {
+                    s.push(value)
+                }
+                result[k] = s
             }
-            result.set(k, s)
         }
     })
 
-    const resultObj: Record<string, string[]> = {}
+    return result;
 
-    for (const [key, value] of result) {
-        resultObj[key] = [...value]
-    }
+}
 
-    return resultObj
+
+const processDependencyObject = (dg: DependenciesOfObject): Record<string, string[]> => {
+    const result: Record<string, string[]> = {}
+    const wholeKeys: Set<string> = new Set() // if object is used as state.key and state.key.key1 then we should invalidate when key changes
+    dg.values.forEach(dgv => {
+        const a = dgv.value.split(".")
+        const k = a[0]
+        const value = a.slice(1).join(".")
+        console.log("*********** processDependencyObject : ", "key: ", k, "value:", value);
+        if (value.trim().length === 0) {
+            console.log("adding to whole set :", k);
+            wholeKeys.add(k)
+        }
+        const mv = result[k]
+        if (mv) {
+            if (!wholeKeys.has(k)) {
+                let canAdd = true
+                let na = mv.map(ev => {
+                    if (ev === value) {
+                        canAdd = false
+                        return ev
+                    } else if (value.startsWith(ev)) {
+                        canAdd = false
+                        return ev
+                    } else {
+                        return ev
+                    }
+                })
+                if (canAdd) {
+                    na.push(value)
+                }
+                na = [...new Set(na)]
+                result[k] = na
+            } else {
+                result[k] = []
+            }
+        } else {
+            let s = []
+            if (!wholeKeys.has(k)) {
+                s.push(value)
+            }
+            result[k] = s
+        }
+
+    })
+
+    return result;
 
 }
 
@@ -290,6 +364,7 @@ const getSelectorFromFunction = (f: ts.ArrowFunction | ts.FunctionExpression, na
     const dg = getDependenciesOfObject(stateParam.name, { variableUsage })
     console.log("Dependency graph : ", JSON.stringify(dg));
     const pg = processDependencyObject(dg)
+    // const pg = processDependencyObject2(dg)
     console.log("Final Dependency Result : ", pg);
     const sType = stateParam.type!.getText()
     const rType = f.type!.getText()

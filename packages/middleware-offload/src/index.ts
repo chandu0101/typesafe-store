@@ -1,20 +1,36 @@
 
 import {
     ReducerGroup, FetchAction, ActionMeta, MiddleWare, Dispatch, GetActionFromReducers,
-    FetchVariants, Json, TypeSafeStore, Action, FetchRequest, FUrl
+    FetchVariants, Json, TypeSafeStore, Action, FetchRequest, FUrl,
+    ActionInternalMeta, OflloadActionResult,
+    FetchActionMeta,
+    FetchFieldValue,
+    FetchRejectionError
 } from "@typesafe-store/store"
+
+import { FetchMiddlewareUtils, FetchMiddlewareOptions } from "@typesafe-store/middleware-fetch"
 
 //TODO fetch should align fetch-middleware , import scripts from pbf
 
 
-type WorkerInput = { kind: "Fetch", input: { url: string, options: RequestInit, workerFunction?: string } }
-    | { kind: "Sync", input: { propAccessArray: string[], payload?: any, state: any, workerFunction: string } }
+export type WorkerFetchInput = { kind: "Fetch", input: { url: string, options: RequestInit, responseType: string, abortable?: boolean, freq?: any, grpc?: { dsf: string }, graphql?: { multiOp?: boolean }, tf?: string }, }
+export type WorkerSyncInput = { kind: "Sync", input: { propAccessArray: string[], payload?: any, abortable?: boolean, state: any, workerFunction: string } }
+export type WorkerAbort = { kind: "WorkerAbort" }
+export type WorkerInput = WorkerFetchInput
+    | WorkerSyncInput | WorkerAbort
 
-type WorkerOutputStatus = "Processing" | "Success" | "Error"
-type WorkerOutput = { kind: "Fetch", status: WorkerOutputStatus, error?: any, result?: { data?: any, error?: any } } | { kind: "Sync", status: WorkerOutputStatus, error?: any, result?: any }
+export type WorkerOutputStatus = "Processing" | "Success" | "Error"
 
-type Options = { workerUrl: string, poolSize?: number }
+export type WorkerFetchOutput = { kind: "Fetch", status: WorkerOutputStatus, stream?: boolean, grpc?: boolean, error?: any, rejectionError?: boolean, result?: { data?: any, completed?: boolean, error?: any } }
+
+export type WorkerSyncOutput = { kind: "Sync", status: WorkerOutputStatus, error?: any, abortError?: any, result?: any }
+
+export type WorkerOutput = WorkerFetchOutput | WorkerSyncOutput
+
+
+type Options = { workerUrl: string, poolSize?: number, fetchMiddlewareOptions?: FetchMiddlewareOptions }
 type GenericReducerGroup = ReducerGroup<any, any, any, any>
+type GenericFetchAsyncData = FetchFieldValue<any, any, any, any, any>
 type Queue = { action: Action, rg: GenericReducerGroup }
 
 const isOffloadAction = (action: Action, rg: GenericReducerGroup) => {
@@ -36,8 +52,9 @@ class TSWorker {
     isRunning = false
     private action!: Action
     private actionMeta!: ActionMeta<any>
+    private abortController?: AbortController
     constructor(url: string, public readonly store: TypeSafeStore<any>,
-        private queue: Queue[]) {
+        private queue: Queue[], private readonly moptions: Options) {
         this.worker = new Worker(url)
         this.worker.onmessage = (e) => {
             this.handleOutput(e.data)
@@ -46,39 +63,94 @@ class TSWorker {
 
     private handleOutput = (wo: WorkerOutput) => {
         if (wo.kind === "Fetch") {
-            if (wo.status === "Processing") {
-                this.store.dispatch({ ...this.action, _internal: { processed: true, kind: "Data", data: { loading: true } } })
-            } else if (wo.status === "Success") {
-                const result = wo.result!
-                let data = {}
-                if (result.error) {
-                    data = { error: result.error }
-                } else {
-                    data = { data: result.data }
-                }
-                this.store.dispatch({ ...this.action, _internal: { processed: true, kind: "Data", data } })
-                this.isRunning = false
-                this.handleDone()
-            } else if (wo.status === "Error") {
-                this.isRunning = false
-                throw new Error(wo.error)
-            }
-
+            this.handleFetchOutput(wo)
         } else if (wo.kind === "Sync") {
-            if (wo.status === "Processing") {
-                // do nothing
-            } else if (wo.status === "Success") {
+            this.handleSyncOutput(wo)
+        }
+    }
+
+    private handleFetchOutput = (wo: WorkerFetchOutput) => {
+        const fetchMeta = this.actionMeta as FetchActionMeta
+        const fetchRequest = (this.action as FetchAction).fetch
+        const action = this.action
+        if (wo.status === "Processing") {
+            let ai: ActionInternalMeta = null as any
+            let result = null as any
+            if (wo.stream) { // streams are sent as processing 
+                result = wo.result
+            }
+            else if (fetchRequest.optimisticResponse) { // optimistic response 
+                if (fetchMeta.response === "stream") {
+                    throw new Error(`Optimistic response not supported in case of stream`)
+                }
+                result = { data: fetchRequest.optimisticResponse, abortController: this.abortController, optimistic: true }
+            } else {
+                result = { loading: true, abortController: this.abortController }
+
+            }
+            if (fetchMeta.typeOps) {
+                ai = { processed: true, kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps, data: result }
+            } else {
+                ai = { processed: true, kind: "Data", data: result }
+            }
+            this.store.dispatch({ ...action, _internal: ai })
+        } else if (wo.status === "Success") {
+            let ai: ActionInternalMeta = null as any
+            let result = wo.result!
+            if (wo.rejectionError) {
+                result.error = new FetchRejectionError(result.error)
+            }
+            if (fetchMeta.typeOps) {
+                if (result.error) {
+                    ai = {
+                        processed: true, data: result,
+                        optimisticFailed: fetchRequest.optimisticResponse,
+                        kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps,
+                    }
+                } else {
+                    ai = {
+                        processed: true, data: result,
+                        optimisticSuccess: fetchRequest.optimisticResponse,
+                        kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps,
+                    }
+                }
+
+            } else {
+                ai = { kind: "Data", data: result, processed: true }
+            }
+            this.store.dispatch({ ...action, _internal: ai })
+            this.isRunning = false
+            this.handleDone()
+        } else if (wo.status === "Error") {
+            this.isRunning = false
+            throw new Error(wo.error)
+        }
+
+    }
+
+    private handleSyncOutput = (wo: WorkerSyncOutput) => {
+        if (wo.status === "Processing") {
+            const result: OflloadActionResult = { loading: true, abortController: this.abortController }
+            const ai: ActionInternalMeta = { kind: "Data", processed: true, data: result }
+            this.store.dispatch({ ...this.action, _internal: ai })
+        } else if (wo.status === "Success") {
+            if (wo.abortError) {
+                const result: OflloadActionResult = { completed: true, error: wo.abortError }
+                const ai: ActionInternalMeta = { kind: "Data", processed: true, data: result }
+                this.store.dispatch({ ...this.action, _internal: ai })
+            } else {
                 const result = wo.result
                 const stateKey = this.store.getStateKeyForGroup(this.action.group)
                 const state = this.store.state[stateKey]
                 const newState = this.actionMeta.offload!.workerResponseToState(state, result)
-                this.store.dispatch({ ...this.action, _internal: { processed: true, kind: "State", data: newState } })
-                this.isRunning = false
-                this.handleDone()
-            } else if (wo.status === "Error") {
-                this.isRunning = false
-                throw new Error(wo.error)
+                const ai: ActionInternalMeta = { kind: "State", processed: true, data: newState }
+                this.store.dispatch({ ...this.action, _internal: ai })
             }
+            this.isRunning = false
+            this.handleDone()
+        } else if (wo.status === "Error") {
+            this.isRunning = false
+            throw new Error(wo.error)
         }
     }
 
@@ -95,6 +167,7 @@ class TSWorker {
         const actionMeta = rg.m.a[action.name]
         this.action = action
         this.actionMeta = actionMeta
+        this.abortController = undefined
         if (actionMeta.offload) {
             this.handleSyncAction(action, actionMeta)
         } else if (actionMeta.f && actionMeta.f.offload) {
@@ -112,44 +185,49 @@ class TSWorker {
         const state = actionMeta.offload!.stateToWorkerIn(estate)
         const workerFunction = this.createWorkerFunctionName()
         const propAccessArray = actionMeta.offload!.propAccessArray
-        const wi: WorkerInput = { kind: "Sync", input: { state, workerFunction, propAccessArray } }
+        let abortable = false
+        const payload = (action as any).payload;
+        if (payload !== null && payload !== undefined && payload._abortable === true) {
+            this.abortController = new AbortController()
+            abortable = true
+            this.abortController.signal.onabort = this.handleAbort
+        }
+        const wi: WorkerInput = { kind: "Sync", input: { state, abortable, workerFunction, propAccessArray } }
+        this.worker.postMessage(wi)
+
+    }
+
+    private handleAbort = () => {
+        const wi: WorkerAbort = { kind: "WorkerAbort" }
         this.worker.postMessage(wi)
     }
 
-
-    private getFetchUrl(url: FUrl): string {
-        let path = url.path
-        if (url.params) {
-            Object.entries(url.params).forEach(([key, value]) => {
-                path = path.replace(`{${key}}`, value.toString())
-            })
+    private handleFetchAction(action: FetchAction, actionMeta: ActionMeta<any>) {
+        const fMeta = actionMeta as FetchActionMeta
+        const fRequest = action.fetch
+        let freqToSend: any | undefined = undefined
+        let tfName: string | undefined = undefined
+        if (fMeta.tf) {
+            tfName = `${this.createWorkerFunctionName()}_fetch_transform`;
+            freqToSend = fRequest
         }
-        if (url.queryParams) {
-            const query = Object.entries(url.queryParams)
-                .map(([key, value]) => `${key}=${value}`).join("&")
-            if (query !== "") {
-                path = `${path}?${query}`
+        if (fRequest._abortable) {
+            this.abortController = new AbortController()
+            this.abortController.signal.onabort = this.handleAbort
+        }
+        const responseType = fMeta.response
+        const url = FetchMiddlewareUtils.getUrl(fRequest.url)
+        const globalUrlOptions = FetchMiddlewareUtils.getGlobalUrlOptions(url, this.moptions.fetchMiddlewareOptions)
+        const options = FetchMiddlewareUtils.getOptions(fRequest, fMeta, globalUrlOptions)
+
+        const wi: WorkerFetchInput = {
+            kind: "Fetch", input: {
+                url,
+                abortable: fRequest._abortable,
+                graphql: fMeta.graphql,
+                options, responseType, freq: freqToSend, tf: tfName
             }
         }
-        return path
-    }
-
-    private getFetchOptions(fr: FetchRequest<FetchVariants, FUrl, any, any>) {
-        const options: RequestInit = { method: fr.type }
-        if (fr.body) {
-            options.body = JSON.stringify(fr.body)
-        }
-        return options
-    }
-
-    private handleFetchAction(action: FetchAction, actionMeta: ActionMeta<any>) {
-        const url = this.getFetchUrl(action.fetch.url)
-        const options = this.getFetchOptions(action.fetch)
-        let workerFunction: string | undefined = undefined
-        if (actionMeta.f!.offload) {
-            workerFunction = this.createWorkerFunctionName()
-        }
-        const wi: WorkerInput = { kind: "Fetch", input: { url, options, workerFunction } }
         this.worker.postMessage(wi)
     }
 
@@ -165,7 +243,7 @@ const getWorker = (workers: TSWorker[], options: Options, store: TypeSafeStore<a
             }
         })
     } else { // create worker 
-        const w = new TSWorker(options.workerUrl, store, queue)
+        const w = new TSWorker(options.workerUrl, store, queue, options)
         workers.push(w)
         worker = w
     }

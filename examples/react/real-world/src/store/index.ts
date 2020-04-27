@@ -3,8 +3,9 @@ import { TypeSafeStore, GetStateFromReducers, GetActionFromReducers } from "@typ
 import createFetchMiddleware from "@typesafe-store/middleware-fetch";
 import { GITHUB_REST_API_URL, githubApiUrlOptions } from "./apis/rest/github";
 import { createDevToolsMiddleware } from "@typesafe-store/middleware-devtools"
+import { SyncReducerGroup } from "./reducers/generated/sync-gen";
 
-const reducers = { app: AppReducerGroup }
+const reducers = { app: AppReducerGroup, sync: SyncReducerGroup }
 
 const fm = createFetchMiddleware<typeof reducers>({
     urlOptions: {

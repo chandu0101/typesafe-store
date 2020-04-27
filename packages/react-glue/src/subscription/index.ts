@@ -12,7 +12,7 @@ export class Subscription<R extends Record<string, ReducerGroup<any, any, any, a
         const changedListeners: any[] = []
         stateKeys.forEach(stateKey => {
             this.store.selectorListeners[stateKey.name].forEach(sl => {
-                console.log("selector : ", sl, this.store.state[stateKey.prevValue]);
+                console.log("selector : ", sl, this.store.state[stateKey.name]);
                 const changed = this.store.isSelectorDependenciesChanged(this.store.state[stateKey.name], stateKey.prevValue, sl.selector,
                     stateKey.name)
                 console.log("changed", changed);

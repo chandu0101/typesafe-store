@@ -1,25 +1,29 @@
 import { ReducerGroup } from "../reducer";
+import { GetStateFromReducers } from "../store";
 
 
+
+
+
+export type TSDontPersist = {}
+
+export type TSPersist = {}
 
 /**
- *  REQUIRED : meaning whenever an action dispatched subscribes/listerners will not be notified until data persisted 
- *   to storage, 
- *  OPTIONAL : meaning whenever an action dispatched subscribers will be notified upfront without waiting for confirmation from storage
+ *  writeMode :->  REQUIRED : meaning whenever an action dispatched subscribes/listerners will not be notified until data persisted .
+ *   OPTIONAL : meaning whenever an action dispatched subscribers will be notified upfront without waiting for confirmation from storage
  */
-export const enum StorageWriteMode {
-    REQUIRED,
-    OPTIONAL
+export type PersistanceStorageOptions = {
+    writeMode?: "REQUIRED" | "OPTIONAL",
+    persistMode: "epxlicitPersist" | "explicitDontPersist"
 }
-
-export type PersistanceStorageOptions = { writeMode?: StorageWriteMode }
 
 /**
  * 
  */
-export interface PersistanceStorage<R extends Record<string, ReducerGroup<any, any, any, any>>, S> {
+export interface PersistanceStorage<R extends Record<string, ReducerGroup<any, any, any, any>>> {
     options: PersistanceStorageOptions
     dataChanged(input: Record<string, string>): Promise<void>
-    getState(reducers: R): Promise<S | undefined>
+    getState(stateKeys: string[]): Promise<Partial<GetStateFromReducers<R>> | undefined>
     clear(): Promise<void>
 }

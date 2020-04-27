@@ -117,20 +117,98 @@ const reducerTransformer: ts.TransformerFactory<ts.SourceFile> = context => {
     return node => ts.visitNode(node, visit);
 };
 
+const TSPERSIST_TYPE = "TSPersist"
+const TSDONTPERSIST_TYPE = "TSDontPersist"
+const getPersistMeta = (): string | undefined => {
+    let result: string | undefined = undefined
+    const persistMode = ConfigUtils.getPeristMode()
+    const isPersistDontPersistNode = (node: ts.Node): typeof TSPERSIST_TYPE | typeof TSDONTPERSIST_TYPE | undefined => {
+        const t = node.getText()
+        if (t === TSDONTPERSIST_TYPE || t === TSDONTPERSIST_TYPE) {
+            return t;
+        } else {
+            return undefined;
+        }
+    }
+    const hc = classDecl.heritageClauses
+    if (hc) {
+        const ic = hc.filter(hc => ts.isInterfaceDeclaration(hc.parent))[0]
+        if (ic) {
+            let v: typeof TSPERSIST_TYPE | typeof TSDONTPERSIST_TYPE | undefined = undefined
+            ic.types.some(t => {
+                const text = isPersistDontPersistNode(t.expression)
+                if (text) {
+                    v = text
+                    return true
+                }
+            })
+            if (v) {
+                if (!persistMode) {
+                    throw new Error(`You should specify persistMode in tsconfig.json "typesafe-store" field  inorder to use ${TSDONTPERSIST_TYPE}/${TSPERSIST_TYPE} interfaces`)
+                } else if (persistMode === "epxlicitPersist" && v === TSDONTPERSIST_TYPE) {
+                    throw new Error(`You choosen persist mode as "epxlicitPersist"  but using ${TSDONTPERSIST_TYPE} which does nothing  probaly you mean ${TSPERSIST_TYPE} `)
+                } else if (persistMode === "explicitDontPersist" && v === TSPERSIST_TYPE) {
+                    throw new Error(`You choosen persist mode as "explicitDontPersist"  but using ${TSPERSIST_TYPE} which does nothing  probaly you mean ${TSDONTPERSIST_TYPE} `)
+                }
+                result = persistMode === "epxlicitPersist" ? "persist:true" : "dpersist:ture"
+            }
+        }
+    }
+    if (!result) {
+        const props: { name: string, tpe: string }[] = []
+        propDecls.forEach(p => {
+            const typeNode = p.pd.type
+            const name = p.pd.name.getText()
+            if (typeNode) {
+                const tpdText = isPersistDontPersistNode(typeNode)
+                if (tpdText) {
+                    props.push({ name, tpe: tpdText })
+                } else if (ts.isIntersectionTypeNode(typeNode)) {
+                    typeNode.types.some(itn => {
+                        const itnText = isPersistDontPersistNode(itn)
+                        if (itnText) {
+                            props.push({ name, tpe: itnText })
+                            return true
+                        }
+                    })
+                }
+            }
+        })
+        if (props.length > 0 && !persistMode) {
+            throw new Error(`You should specify persistMode in tsconfig.json "typesafe-store" field  inorder to use ${TSDONTPERSIST_TYPE}/${TSPERSIST_TYPE} interfaces`)
+        } else {
+            const rp: string[] = []
+            props.forEach(p => {
+                const v = p.tpe
+                if (persistMode === "epxlicitPersist" && v === TSDONTPERSIST_TYPE) {
+                    throw new Error(`You choosen persist mode as "epxlicitPersist"  but using ${TSDONTPERSIST_TYPE} on field ${p.name} which does nothing  probaly you mean ${TSPERSIST_TYPE} `)
+                } else if (persistMode === "explicitDontPersist" && v === TSPERSIST_TYPE) {
+                    throw new Error(`You choosen persist mode as "explicitDontPersist"  but using ${TSPERSIST_TYPE} on field ${p.name} which does nothing  probaly you mean ${TSDONTPERSIST_TYPE} `)
+                }
+                rp.push(p.name)
+            })
+            const keys = JSON.stringify(rp)
+            result = persistMode === "epxlicitPersist" ? `persistKeys:${keys}` : `dpersistKeys:${keys}`
+        }
+    }
+    return result;
+}
 
 
 //constants
 
 const createReducerFunction = (cd: ts.ClassDeclaration) => {
     setClassDeclaration(cd);
-    const propDecls = getPropDeclsFromTypeMembers();
     const defaultState = getDefaultState(propDecls);
     const typeName = getTypeName();
     const group = `${ConfigUtils.getPrefixPathForReducerGroup(currentProcessingReducerFile)}${typeName}`;
     const stateName = `${typeName}State`
     const methodsResults = processMethods({ group, stateName });
-    const syncMeta = methodsResults.filter(mr => mr.offload).map(mr => ({ name: mr.actionType.name, value: `{offload:${mr.offload}}` }))
+    const offloadMethodResult = methodsResults.filter(mr => mr.offload)
+    const stateType = getStateType(offloadMethodResult.map(mr => mr.actionType.name))
+    const syncMeta = offloadMethodResult.map(mr => ({ name: mr.actionType.name, value: `{offload:${mr.offload}}` }))
     let [asyncActionType, asyncMeta] = getAsyncActionTypeAndMeta(group);
+    let persistMeta: string | undefined = getPersistMeta()
     let result = ts.createIdentifier("")
     if (methodsResults.length === 0 && asyncActionType === "") { // If no async properties and methods then return empty node
         result = ts.createIdentifier(EMPTY_REDUCER_TRANFORM_MESSAGE)
@@ -155,10 +233,10 @@ const createReducerFunction = (cd: ts.ClassDeclaration) => {
             asyncActionType = `undefined`
         }
 
-        const meta = `{async:undefined,a:{${[...syncMeta, ...asyncMeta].map(m => `${m.name}:${m.value}`).join(",")}}}`
+        const meta = `{async:undefined,a:{${[...syncMeta, ...asyncMeta].map(m => `${m.name}:${m.value}`).join(",")}}${persistMeta ? `,${persistMeta}` : ""}}`
         result = ts.createIdentifier(
             `
-           export type ${stateName} = ${getStateType()}
+           export type ${stateName} = ${stateType}
            
            export type ${typeName}Action = ${actionType}
   
@@ -424,10 +502,6 @@ const processMethods = ({ group, stateName }: { group: string, stateName: string
 
                 return mResult;
 
-            }
-
-            const isBlockContainsMutationStatements = (b: ts.Block): boolean => {
-                return Boolean(b.statements.find(s => isSupportedMutationStatement(s)))
             }
 
             const getForEachStatements = (input: ts.CallExpression): ts.NodeArray<ts.Statement> | ts.Expression => {
@@ -1316,27 +1390,23 @@ export function cleanUpGloabals() {
 
 
 
-const geenratePromiseDataType = (lpd: LocalPropertyDecls) => {
-    const tpe = lpd.typeStr
-    const i = tpe.indexOf("<")
-    const j = tpe.indexOf(">")
-    return `PromiseData<${tpe.substr(i + 1, j)}>`
-}
-
-const getStateType = () => {
+const getStateType = (offloadMethods: string[]) => {
     return `{${propDecls
         .map(p => {
             const n = p.pd.name.getText();
             const tpe = p.typeStr
-            if (tpe.startsWith("Promise<")) {
-                return `${n}${p.pd.questionToken ? "?" : ""}:${geenratePromiseDataType(p)}`
-            }
+
             let t = p.typeStr
+
             if (p.pd.type) { // Dont use tostring value as it fetches all values of types and we cant add individual imports  
                 t = p.pd.type.getText()
+            } else if (t === "string" || t === "number" || t === "boolean") {// if primitive fields we can depend on toString()
+            }
+            else {
+                throw new Error('all fields of reducer should be annotated with type')
             }
             return `${n}${p.pd.questionToken ? "?" : ""}:${t}`;
-        })
+        }).concat(offloadMethods.map(n => `${n} :{abortController?:AbortController,loading?:boolean, error?:Error,completed?:boolean}`))
         .join(",")}}`;
 };
 
@@ -1346,20 +1416,6 @@ export const lastElementOfArray = <T>(a: T[]) => {
 
 
 
-/**
- * 
- * @param lpd async(Fetch) property declaration
- */
-function generateFetchActionType(lpd: LocalPropertyDecls): string {
-    console.log("generateFetchActionType Input: ", lpd.typeStr);
-    const tpe = lpd.typeStr;
-    const metaIndex = lpd.typeStr.indexOf("_fmeta")
-    const metaTypeRaw = tpe.substring(metaIndex).replace("_fmeta?:", "");
-    const lastOrIndex = metaTypeRaw.lastIndexOf("|");
-    const result = metaTypeRaw.substr(0, lastOrIndex);
-    console.log("generateFetchActionType Output: ", result);
-    return result;
-}
 
 function getFetchRequestResponseType(response: string): FetchActionMeta["response"] {
     let result: FetchActionMeta["response"] = "json"
@@ -1393,10 +1449,21 @@ const isTypeOpsNode = (node: ts.Node) => {
 }
 
 const FETCHBODYTYPES_ARRAY = ["Blob", "BufferSource", "FormData", "URLSearchParams", "ReadableStream<Uint8Array>", "string"]
+
 const getFetchBodyType = (input: string): FetchActionMeta["body"] => {
-    let result: FetchActionMeta["body"] = "string"
-    if (FETCHBODYTYPES_ARRAY.includes(input)) {
-        result = undefined
+    let result: FetchActionMeta["body"] = "json"
+    if (input === "Blob") {
+        result = "blob"
+    } else if (input === "BufferSource") {
+        result = "blob"
+    } else if (input === "FormData") {
+        result = "form"
+    } else if (input === "string") {
+        result = "text"
+    } else if (input === "URLSearchParams") {
+        result = "urlsearch"
+    } else if (input === "ReadableStream<Uint8Array>") {
+        result = "blob"
     }
     return result
 }
@@ -1437,7 +1504,7 @@ const processWebSocket = (lpd: LocalPropertyDecls, group: string): { meta: strin
 }
 
 
-//TODO form FetchRequest from type arguments dont depend on _fmeta
+
 const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetchResult => {
     const OFFLOAD_ASYNC = "OffloadAsync"
     let fieldTypeNode = lpd.pd.type!
@@ -1474,6 +1541,7 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
     let typeOpsResult: string | undefined = undefined;
     if (declaredTypeNodeText.startsWith("GRPCUnary<") || declaredTypeNodeText.startsWith("GRPCResponseStream<")) { // grpc 
         isGrpc = true;
+        bodyType = "grpc"
         // let grpcOpNode: ts.TypeReferenceNode = null as any
         if (ts.isIntersectionTypeNode(fieldTypeNode)) {
             fieldTypeNode.types.forEach(t => {
@@ -1514,7 +1582,7 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
         }
         graphql = `{}`;
         metaResponseType = "json"
-        bodyType = "string"
+        bodyType = "json"
         const declaredTypeArgument = declaredTypeNode.typeArguments!
         responseTypeNode = declaredTypeArgument[2];
         if (ts.isTupleTypeNode(responseTypeNode)) {
@@ -1716,7 +1784,7 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
         typeOpsResult = `{ name:"${opName}", ${propsAcess ? `obj:${JSON.stringify(propsAcess)}` : ""} }`
 
     }
-    if (transformFunctionQueryNode && offload) {// try to get response type of this function
+    if (transformFunctionQueryNode && offload && !isGrpc) {// try to get response type of this function
         let symb = AstUtils.getTypeChecker().getSymbolAtLocation(transformFunctionQueryNode.exprName)
         let decl = symb!.declarations[0]
         let fd: ts.FunctionDeclaration | ts.MethodDeclaration | ts.ArrowFunction = null as any
@@ -1737,6 +1805,10 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
             throw new Error(`transform function should be arrow function/ function declaration / static method declaration`)
         }
         const paramName = fd.parameters[0].name.getText()
+        let freqParam: string | undefined = undefined
+        if (fd.parameters[1]) { // it takes fetch request
+            freqParam = fd.parameters[1].name.getText()
+        }
         let body = ""
         if (ts.isBlock(fd.body!)) {
             body = fd.body.getText()
@@ -1744,48 +1816,49 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
             body = `return ${fd.body?.getText()}`
         }
         const code = `
-          function ${WorkersUtils.createFunctionNameFromGroup(name, group)}_fetch_transform(${paramName}:any) {
+          function ${WorkersUtils.createFunctionNameFromGroup(name, group)}_fetch_transform(${paramName}:any${freqParam ? `,${freqParam}: any` : ""}) {
               ${body}
           }
         `
         WorkersUtils.addWorkerFunction({ name, group, code })
     }
     if (isGrpc && offload) {
-        const serializersDeclSymb = AstUtils.getTypeChecker().getSymbolAtLocation(grpcSerializeFnNode!.exprName)
-        if (!serializersDeclSymb) {
-            throw new Error(`No symbol found for ${grpcDeserializeFnNode?.getText()}`)
-        }
-        const serliazerDecl = serializersDeclSymb.declarations[0]
-        if (ts.isMethodDeclaration(serliazerDecl)) {
-            const params = serliazerDecl.parameters.map(p => `${p.name}: ${p.type?.getText()}`).join(", ")
-            const code = `
-               function ${WorkersUtils.createFunctionNameFromGroup(name, group)}_grpc_serializer(${params}) {
-                   ${serliazerDecl.body?.getText()}
-               }
-             `
-            WorkersUtils.addWorkerFunction({ name, group, code })
-        } else {
-            throw new Error(`please use classes and static methods to define serializers deserializers`)
-        }
+        throw new Error(`GRPC offload is not supported atm, please file an issue if you really need that feature`)
+        // const serializersDeclSymb = AstUtils.getTypeChecker().getSymbolAtLocation(grpcSerializeFnNode!.exprName)
+        // if (!serializersDeclSymb) {
+        //     throw new Error(`No symbol found for ${grpcDeserializeFnNode?.getText()}`)
+        // }
+        // const serliazerDecl = serializersDeclSymb.declarations[0]
+        // if (ts.isMethodDeclaration(serliazerDecl)) {
+        //     const params = serliazerDecl.parameters.map(p => `${p.name}: ${p.type?.getText()}`).join(", ")
+        //     const code = `
+        //        function ${WorkersUtils.createFunctionNameFromGroup(name, group)}_grpc_serializer(${params}) {
+        //            ${serliazerDecl.body?.getText()}
+        //        }
+        //      `
+        //     WorkersUtils.addWorkerFunction({ name, group, code })
+        // } else {
+        //     throw new Error(`please use classes and static methods to define serializers deserializers`)
+        // }
 
-        const deserializersDeclSymb = AstUtils.getTypeChecker().getSymbolAtLocation(grpcDeserializeFnNode!.exprName)
-        if (!deserializersDeclSymb) {
-            throw new Error(`No symbol found for ${grpcDeserializeFnNode?.getText()}`)
-        }
-        const deserliazerDecl = deserializersDeclSymb.declarations[0]
-        if (ts.isMethodDeclaration(deserliazerDecl)) {
-            const params = deserliazerDecl.parameters.map(p => `${p.name}: ${p.type?.getText()}`).join(", ")
-            const code = `
-               function ${WorkersUtils.createFunctionNameFromGroup(name, group)}_grpc_deserializer(${params}) {
-                   ${deserliazerDecl.body?.getText()}
-               }
-             `
-            WorkersUtils.addWorkerFunction({ name, group, code })
-        } else {
-            throw new Error(`please use classes and static methods to define serializers deserializers`)
-        }
+        // const deserializersDeclSymb = AstUtils.getTypeChecker().getSymbolAtLocation(grpcDeserializeFnNode!.exprName)
+        // if (!deserializersDeclSymb) {
+        //     throw new Error(`No symbol found for ${grpcDeserializeFnNode?.getText()}`)
+        // }
+        // const deserliazerDecl = deserializersDeclSymb.declarations[0]
+        // if (ts.isMethodDeclaration(deserliazerDecl)) {
+        //     const params = deserliazerDecl.parameters.map(p => `${p.name}: ${p.type?.getText()}`).join(", ")
+        //     const code = `
+        //        function ${WorkersUtils.createFunctionNameFromGroup(name, group)}_grpc_deserializer(${params}) {
+        //            ${deserliazerDecl.body?.getText()}
+        //        }
+        //      `
+        //     WorkersUtils.addWorkerFunction({ name, group, code })
+        // } else {
+        //     throw new Error(`please use classes and static methods to define serializers deserializers`)
+        // }
 
-        grpcMeta = `{ sf: ${grpcSerializeFnNode!.exprName.getText()}, dsf: ${grpcDeserializeFnNode!.exprName.getText()} }` as any
+        // grpcMeta = `{ sf: ${grpcSerializeFnNode!.exprName.getText()}, dsf: ${grpcDeserializeFnNode!.exprName.getText()} }` as any
     }
     if (lpd.pd.name.getText() === "books2") {
         throw new Error("teseting : ")
@@ -1798,6 +1871,22 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
 
 }
 
+export type ProcessPromisePropResult = { returnType: string }
+
+const processPromiseProp = (lpd: LocalPropertyDecls): ProcessPromisePropResult => {
+    const typeNode = lpd.pd.type
+    let returnType = "any"
+    if (!typeNode) {
+        throw new Error(`for all TSPromise fields you should specify type name at declaration`)
+    }
+    if (ts.isTypeReferenceNode(typeNode) && typeNode.typeArguments?.length === 2) {
+        returnType = typeNode.typeArguments[0].getText()
+    } else {
+        throw new Error(`All Promise fields should use TSPromise<R,E> type at field level`)
+    }
+
+    return { returnType }
+}
 
 /**
  *  All async actions of a class
@@ -1815,9 +1904,10 @@ const getAsyncActionTypeAndMeta = (group: string): [string, { name: string, valu
             );
             const tpe = p.typeStr
             const name = p.pd.name.getText()
-            if (tpe.startsWith("Promise<")) {
+            if (tpe.includes("_ts_pmeta") || tpe.startsWith("TSPromiseFieldValue")) {
+                const ppR = processPromiseProp(p)
                 promiseProps.push(name)
-                result = `{name:"${name}",group:"${group}", promise: () => ${p.typeStr} }`;
+                result = `{name:"${name}",group:"${group}", promise: {promiseFn: (signal?: AbortSignal) => Promise<${ppR.returnType}>, _abortable?: boolean }`;
             } else if (tpe.includes("_fmeta") || tpe.includes("FetchAsyncData")) {
                 const fr = processFetchProp2(p, group)
                 const metas = `{response:"${fr.responseType}"${fr.offload ? `,offload: ${fr.offload}` : ""}${fr.tf ? `,tf: ${fr.tf}` : ""}${fr.graphql ? `,graphql:${fr.graphql}` : ""}${fr.typeOps ? `,typeOps: ${fr.typeOps}` : ""}${fr.grpcMeta ? `,grpc: ${fr.grpcMeta}` : ""}}`
@@ -1836,7 +1926,7 @@ const getAsyncActionTypeAndMeta = (group: string): [string, { name: string, valu
         }).join(" | ");
 
     const meta = [...fetchProps, ...webSocketProps,
-    ...promiseProps.map(p => ({ name: p, value: `{}` }))]
+    ...promiseProps.map(p => ({ name: p, value: `{p:{}}` }))]
 
     return [asyncType, meta]
 };
@@ -1855,30 +1945,43 @@ const getPayloadForClassMethod = (m: ts.MethodDeclaration): string => {
         memberTypes.find(mt => mt.name === n)!.type
     );
     let payload = ""
+    if (m.typeParameters) {
+        throw new Error(`typeParameters not supported on reducer methods , remove type parameters from ${m.name.getText()}`)
+    }
+    let offload = false
+    if (m.type && m.type.getText() === "Offload") {
+        offload = true
+    }
     if (pl === 1) {
         payload = params[0].type!.getText() // dont uses toString value as it replaces all references to its values and we cant import all individual types
-        if (m.typeParameters) {
-            const tp = m.typeParameters[0]
-            const name = tp.name.getText()
-            const r = new RegExp(name, "g") //TODO dont replace blidnly we have to iterate over type or just dont support type contraints https://stackoverflow.com/questions/61110391/how-to-replace-typeparaameter-from-typenode-using-typescript-compiler
-            payload = payload.replace(r, tp.constraint!.getText())
+        if (offload) {
+            payload = `{${params[0].name}: ${payload},_abortable?: boolean}`
         }
+        // if (m.typeParameters) {
+        //     const tp = m.typeParameters[0]
+        //     const name = tp.name.getText()
+        //     const r = new RegExp(name, "g") //TODO dont replace blidnly we have to iterate over type or just dont support type contraints https://stackoverflow.com/questions/61110391/how-to-replace-typeparaameter-from-typenode-using-typescript-compiler
+        //     payload = payload.replace(r, tp.constraint!.getText())
+        // }
     } else {
-        const typeParams = m.typeParameters ?
-            m.typeParameters.map(tp => ({ name: tp.name.getText(), constraint: tp.constraint!, })) : []//Note: User should provide contrain based typeparams
+        // const typeParams = m.typeParameters ?
+        //     m.typeParameters.map(tp => ({ name: tp.name.getText(), constraint: tp.constraint!, })) : []//Note: User should provide contrain based typeparams
         const paramsProcessed = params.map(p => {
             const name = p.name.getText()
             const isOptional = !!p.questionToken
             let t = p.type!.getText() // dont uses toString value as it replaces all references to its values and we cant import all individual types
-            if (typeParams.length > 0) {
-                typeParams.forEach(tp => {
-                    if (tp.name === t) {
-                        t = tp.constraint.getText()
-                    }
-                })
-            }
+            // if (typeParams.length > 0) {
+            //     typeParams.forEach(tp => {
+            //         if (tp.name === t) {
+            //             t = tp.constraint.getText()
+            //         }
+            //     })
+            // }
             return `${name}${isOptional ? "?" : ""}: ${t}`
         })
+        if (offload) {
+            paramsProcessed.push(`_abortable ?: boolean`)
+        }
         payload = `{${paramsProcessed.join(", ")}}`
     }
     return payload;
@@ -1966,8 +2069,9 @@ export function isAsyncPropDeclaration(input: LocalPropertyDecls) {
     const tpe = input.typeStr
     console.log("isAsyncPropDeclaration", tpe);
     return tpe.includes("_fmeta")
-        || tpe.includes("FetchAsyncData")
-        || tpe.includes("WebSocketFieldValue") || tpe.includes("_wsmeta") || tpe.startsWith("Promise<");
+        || tpe.includes("FetchFieldValue")
+        || tpe.includes("WebSocketFieldValue") || tpe.includes("_wsmeta") || tpe.includes("_ts_pmeta")
+        || tpe.startsWith("TSPromiseFieldValue<")
 }
 
 export const getMethodsFromTypeMembers = () => {

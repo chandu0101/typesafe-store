@@ -71,25 +71,24 @@ class DMW {
     }
 
     private handleMessage = (e: MessageEvent) => {
+        console.log("Devtools Middleware .......", e.data);
         const m: Message = JSON.parse(e.data)
-        if (m.kind === "Action") {
-            const action: DevToolsAppAction = m.action as any
-            if (action.group === DEVTOOL_MIDDLEWARE_ACTION_GROUP) {
-                if (action.name === "close") {
-                    this.ws.close()
-                } else if (action.name === "start") {
-                    this.connect()
-                } else if (action.name === "replaceState") {
-                    this.replaceState(action.payload, action)
-                }
+        const action: DevToolsAppAction = m as any
+        if (action.group === DEVTOOL_MIDDLEWARE_ACTION_GROUP) {
+            if (action.name === "close") {
+                this.ws.close()
+            } else if (action.name === "start") {
+                this.connect()
+            } else if (action.name === "replaceState") {
+                this.replaceState(action.payload, action)
             }
         }
 
     }
 
-    private replaceState = (newState: string, action: Action) => {
-        const newS: any = JSON.parse(newState);
-        (this.store as any)["_state"] = newS
+    private replaceState = (newState: any, action: Action) => {
+        console.log("middleware- devtools -> replacing state : ", newState);
+        (this.store as any)["_state"] = newState
         Object.entries(this.store.selectorListeners).forEach(([key, value]) => {
             value.forEach(v => {
                 v.listener({ name: action.name, group: action.group })
@@ -105,11 +104,13 @@ class DMW {
 
     setStore = (store: TypeSafeStore<any>) => {
         try {
+            console.log("setting store");
             this.store = store;
             if (this.unSub) {
                 this.unSub()
             }
             this.unSub = this.store._addCompleteHook(this.onCompleteHook)
+            console.log("complete hokk unsun", this.unSub);
             const m: ActionMessage = {
                 kind: "Action",
                 action: { name: "Initialize", group: DEVTOOL_MIDDLEWARE_ACTION_GROUP, },
@@ -129,6 +130,7 @@ class DMW {
     }
 
     onCompleteHook = (action: Action, statekeys: { name: string, prevValue: any }[]) => {
+        console.log("**************** onCompleteHook", this.ws.readyState);
         if (this.ws.readyState === 1) {
             try {
                 if (this.queue.length > 0) {
@@ -178,7 +180,9 @@ class DMW {
 
 export function createDevToolsMiddleware<R extends Record<string, ReducerGroup<any, any, any, any>>>(options: Options): MiddleWare<R> {
     let dmw: DMW | undefined = undefined
+    console.log("createDevToolsMiddleware", options);
     if (options.connectInProd || process.env.NODE_ENV === "development") {
+        console.log("******* creating DMW");
         dmw = new DMW(options)
     }
     return (store: TypeSafeStore<R>) => (next: Dispatch<GetActionFromReducers<R>>) => (action: GetActionFromReducers<R>) => {

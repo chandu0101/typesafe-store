@@ -1,9 +1,11 @@
 import React, { useState, useRef } from 'react'
 import { useSelector } from '@typesafe-store/react';
-import { appNameSelector, appNamesSelector, wsUrlSeelctor } from '../store/selectors/generated/app-gen';
+import { appNameSelector, appNamesSelector, wsUrlSeelctor, appNameAndStatusSeelctor } from '../store/selectors/generated/app-gen';
 import { useAppDispatch } from '../hooks/app-dispatch';
 import { useOnClickOutside } from '../hooks/onclick-outside';
 import { FaCog } from "react-icons/fa"
+import devToolsServerTypes from '../store/apis/websockets/devtools-server/types';
+import DevToolServerRequestCreator from '../store/apis/websockets/devtools-server/requests';
 
 
 
@@ -13,7 +15,7 @@ type AppSettingsProps = {};
 type AppBarProps = {};
 
 const AppBar: React.FC<AppBarProps> = ({ }) => {
-    const appName = useSelector(appNameSelector)
+    const { appName, status } = useSelector(appNameAndStatusSeelctor)
     const appNames = useSelector(appNamesSelector)
     const url = useSelector(wsUrlSeelctor)
     const [showSetting, setShowSetting] = useState(false)
@@ -39,23 +41,44 @@ const AppBar: React.FC<AppBarProps> = ({ }) => {
         dispatch({ name: "setAppName", group: "AppReducer", payload: value })
     }
 
+    const handleAppConnectDisConnectClick = () => {
+        const sm: devToolsServerTypes.AppConnectDisConnectMessage = {
+            kind: "AppConnectDisConnect", appName,
+            mode: status === "Connected" ? "close" : "open"
+        }
+        dispatch({
+            name: "wsSendMessage", group: "AppReducer",
+            ws: DevToolServerRequestCreator.createSendMessageRequest(sm, url)
+        })
+        dispatch({
+            name: "resetApp", group: "AppReducer", payload: {
+                appName, actions: [],
+                status: status === "Connected" ? "Disconnected" : "Connected"
+            }
+        })
+    }
+
     return (
         <div className="app-bar">
             <div className="logo">TypeSafe Store Dev Toolss</div>
             <div className="app-bar__right">
-                {appNames.length > 0 && <select value={appName} onChange={handleAppNameChange}>
-                    {appNames.map(a => <option key={a} value={a}>{a}</option>)}
-                </select>}
-                <div onClick={() => setShowSetting(true)} >
+                {appNames.length > 0 ? (<div className="app-bar__right-select-div">
+                    <select className="app-bar__right-select" value={appName} onChange={handleAppNameChange}>
+                        {appNames.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                    <button className="app-bar__right-select-div--button" onClick={handleAppConnectDisConnectClick}> {status === "Connected" ? "DisConnect" : "Connect"}</button>
+                </div>) : <div className="app-bar__right-noapps"> No Apps Connected </div>}
+
+                <div className="app-bar__right-settings-div" onClick={() => setShowSetting(true)} >
                     <FaCog size="20px" title="app-settings" />
                     {showSetting && (<div className="setting-pannel" ref={settingPanelRef}>
-                        <input value={newUrl} onChange={handleUrlInputChange} />
+                        <input value={newUrl} placeholder="devtools server url" onChange={handleUrlInputChange} />
                         <button onClick={handleChangeUrlButton}>Change Url</button>
                     </div>)}
                 </div>
 
             </div>
-        </div>);
+        </div >);
 }
 
 export default AppBar;

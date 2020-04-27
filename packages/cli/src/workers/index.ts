@@ -2,10 +2,9 @@ import { MetaUtils } from "../utils/meta-utils";
 import { WorkerFunction } from "../types";
 import { ConfigUtils } from "../utils/config-utils";
 import { FileUtils } from "../utils/file-utils";
-import { WORKER_STATE_EXTRACTOR_FUNCTION_NAME } from "../constants"
-import { worker } from "cluster";
+import { PROCESS_FETCH_CODE } from "./fetch";
+import { PROCESS_SYNC_CODE } from "./sync";
 
-const GET_PROP_ACCESS_FUNCTION_NAME = "_getPropsAccess"
 
 export class WorkersUtils {
 
@@ -63,77 +62,10 @@ export class WorkersUtils {
         }).join("\n")
         const output = `
 
-        type WorkerInput = { kind: "Fetch", input: { url: string, options: RequestInit, workerFunction?: string }, }
-        | { kind: "Sync", input: { propAccessArray: string[], payload?: any, state: any, workerFunction: string } }
-
-        type WorkerOutputStatus = "Processing" | "Success" | "Error"
-        type WorkerOutput = { kind: "Fetch", status: WorkerOutputStatus, error?: any, result?: { data?: any, error?: any } } | { kind: "Sync", status: WorkerOutputStatus, error?: any, result?: any }
-        onmessage = async (e) => {
-        const wi = e.data as WorkerInput
-        try {
-            if (wi.kind === "Fetch") {
-                let m: WorkerOutput = { kind: wi.kind, status: "Processing" }
-                postMessage(m)
-                const result = await _processFetch(wi.input)
-                m = { kind: wi.kind, status: "Success", result }
-                postMessage(m)
-            } else if (wi.kind === "Sync") {
-                let m: WorkerOutput = { kind: wi.kind, status: "Processing" }
-                postMessage(m)
-                const result = (self as any)[wi.input.workerFunction]({ _trg_satate: wi.input.state, payload: wi.input.payload, propAccessArray: wi.input.propAccessArray })
-                m = { kind: wi.kind, status: "Success", result }
-                postMessage(m)
-            }
-        } catch (error) {
-            const erm: WorkerOutput = { kind: wi.kind, error, status: "Error" }
-            postMessage(erm)
-        }
-        }
-
-        function ${GET_PROP_ACCESS_FUNCTION_NAME}(obj: any, propAccess: string): any  {
-            let result: any = obj
-            propAccess.split(".").some(v => {
-                const pav = result[v]
-                if (pav) {
-                    result = pav
-                } else {
-                    result = pav
-                    return true
-                }
-            })
-            return result
-        }
-
-        function ${WORKER_STATE_EXTRACTOR_FUNCTION_NAME}(obj: any, propAccessArray: string[]) {
-            const result: any = {}
-            propAccessArray.forEach(pa => {
-                result[pa] = _getPropsAccess(obj, pa)
-            })
-            return result
-        }
-
-        async function _processFetch(_input: any) {
-            const { url, options, responseType, workerFunction } = _input
-            const res = await fetch(url, options)
-            if (!res.ok) {
-                return { error: res.statusText }
-            }
-            let response = undefined as any
-            if (responseType === "json") {
-                response = await res.json()
-            } else if (responseType === "blob") {
-                response = await res.blob()
-            } else if (responseType === "arrayBuffer") {
-                response = await res.arrayBuffer()
-            } else if (responseType === "text") {
-                response = await res.text()
-            }
-            if (workerFunction) {
-                response = (self as any)[workerFunction](response)
-            }
-            return { data: response }
-        }
-
+         ${WORKER_TYPES}
+         ${ONMESSAGE_CODE}
+         ${PROCESS_FETCH_CODE}
+         ${PROCESS_SYNC_CODE}
           ${fns}
         `
         FileUtils.writeFileSync(path, output)
@@ -145,73 +77,91 @@ export class WorkersUtils {
 
 // worker inbuilt code , copy this to final worker output 
 
-function _getPropsAccess(obj: any, propAccess: string): any {
-    let result: any = obj
-    propAccess.split(".").some(v => {
-        const pav = result[v]
-        if (pav) {
-            result = pav
-        } else {
-            result = pav
-            return true
-        }
-    })
-    return result
-}
 
-// function _getValuesFromState(obj: any, propAccessArray: string[]) {
-//     const result: any = {}
-//     propAccessArray.forEach(pa => {
-//         result[pa] = _getPropsAccess(obj, pa)
-//     })
-//     return result
-// }
+export type WorkerFetchInput = { kind: "Fetch", input: { url: string, options: RequestInit, responseType: string, abortable?: boolean, freq?: any, grpc?: { dsf: string }, graphql?: { multiOp?: boolean }, tf?: string }, }
+export type WorkerSyncInput = { kind: "Sync", input: { propAccessArray: string[], payload?: any, abortable?: boolean, state: any, workerFunction: string } }
+export type WorkerAbort = { kind: "WorkerAbort" }
+export type WorkerInput = WorkerFetchInput
+    | WorkerSyncInput | WorkerAbort
 
-// async function _processFetch(_input: any) {
-//     const { url, options, responseType, workerFunction } = _input
-//     const res = await fetch(url, options)
-//     if (!res.ok) {
-//         return { error: res.statusText }
-//     }
-//     let response = undefined as any
-//     if (responseType === "json") {
-//         response = await res.json()
-//     } else if (responseType === "blob") {
-//         response = await res.blob()
-//     } else if (responseType === "arrayBuffer") {
-//         response = await res.arrayBuffer()
-//     } else if (responseType === "text") {
-//         response = await res.text()
-//     }
-//     if (workerFunction) {
-//         response = (self as any)[workerFunction](response)
-//     }
-//     return { data: response }
-// }
+export type WorkerOutputStatus = "Processing" | "Success" | "Error"
 
-// type WorkerInput = { kind: "Fetch", input: { url: string, options: RequestInit, workerFunction?: string }, }
-//     | { kind: "Sync", input: { propAccessArray: string[], payload?: any, state: any, workerFunction: string } }
+export type WorkerFetchOutput = { kind: "Fetch", status: WorkerOutputStatus, stream?: boolean, grpc?: boolean, error?: any, rejectionError?: boolean, result?: { data?: any, completed?: boolean, error?: any } }
 
-// type WorkerOutputStatus = "Processing" | "Success" | "Error"
-// type WorkerOutput = { kind: "Fetch", status: WorkerOutputStatus, error?: any, result?: { data?: any, error?: any } } | { kind: "Sync", status: WorkerOutputStatus, error?: any, result?: any }
+export type WorkerSyncOutput = { kind: "Sync", status: WorkerOutputStatus, error?: any, abortError?: any, result?: any }
+
+export type WorkerOutput = WorkerFetchOutput | WorkerSyncOutput
+
+
+const WORKER_TYPES = `
+export type WorkerFetchInput = { kind: "Fetch", input: { url: string, options: RequestInit, responseType: string, abortable?: boolean, freq?: any, grpc?: { dsf: string }, graphql?: { multiOp?: boolean }, tf?: string }, }
+export type WorkerSyncInput = { kind: "Sync", input: { propAccessArray: string[], payload?: any, abortable?: boolean, state: any, workerFunction: string } }
+export type WorkerAbort = { kind: "WorkerAbort" }
+export type WorkerInput = WorkerFetchInput
+    | WorkerSyncInput | WorkerAbort
+
+export type WorkerOutputStatus = "Processing" | "Success" | "Error"
+
+export type WorkerFetchOutput = { kind: "Fetch", status: WorkerOutputStatus, stream?: boolean, grpc?: boolean, error?: any, rejectionError?: boolean, result?: { data?: any, completed?: boolean, error?: any } }
+
+export type WorkerSyncOutput = { kind: "Sync", status: WorkerOutputStatus, error?: any, abortError?: any, result?: any }
+
+export type WorkerOutput = WorkerFetchOutput | WorkerSyncOutput
+
+`
 // onmessage = async (e) => {
 //     const wi = e.data as WorkerInput
 //     try {
-//         if (wi.kind === "Fetch") {
+//         if (wi.kind == "WorkerAbort") {
+//             const abc = (self as any).globalAbortController
+//             if (abc) {
+//                 abc.abort()
+//             }
+//         }
+//         else if (wi.kind === "Fetch") {
 //             let m: WorkerOutput = { kind: wi.kind, status: "Processing" }
 //             postMessage(m)
-//             const result = await _processFetch(wi.input)
-//             m = { kind: wi.kind, status: "Success", result }
-//             postMessage(m)
+//             await _processFetch(wi.input)
+
 //         } else if (wi.kind === "Sync") {
 //             let m: WorkerOutput = { kind: wi.kind, status: "Processing" }
 //             postMessage(m)
-//             const result = (self as any)[wi.input.workerFunction]({ _trg_satate: wi.input.state, payload: wi.input.payload, propAccessArray: wi.input.propAccessArray })
-//             m = { kind: wi.kind, status: "Success", result }
-//             postMessage(m)
+//             await _proccessSync(wi.input)
 //         }
 //     } catch (error) {
 //         const erm: WorkerOutput = { kind: wi.kind, error, status: "Error" }
 //         postMessage(erm)
+//     } finally {
+//         (self as any).globalAbortController = null
 //     }
 // }
+
+
+const ONMESSAGE_CODE = `
+onmessage = async (e) => {
+    const wi = e.data as WorkerInput
+    try {
+        if (wi.kind == "WorkerAbort") {
+            const abc = (self as any).globalAbortController
+            if(abc) {
+                abc.abort()
+            }
+        }
+        else if (wi.kind === "Fetch") {
+            let m: WorkerOutput = { kind: wi.kind, status: "Processing" }
+            postMessage(m)
+            await _processFetch(wi.input)
+
+        } else if (wi.kind === "Sync") {
+            let m: WorkerOutput = { kind: wi.kind, status: "Processing" }
+            postMessage(m)
+            await _proccessSync(wi.input)
+        }
+    } catch (error) {
+        const erm: WorkerOutput = { kind: wi.kind, error, status: "Error" }
+        postMessage(erm)
+    } finally {
+        (self as any).globalAbortController = null
+    }
+}
+`

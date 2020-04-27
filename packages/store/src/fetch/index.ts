@@ -10,6 +10,11 @@ export type Json =
     | Json[];
 
 
+export class FetchRejectionError {
+    constructor(public readonly error: Error) {
+
+    }
+}
 
 
 export type FetchResponse = Record<string, any> | void | ArrayBuffer | Blob | string
@@ -26,16 +31,17 @@ export enum FetchVariants {
 }
 
 
-export type FetchAsyncData<D, U extends FUrl, B extends FetchBody, FV extends FetchVariants, E,> = Readonly<{
+export type FetchFieldValue<D, U extends FUrl, B extends FetchBody, FV extends FetchVariants, E,> = Readonly<{
     loading?: boolean;
-    error?: E;
+    error?: E | FetchRejectionError;
     data?: D;
+    abortController?: AbortController
     optimistic?: boolean
     completed?: boolean,
     _fmeta?: FetchRequest<FV, U, B, D>
 }>;
 
-export type FetchRequest<FV extends FetchVariants, U extends FUrl, B extends FetchBody, D> = { type: FV, url: U, body?: B, headers?: Record<string, string>, optimisticResponse?: D }
+export type FetchRequest<FV extends FetchVariants, U extends FUrl, B extends FetchBody, D> = { type: FV, url: U, body?: B, _abortable: boolean, headers?: Record<string, string>, optimisticResponse?: D }
 
 export type FetchAction = Action & { fetch: FetchRequest<FetchVariants, FUrl, FetchBody, any> }
 
@@ -45,7 +51,7 @@ export type FetchAction = Action & { fetch: FetchRequest<FetchVariants, FUrl, Fe
  */
 export type FetchActionMeta = {
     response: "json" | "text" | "blob" | "arrayBuffer" | "void" | "stream",
-    body?: "string" // if json body use this flag to JSON.strigify()
+    body?: "json" | "blob" | "text" | "grpc" | "form" | "urlsearch"// if json body use this flag to JSON.strigify()
     tf?: (d: any, req?: FetchRequest<any, any, any, any>) => any,
     offload?: boolean,
     graphql?: { multiOp?: boolean },
@@ -81,7 +87,7 @@ export type Fetch<
     R extends FetchResponse,
     E,
     T extends FetchTransform<R, any> | null = null
-    > = T extends FetchTransform<R, infer PR> ? FetchAsyncData<PR, U, null, FetchVariants.GET, E> : FetchAsyncData<R, U, null, FetchVariants.GET, E>
+    > = T extends FetchTransform<R, infer PR> ? FetchFieldValue<PR, U, null, FetchVariants.GET, E> : FetchFieldValue<R, U, null, FetchVariants.GET, E>
 
 /**
  *  U: url string static/dynamic
@@ -94,7 +100,7 @@ export type FetchPost<
     R extends FetchResponse,
     E,
     T extends FetchTransform<R, any> | null = null
-    > = T extends FetchTransform<R, infer PR> ? FetchAsyncData<PR, U, B, FetchVariants.POST, E> : FetchAsyncData<R, U, B, FetchVariants.POST, E>
+    > = T extends FetchTransform<R, infer PR> ? FetchFieldValue<PR, U, B, FetchVariants.POST, E> : FetchFieldValue<R, U, B, FetchVariants.POST, E>
 
 /**
  *  U: url string static/dynamic
@@ -107,7 +113,7 @@ export type FetchPut<
     R extends FetchResponse,
     E,
     T extends FetchTransform<R, any> | null = null
-    > = T extends FetchTransform<R, infer PR> ? FetchAsyncData<PR, U, B, FetchVariants.PUT, E> : FetchAsyncData<R, U, B, FetchVariants.PUT, E>;
+    > = T extends FetchTransform<R, infer PR> ? FetchFieldValue<PR, U, B, FetchVariants.PUT, E> : FetchFieldValue<R, U, B, FetchVariants.PUT, E>;
 
 /**
  *  U: url string static/dynamic
@@ -121,7 +127,7 @@ export type FetchPatch<
     R extends FetchResponse,
     E,
     T extends FetchTransform<R, any> | null = null
-    > = T extends FetchTransform<R, infer PR> ? FetchAsyncData<PR, U, B, FetchVariants.PATCH, E> : FetchAsyncData<R, U, B, FetchVariants.PATCH, E>;
+    > = T extends FetchTransform<R, infer PR> ? FetchFieldValue<PR, U, B, FetchVariants.PATCH, E> : FetchFieldValue<R, U, B, FetchVariants.PATCH, E>;
 
 /**
  *  U: url string static/dynamic
@@ -134,5 +140,5 @@ export type FetchDelete<
     R extends FetchResponse,
     E,
     T extends FetchTransform<R, any> | null = null
-    > = T extends FetchTransform<R, infer PR> ? FetchAsyncData<PR, U, B, FetchVariants.DELETE, E> : FetchAsyncData<R, U, B, FetchVariants.DELETE, E>;
+    > = T extends FetchTransform<R, infer PR> ? FetchFieldValue<PR, U, B, FetchVariants.DELETE, E> : FetchFieldValue<R, U, B, FetchVariants.DELETE, E>;
 

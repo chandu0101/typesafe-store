@@ -24,7 +24,10 @@ const MessageListener: React.FC<MessageListenerProps> = ({ }) => {
         if (message.kind === "InitiateAppConnection") {
             console.log("dispatching AppConnection action", message.appName);
             dispatch({ group: "AppReducer", name: "initializeApp", payload: message.appName })
-        } else if (message.kind == "Action") {
+        } else if (message.kind === "AppClose") {
+            dispatch({ group: "AppReducer", name: "resetApp", payload: { appName: message.appName, actions: [], status: "Disconnected" } })
+        }
+        else if (message.kind == "Action") {
             dispatch({
                 group: "AppReducer", name: "addAction",
                 payload: { action: { ...message.action, state: message.stateChanged }, appName: message.appName }
@@ -41,7 +44,7 @@ const MessageListener: React.FC<MessageListenerProps> = ({ }) => {
         })
 
         return () => { // on unmount close connection
-            createGlobalSocketCloseAction(url)
+            dispatch(createGlobalSocketCloseAction(url))
         }
     }, [url])
     return (

@@ -176,7 +176,7 @@ const processFile = (file: string, ) => {
                     if (operations.length > 1) {
                         isMultipleOp = true
                         errorType = `[${operations.map(o => "GraphQLError[]").join(",")}]`
-                        responseType = `[${operations.map(o => o.name).join(",")}]`
+                        responseType = `[${operations.map(o => `${o.name} | null`).join(",")}]`
                         bodyType = `[${operations.map(op => `{query: \`${gqlString}\`,operationName:"${op.name}" ,${op.variables ? `variables:${op.variables}` : ""}}`).join(", ")}]`
                         const variables = operations.map((o, i) => {
                             if (o.variables) {

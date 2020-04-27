@@ -1,7 +1,7 @@
 
 
 import * as  WebSockoket from "ws"
-import { DevToolsConnectionInitialteMessage, Message } from "./types"
+import { DevToolsConnectionInitialteMessage, Message, ActionMessage, AppCloseMessage } from "./types"
 import { MetaUtils } from "./meta-utils"
 import chalk from "chalk"
 
@@ -43,7 +43,20 @@ export class TSDevToolsServerConnection {
         }
         else if (m.kind === "StartMessage") {
             this.id = m.id
-        } else if (m.kind === "Action") {
+        } else if (m.kind === "AppConnectDisConnect") {
+
+            const am: ActionMessage = {
+                kind: "Action", action: {
+                    group: "DEVTOOL_MIDDLEWARE_SERVER_ACTION_GROUP",
+                    name: m.mode,
+                },
+                stateChanged: null as any,
+                appName: m.appName,
+                id: ""
+            }
+            MetaUtils.broadCastMessageToApp(am)
+        }
+        else if (m.kind === "Action") {
             if (this.type === "App") {
                 MetaUtils.broadcastMessageToDevTools(m)
             } else if (this.type === "DevTools") {
@@ -59,5 +72,9 @@ export class TSDevToolsServerConnection {
     handleClose = (e: WebSockoket.CloseEvent) => {
         console.log("on close event : ", e.reason);
         MetaUtils.removeConnection(this)
+        if (this.type === "App" && this.appName !== undefined) {
+            const m: AppCloseMessage = { kind: "AppClose", appName: this.appName }
+            MetaUtils.broadcastMessageToDevTools(m)
+        }
     }
 }

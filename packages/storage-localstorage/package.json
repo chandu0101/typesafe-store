@@ -1,13 +1,13 @@
 {
-  "name": "@typesafe-store/middleware-offload",
+  "name": "@typesafe-store/storage-localstorage",
   "description": "type safe store reducer transformer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/chandu0101/typesafe-store",
-    "directory": "packages/middleware-rest"
+    "directory": "packages/store"
   },
   "bugs": {
     "url": "https://github.com/chandu0101/typesafe-store/issues"
@@ -20,9 +20,7 @@
     "transformers"
   ],
   "publishConfig": {
-    "access": "public",
-    "main": "build/index.js",
-    "types": "build/index.d.ts"
+    "access": "public"
   },
   "scripts": {
     "test": "jest",
@@ -30,8 +28,7 @@
   },
   "dependencies": {},
   "peerDependencies": {
-    "@typesafe-store/store": "^0.1.0",
-    "@typesafe-store/middleware-fetch": "^0.1.0"
+    "@typesafe-store/store": "^0.1.0"
   },
   "devDependencies": {
     "@types/jest": "^24.0.20",

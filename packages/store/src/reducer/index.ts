@@ -1,6 +1,7 @@
 import { SyncActionOffload } from "../offload";
 import { FetchActionMeta } from "../fetch";
 import { WebSocketActionMeta } from "../websockets";
+import { PromiseActionMeta } from "../promise";
 
 export type DataAndTypeOps = {
     kind: "DataAndTypeOps", data: any, processed: boolean, optimisticFailed?: any,
@@ -19,12 +20,6 @@ export type Action = Readonly<{
     _internal?: ActionInternalMeta;
 }>;
 
-
-export type PromiseData<D, E = Error> = {
-    loading?: boolean;
-    error?: E;
-    data?: D;
-}
 
 export type Reducer<S extends any, A extends Action> = (
     state: S,
@@ -50,18 +45,23 @@ export type ReducerGroup<
     }>;
 
 
-
+export type OflloadActionResult = { abortController?: AbortController, loading?: boolean, error?: Error, completed?: boolean }
 
 export type ActionMeta<S> = {
     f?: FetchActionMeta,
     offload?: SyncActionOffload<S>,
-    ws?: WebSocketActionMeta
+    ws?: WebSocketActionMeta,
+    p?: PromiseActionMeta
 }
 
 /**
  *  a: all meta information about actions(sync and async)
  */
 export type RMeta<S, AA> = Readonly<{
-    a: Record<string, ActionMeta<S>>
+    a: Record<string, ActionMeta<S>>,
+    persist?: boolean,
+    persistKeys?: string[],
+    dpersist?: boolean,
+    dpersistKeys?: string[]
     async?: AA
 }>;

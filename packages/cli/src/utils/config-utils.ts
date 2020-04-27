@@ -374,4 +374,8 @@ export class ConfigUtils extends ConfigValidation {
         return file.includes(config.reducersPath) && !file.includes(config.reducersGeneratedPath)
     }
 
+    static getPeristMode() {
+        return this.getConfig().persistMode
+    }
+
 }

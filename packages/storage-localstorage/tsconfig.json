@@ -2,21 +2,18 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "rootDir": "src",
-    "lib": [
-      "WebWorker"
-    ],
     "outDir": "build",
+    "lib": [
+      "DOM"
+    ],
     "sourceMap": true,
-    "composite": true,
     "declaration": true,
+    "composite": true,
     "plugins": []
   },
   "references": [
     {
       "path": "../store"
-    },
-    {
-      "path": "../middleware-fetch"
     }
   ],
 }

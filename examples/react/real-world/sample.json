@@ -1,0 +1,30 @@
+{
+    "values": [
+        {
+            "value": "app2",
+            "childDeps": {
+                "values": [],
+                "parent": "app2"
+            }
+        },
+        {
+            "value": "app2.app2I",
+            "childDeps": {
+                "values": [
+                    {
+                        "value": "name"
+                    }
+                ],
+                "parent": "app2.app2I"
+            }
+        },
+        {
+            "value": "app2.app2I2.name2",
+            "childDeps": {
+                "values": [],
+                "parent": "app2.app2I2.name2"
+            }
+        }
+    ],
+    "parent": "state"
+}

@@ -4,7 +4,7 @@ Store :
 
 Cli :
 check for tsconfig propertyInitializers / stric 
-
+selector-transformer generating wrong deps checkout realworld example
 
 Rest : 
 If open API spec specifies error then we should get error in resp.notok case ? reducer-transformer get errorTYpe 

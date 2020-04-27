@@ -54,6 +54,10 @@ const reposPageSelector = createSelector((state: AppState): selectorTypes.ReposP
     return result
 })
 
+
+
+
+
 const repoSelector = createSelector((state: AppState): githubRestApiTypes.requests.GetRepo => state.app.repo)
 
 const userSeelctor = createSelector((state: AppState): githubRestApiTypes.requests.GetUSer => state.app.user)

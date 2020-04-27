@@ -63,7 +63,7 @@ const ActionTile: React.FC<ActionTileProps> = ({ action, status, index, onGotoAc
     return (
         <div className="action-tile" onClick={() => setShowDetails(!showDetails)}>
             <div className="action-tile__title">
-                <div>{actionType}</div>
+                <div className="action-tile__title-group">{actionType}</div>
                 <div>{action.group}.{action.name}</div>
             </div>
             {showDetails && actionDetails()}

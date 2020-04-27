@@ -3,8 +3,9 @@
 import {
     MiddleWare, TypeSafeStore,
     Dispatch, GetActionFromReducers, ReducerGroup, Action, FetchRequest, FetchVariants, FUrl,
-    Json, FetchAsyncData, FetchBody, FetchActionMeta,
-    ActionInternalMeta
+    Json, FetchFieldValue, FetchBody, FetchActionMeta,
+    ActionInternalMeta,
+    FetchRejectionError
 } from "@typesafe-store/store"
 import GrpcUtils from "./grpc"
 
@@ -19,130 +20,179 @@ export type FetchMiddlewareOptions = {
     urlOptions: Record<string, () => FetchGlobalUrlOptions>
 }
 
+
+export class FetchMiddlewareUtils {
+
+
+    static getUrl(url: FUrl): string {
+        console.log("******* getting url for : ", url);
+        let path = url.path
+        if (url.params) {
+            Object.entries(url.params).forEach(([key, value]) => {
+                path = path.replace(`{${key}}`, value.toString())
+            })
+        }
+        console.log("queryParams :", url.queryParams, "path: ", path);
+        if (url.queryParams) {
+            console.log("queryParams :", url.queryParams);
+            const query = Object.entries(url.queryParams)
+                .filter(([key, value]) => value !== undefined && value !== null)
+                .map(([key, value]) => `${key}=${JSON.stringify(value)}`).join("&")
+            console.log("query : ", query);
+            if (query !== "") {
+                path = `${path}?${query}`
+            }
+        }
+        return path
+    }
+
+
+    static getOptions<FV extends FetchVariants, U extends FUrl, B extends FetchBody>(
+        fRequest: FetchRequest<FV, U, B, any>, meta: FetchActionMeta, globalOptions?: FetchGlobalUrlOptions) {
+        const options: RequestInit = { method: fRequest.type }
+        let headers: Record<string, string> = {}
+        let contentType = ""
+        if (meta.body === "blob") {
+            contentType = "application/octet-stream"
+        } else if (meta.body === "form") {
+            contentType = "multipart/form-data"
+        } else if (contentType === "grpc") {
+            contentType = "application/grpc-web+proto"
+        } else if (meta.body === "urlsearch") {
+            contentType = "application/x-www-form-urlencoded;charset=UTF-8"
+        } else if (meta.body === "text") {
+            contentType = "text/plain;charset=UTF-8"
+        } else if (meta.body === "json") {
+            contentType = "application/json"
+        }
+        headers["Content_Type"] = contentType
+
+        if (globalOptions?.headers) {
+            headers = { ...headers, ...globalOptions.headers }
+        }
+        if (fRequest.headers) {
+            headers = { ...headers, ...fRequest.headers }
+        }
+        if (fRequest.body) {
+            if (meta.grpc) {
+                options.body = GrpcUtils.frameRequest(meta.grpc.sf(fRequest.body))
+            }
+            else if (meta.body === "json") {
+                options.body = JSON.stringify(fRequest.body)
+            } else {
+                options.body = fRequest.body as any
+            }
+        }
+        options.headers = headers
+        return options
+    }
+
+    static getGlobalUrlOptions(url: string, mOptions?: FetchMiddlewareOptions): FetchGlobalUrlOptions | undefined {
+        let result: FetchGlobalUrlOptions | undefined = undefined
+        if (mOptions) {
+            Object.entries(mOptions.urlOptions).some(([key, value]) => {
+                if (url.startsWith(key)) {
+                    result = value()
+                    return true
+                }
+            })
+        }
+        return result
+    }
+}
+
 function isFetchAction(rg: ReducerGroup<any, any, any, any>, action: Action) {
     return rg.m.a[action.name] && rg.m.a[action.name].f
 }
 
 
-function getUrl(url: FUrl): string {
-    console.log("******* getting url for : ", url);
-    let path = url.path
-    if (url.params) {
-        Object.entries(url.params).forEach(([key, value]) => {
-            path = path.replace(`{${key}}`, value.toString())
-        })
-    }
-    console.log("queryParams :", url.queryParams, "path: ", path);
-    if (url.queryParams) {
-        console.log("queryParams :", url.queryParams);
-        const query = Object.entries(url.queryParams)
-            .filter(([key, value]) => value !== undefined && value !== null)
-            .map(([key, value]) => `${key}=${JSON.stringify(value)}`).join("&")
-        console.log("query : ", query);
-        if (query !== "") {
-            path = `${path}?${query}`
-        }
-    }
-    return path
-}
 
-function getOptions<FV extends FetchVariants, U extends FUrl, B extends FetchBody>(
-    fRequest: FetchRequest<FV, U, B, any>, meta: FetchActionMeta, globalOptions?: FetchGlobalUrlOptions) {
-    const options: RequestInit = { method: fRequest.type }
-    let headers: Record<string, string> = {}
-    if (globalOptions?.headers) {
-        headers = globalOptions.headers
-    }
-    if (fRequest.headers) {
-        headers = { ...headers, ...fRequest.headers }
-    }
-    if (fRequest.body) {
-        if (meta.grpc) {
-            headers["Content-Type"] = "application/grpc-web+proto"
-            options.body = GrpcUtils.frameRequest(meta.grpc.sf(fRequest.body))
-        }
-        else if (meta.body === "string") {
-            headers["Content-Type"] = "application/json"
-            options.body = JSON.stringify(fRequest.body)
-        } else {
-            options.body = fRequest.body as any
-        }
-    }
-    options.headers = headers
-    return options
-}
+type GenericFetchAsyncData = FetchFieldValue<any, any, any, any, any>
 
-type GenericFetchAsyncData = FetchAsyncData<any, any, any, any, any>
-
-const getGlobalUrlOptions = (url: string, mOptions?: FetchMiddlewareOptions): FetchGlobalUrlOptions | undefined => {
-    let result: FetchGlobalUrlOptions | undefined = undefined
-    if (mOptions) {
-        Object.entries(mOptions.urlOptions).some(([key, value]) => {
-            if (url.startsWith(key)) {
-                result = value()
-                return true
-            }
-        })
-    }
-    return result
-}
 
 async function processFetchAction<R extends Record<string, ReducerGroup<any, any, any, any>>>(store: TypeSafeStore<R>, action: GetActionFromReducers<R>, rg: ReducerGroup<any, any, any, any>, moptions?: FetchMiddlewareOptions) {
     const fetchRequest: FetchRequest<FetchVariants, FUrl, FetchBody, any> = (action as any).fetch
     const fetchMeta = rg.m.a[action.name].f!
-    const url = getUrl(fetchRequest.url)
-    const globalUrlOptions = getGlobalUrlOptions(url, moptions)
-    const options = getOptions(fetchRequest, fetchMeta, globalUrlOptions)
-    try {
-        if (fetchRequest.optimisticResponse) { // optimistic response 
-            if (fetchMeta.response === "stream") {
-                throw new Error(`Optimistic response not supported in case of stream`)
+    const url = FetchMiddlewareUtils.getUrl(fetchRequest.url)
+    const globalUrlOptions = FetchMiddlewareUtils.getGlobalUrlOptions(url, moptions)
+    const options = FetchMiddlewareUtils.getOptions(fetchRequest, fetchMeta, globalUrlOptions)
+    let res: Response = null as any
+    const responseType = fetchMeta.response
+    let abortController: AbortController | undefined = undefined
+    if (fetchRequest._abortable) {
+        abortController = new AbortController()
+    }
+    if (fetchRequest.optimisticResponse) { // optimistic response 
+        if (fetchMeta.response === "stream") {
+            throw new Error(`Optimistic response not supported in case of stream`)
+        }
+        const opResponse: GenericFetchAsyncData = { data: fetchRequest.optimisticResponse, abortController, optimistic: true }
+        if (fetchMeta.typeOps) {
+            const im: ActionInternalMeta = {
+                processed: true,
+                kind: "DataAndTypeOps",
+                data: opResponse, typeOp: fetchMeta.typeOps
             }
-            const opResponse: GenericFetchAsyncData = { data: fetchRequest.optimisticResponse, optimistic: true }
-            if (fetchMeta.typeOps) {
-                const im: ActionInternalMeta = {
-                    processed: true,
-                    kind: "DataAndTypeOps",
-                    data: opResponse, typeOp: fetchMeta.typeOps
-                }
-                store.dispatch({
-                    ...action, _internal: im
-                })
-            } else {
-                store.dispatch({ ...action, _internal: { processed: true, kind: "Data", data: opResponse } })
+            store.dispatch({
+                ...action, _internal: im
+            })
+        } else {
+            store.dispatch({ ...action, _internal: { processed: true, kind: "Data", data: opResponse } })
+        }
+    } else {
+        const resultLoading: GenericFetchAsyncData = { loading: true, abortController }
+        let ai: ActionInternalMeta = null as any
+        if (fetchMeta.typeOps) {
+            ai = { processed: true, kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps, data: resultLoading }
+        } else {
+            ai = { processed: true, kind: "Data", data: resultLoading }
+        }
+        store.dispatch({ ...action, _internal: ai })
+    }
+
+    try {
+        if (abortController) {
+            options.signal = abortController.signal
+        }
+        res = await fetch(url, options)
+    } catch (error) {
+        const resultError: GenericFetchAsyncData = { error: new FetchRejectionError(error), completed: true }
+        let ai: ActionInternalMeta = null as any
+        if (fetchMeta.typeOps) {
+            ai = {
+                processed: true, data: resultError,
+                optimisticFailed: fetchRequest.optimisticResponse,
+                kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps,
             }
         } else {
-            const resultLoading: GenericFetchAsyncData = { loading: true }
-            let ai: ActionInternalMeta = null as any
-            if (fetchMeta.typeOps) {
-                ai = { processed: true, kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps, data: resultLoading }
-            } else {
-                ai = { processed: true, kind: "Data", data: resultLoading }
-            }
-            store.dispatch({ ...action, _internal: ai })
+            ai = { kind: "Data", data: resultError, processed: true }
         }
-
-        const res = await fetch(url, options)
-        console.log("*************** Resp : ", res.ok, res.status);
-        if (!res.ok) {
-            if (globalUrlOptions?.onError) {
-                globalUrlOptions.onError(res)
-            }
-            const resultError: GenericFetchAsyncData = { error: res.statusText, completed: true }
-            let ai: ActionInternalMeta = null as any
-            if (fetchMeta.typeOps) {
-                ai = {
-                    processed: true, data: resultError,
-                    optimisticFailed: fetchRequest.optimisticResponse,
-                    kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps,
-                }
-            } else {
-                ai = { kind: "Data", data: resultError, processed: true }
-            }
-            store.dispatch({ ...action, _internal: ai })
+        store.dispatch({ ...action, _internal: ai })
+    }
+    console.log("*************** Resp : ", res.ok, res.status);
+    if (!res.ok) {
+        if (globalUrlOptions?.onError) {
+            globalUrlOptions.onError(res)
         }
-
-        const responseType = fetchMeta.response
+        let error = res.statusText
+        if (responseType === "json") {
+            error = await res.json()
+        } else if (responseType === "text") {
+            error = await res.text()
+        }
+        const resultError: GenericFetchAsyncData = { error, completed: true }
+        let ai: ActionInternalMeta = null as any
+        if (fetchMeta.typeOps) {
+            ai = {
+                processed: true, data: resultError,
+                optimisticFailed: fetchRequest.optimisticResponse,
+                kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps,
+            }
+        } else {
+            ai = { kind: "Data", data: resultError, processed: true }
+        }
+        store.dispatch({ ...action, _internal: ai })
+    } else {
 
         const processStream = async <R>(reader: ReadableStreamDefaultReader<R>): Promise<any> => {
             const result = await reader.read()
@@ -260,11 +310,18 @@ async function processFetchAction<R extends Record<string, ReducerGroup<any, any
                     const newBytes = GrpcUtils.parseResponseBytes(response as any)
                     if (newBytes) {
                         response = fetchMeta.grpc.dsf(newBytes)
+                        if (fetchMeta.tf) {
+                            response = fetchMeta.tf(response, fetchRequest)
+                        }
+                    } else {
+                        response = null //we got only headersin grpc response
+                    }
+                } else {
+                    if (fetchMeta.tf) {
+                        response = fetchMeta.tf(response, fetchRequest)
                     }
                 }
-                if (fetchMeta.tf) {
-                    response = fetchMeta.tf(response, fetchRequest)
-                }
+
                 const resultSuccess = { data: response, completed: true }
                 let ai: ActionInternalMeta = null as any
                 if (fetchMeta.typeOps) {
@@ -279,10 +336,14 @@ async function processFetchAction<R extends Record<string, ReducerGroup<any, any
             }
         }
 
-    } catch (error) { //TODO  when cors not supported fetch is throwinf error catch that
-        console.log("***** Middleware fect  error : ", error);
-        throw error
     }
+
+
+
+    // catch (error) { //TODO  when cors not supported fetch is throwinf error catch that
+    //     console.log("***** Middleware fect  error : ", error);
+    //     throw error
+    // }
 
 }
 

@@ -28,10 +28,14 @@ export class MetaUtils {
     }
 
     static broadCastMessageToApp(m: ActionMessage) {
+        console.log("broadCastMessageToApp : ", m);
         const appName = m.appName
         const connection = this.getConfig().connections.find(c => c.appName === appName)
         if (connection) {
-            connection.ws.send(JSON.stringify(m))
+            console.log("got connection for appName : ", connection.type);
+            connection.ws.send(JSON.stringify({ name: m.action.name, group: m.action.group, payload: m.stateChanged }), (er) => {
+                console.log("Error while sending ", er);
+            })
         }
     }
 

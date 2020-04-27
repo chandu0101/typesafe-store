@@ -10,6 +10,14 @@ const routeSelector = createSelector((state: AppState): reducerTypes.app.Route =
 
 const appNameSelector = createSelector((state: AppState): string => state.app.appName)
 
+const appNameAndStatusSeelctor = createSelector((state: AppState): { appName: string, status: reducerTypes.app.AppConnectionStatus } => {
+    const appName = state.app.appName
+    let status: reducerTypes.app.AppConnectionStatus = "Disconnected"
+    if (appName) {
+        status = state.app.appsData[appName].status
+    }
+    return { appName, status }
+})
 
 const appNamesSelector = createSelector((state: AppState): string[] => {
     const keys = Object.keys(state.app.appsData)
