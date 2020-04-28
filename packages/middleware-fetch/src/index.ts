@@ -17,7 +17,8 @@ export type FetchGlobalUrlOptions = {
 }
 
 export type FetchMiddlewareOptions = {
-    urlOptions: Record<string, () => FetchGlobalUrlOptions>
+    urlOptions?: Record<string, () => FetchGlobalUrlOptions>,
+
 }
 
 
@@ -89,7 +90,7 @@ export class FetchMiddlewareUtils {
 
     static getGlobalUrlOptions(url: string, mOptions?: FetchMiddlewareOptions): FetchGlobalUrlOptions | undefined {
         let result: FetchGlobalUrlOptions | undefined = undefined
-        if (mOptions) {
+        if (mOptions && mOptions.urlOptions) {
             Object.entries(mOptions.urlOptions).some(([key, value]) => {
                 if (url.startsWith(key)) {
                     result = value()
@@ -156,18 +157,23 @@ async function processFetchAction<R extends Record<string, ReducerGroup<any, any
         }
         res = await fetch(url, options)
     } catch (error) {
-        const resultError: GenericFetchAsyncData = { error: new FetchRejectionError(error), completed: true }
-        let ai: ActionInternalMeta = null as any
-        if (fetchMeta.typeOps) {
-            ai = {
-                processed: true, data: resultError,
-                optimisticFailed: fetchRequest.optimisticResponse,
-                kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps,
-            }
+        if (fetchRequest.offline && error.name !== "AbortError") {
+            store.addNetworkOfflineAction(action)
         } else {
-            ai = { kind: "Data", data: resultError, processed: true }
+            const resultError: GenericFetchAsyncData = { error: new FetchRejectionError(error), completed: true }
+            let ai: ActionInternalMeta = null as any
+            if (fetchMeta.typeOps) {
+                ai = {
+                    processed: true, data: resultError,
+                    optimisticFailed: fetchRequest.optimisticResponse,
+                    kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps,
+                }
+            } else {
+                ai = { kind: "Data", data: resultError, processed: true }
+            }
+            store.dispatch({ ...action, _internal: ai })
         }
-        store.dispatch({ ...action, _internal: ai })
+        return
     }
     console.log("*************** Resp : ", res.ok, res.status);
     if (!res.ok) {
@@ -335,15 +341,7 @@ async function processFetchAction<R extends Record<string, ReducerGroup<any, any
                 store.dispatch({ ...action, _internal: ai })
             }
         }
-
     }
-
-
-
-    // catch (error) { //TODO  when cors not supported fetch is throwinf error catch that
-    //     console.log("***** Middleware fect  error : ", error);
-    //     throw error
-    // }
 
 }
 

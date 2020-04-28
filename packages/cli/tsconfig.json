@@ -3,10 +3,7 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "build",
-    "lib": [
-      "DOM",
-      "WebWorker"
-    ],
+    "lib": [],
     "plugins": [],
     "sourceMap": true,
     "esModuleInterop": true,

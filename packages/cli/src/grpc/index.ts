@@ -770,16 +770,23 @@ const convertServiceMethodToGrpCRequestCreator = ({ md, apiName, baseUrl, servic
     const req = `${typesImpotsPath}.${md.requestType.value}`
     const resp = `${typesImpotsPath}.${md.responseType.value}`
     const name = `create${md.name}Request`
+    const paramsList = [
+        { name: "req", optional: false, type: resp },
+        { name: "abortable", type: "boolean", optional: true }, { name: "offline", type: "boolean", optional: true }]
+    if (!responseStream) {
+        paramsList.push({ name: "optimisticResponse", optional: true, type: resp })
+    }
+    const params = ` {${paramsList.map(p => p.name).join(", ")}}:{${paramsList.map(p => `${p.name} ${p.optional ? "?" : ""}:${p.type}`).join(", ")}}`
     if (responseStream) {
         rc = `
-         static ${name}(req:${req}) {
-              return { type: FetchVariants.POST,url: {path:"${url}"} ,body:req }
+         static ${name}(${params}) {
+              return { type: FetchVariants.POST,url: {path:"${url}"} ,body:req,optimisticResponse,_abortable:abortable,offline}
           }
         `
     } else {
         rc = `
-         static ${name}(req:${req},optimisticResponse?:${resp}) {
-              return {type: FetchVariants.POST, url: {path:"${url}"} ,body:req, optimisticResponse}
+         static ${name}(${params}) {
+              return {type: FetchVariants.POST, url: {path:"${url}"} ,body:req, optimisticResponse,_abortable:abortable,offline}
           }
         `
     }

@@ -17,6 +17,7 @@ import { MetaUtils } from "../utils/meta-utils";
 import { CommonUtils } from "../utils/common-utils";
 import { relative } from "path"
 import { performance } from "perf_hooks"
+import { boolean } from "@mojotech/json-type-validation";
 
 
 // let apiMetaMap = new Map<string, GraphqlApiMeta>()
@@ -150,6 +151,7 @@ const processFile = (file: string, ) => {
                 if (errorMessage) {
                     throw new Error(`query :${gqlString} is not valid , ${errorMessage}`)
                 }
+
                 if (operation) {
                     const variableName = (node.parent.parent as ts.VariableDeclaration).name.getText() // Todo Check for other than VariableDeclaration(is it possible ?)
                     existingVariables.push(variableName)
@@ -180,18 +182,23 @@ const processFile = (file: string, ) => {
                         bodyType = `[${operations.map(op => `{query: \`${gqlString}\`,operationName:"${op.name}" ,${op.variables ? `variables:${op.variables}` : ""}}`).join(", ")}]`
                         const variables = operations.map((o, i) => {
                             if (o.variables) {
-                                return `${o.name}: ${o.variables}`
+                                return `_${o.name}: ${o.variables}`
                             } else {
                                 return ""
                             }
                         }).filter(p => p.length > 0).join(", ")
                         const optimisticResponseType = `[${operations.map(o => `${getRequestCreatorTypePrefix(o.name)}`)}]`
-                        const params = variables.length > 0 ? `variables: {${variables}}, optimisticResponse?: ${optimisticResponseType}` : `optimisticResponse?: ${optimisticResponseType}`
+                        const paramsList = [{ name: "optimisticResponse", optional: true, type: optimisticResponseType },
+                        { name: "abortable", type: "boolean", optional: true }, { name: "offline", type: "boolean", optional: true }]
+                        if (variables.length > 0) {
+                            paramsList.push({ name: "variables", optional: false, type: `{${variables}}` })
+                        }
+                        const params = ` {${paramsList.map(p => p.name).join(", ")}}:{${paramsList.map(p => `${p.name} ${p.optional ? "?" : ""}:${p.type}`).join(", ")}}`
                         requestCreator = `
                            static ${rcName}Request(${params}) {
                                return {type: FetchVariants.POST, url:{path:"${meta.schemaManager.url}"} ,body : [
                                 ${operations.map(op => `{query: \`${gqlString}\`,operationName:"${op.name}",${op.variables ? `variables:${op.name}_variables` : ""}}`).join(", ")}
-                               ],optimisticResponse }
+                               ],optimisticResponse,_abortable:abortable,offline }
                            }
                         `
                     } else {
@@ -199,13 +206,17 @@ const processFile = (file: string, ) => {
                         const op = operations[0]
                         bodyType = `{query: \`${gqlString}\`,${op.variables ? `variables:${op.variables}` : ""}}`
                         const optimisticResponseType = getRequestCreatorTypePrefix(op.name)
-
-                        const params = op.variables ? `variables: {${op.variables}}, optimisticResponse?: ${optimisticResponseType}` : `optimisticResponse?: ${optimisticResponseType}`
+                        const paramsList = [{ name: "optimisticResponse", optional: true, type: optimisticResponseType },
+                        { name: "abortable", type: "boolean", optional: true }, { name: "offline", type: "boolean", optional: true }]
+                        if (op.variables) {
+                            paramsList.push({ name: "variables", optional: false, type: op.variables })
+                        }
+                        const params = ` {${paramsList.map(p => p.name).join(", ")}}:{${paramsList.map(p => `${p.name} ${p.optional ? "?" : ""}:${p.type}`).join(", ")}}`
                         requestCreator = `
                          static ${rcName}Request(${params}) {
                             return { url:{path:"${meta.schemaManager.url}"} , type: FetchVariants.POST,
                             body : {query: \`${gqlString}\`,${op.variables ? `variables` : ""}},
-                            optimisticResponse}
+                            optimisticResponse,_abortable:abortable,offline }
                          }   
                      `
                     }

@@ -22,6 +22,10 @@ export * from "./typeops"
 
 export * from "./promise"
 
+export * from "./storage"
+
+export * from "./offline"
+
 
 
 

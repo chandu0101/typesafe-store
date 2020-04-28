@@ -212,7 +212,7 @@ const getDependenciesOfObjectBindingpattern = (obp: ts.ObjectBindingPattern, opt
 type GetDependenciesOfObjectOptions = { parentObj?: string, variableUsage: Map<ts.Identifier, VariableInfo> }
 
 /**
- * //TODO   reuse of selectors (its a must feature)
+ * 
  *   
  * @param node 
  * @param obj 
@@ -339,16 +339,11 @@ const processDependencyObject = (dg: DependenciesOfObject): Record<string, strin
         }
 
     })
-
+    if (Object.keys(result).length === 0) {
+        throw new Error(`You must depend on atleast one statekey inside selectors`)
+    }
     return result;
 
-}
-
-
-const getReturnTypeOfFunction = (f: ts.ArrowFunction | ts.FunctionExpression) => {
-    const t = AstUtils.getTypeStrOfNode(f)
-    const ai = t.lastIndexOf("=>")
-    return t.substr(ai + 2).trim()
 }
 
 

@@ -5,6 +5,7 @@ import { Selector, SelectorE, SelectorDepenacyValue } from "./selector"
 import { TypeOpEntity } from "./typeops"
 import { Navigation, NAVIGATION_REDUCER_GROUP_NAME, Location, NavigationAction } from "./navigation"
 import { TStoreUtils } from "./utils"
+import { NetWorkOfflineOptions } from "./offline"
 
 /**
  *  store subscription will be called with current procesed action
@@ -41,7 +42,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     private reducerGroupToStateKeyMap: Record<string, string> = {}
 
-    readonly storage?: PersistanceStorage<R>
+    readonly storage?: PersistanceStorage
 
     private _globalListener?: (action: Action, stateKeys: { name: string, prevValue: any }[]) => any
 
@@ -56,6 +57,8 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         | SelectorE<GetStateFromReducers<R>, any, any>, listener: Callback, tag?: string
     }[]> = {} as any
 
+    private networkOfllineOptions?: NetWorkOfflineOptions & { actions: Action[], storageKey: string }
+
     /**
      *  use this when you set a persitance storage and to know whether state is loaded from storage or not
      */
@@ -65,12 +68,13 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     readonly navigation: Navigation
 
-    constructor({ reducers, middleWares, storage, navigation }:
+    constructor({ reducers, networkOfflne, middleWares, storage, navigation }:
         {
             reducers: R,
             middleWares: MiddleWare<R>[],
             navigation?: Navigation,
-            storage?: PersistanceStorage<R>
+            storage?: PersistanceStorage,
+            networkOfflne?: NetWorkOfflineOptions
         }) {
         this.reducers = reducers
         const mchain = middleWares.map(m => m(this))
@@ -89,8 +93,69 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         } else { // react-native or similar environments
             this.navigation = "lazyNavigation" as any
         }
+        if (networkOfflne) {
+            this.setNetWorkOptions(networkOfflne)
+        }
     }
 
+    private setNetWorkOptions = async (np: NetWorkOfflineOptions) => {
+        this.networkOfllineOptions = { ...np, actions: [], storageKey: "TSTORE_NETWORK_OFFLINE_KEY" }
+        window.addEventListener("online", this.handleNetworkStatusChange)
+        window.addEventListener("offline", this.handleNetworkStatusChange)
+        if (this.storage) {
+            const ds = await this.storage.getKey(this.networkOfllineOptions!.storageKey)
+            if (ds) {
+                let actions = []
+                if (np.persist) {
+                    actions = np.persist.deserializer(ds as any)
+                } else {
+                    actions = JSON.parse(ds as any)
+                }
+                this.processNetworkOfflineAction(actions)
+            }
+
+        }
+    }
+
+    private handleNetworkStatusChange = () => {
+        if (navigator.onLine) {
+            if (this.networkOfllineOptions?.actions) {
+                this.processNetworkOfflineAction(this.networkOfllineOptions!.actions)
+            }
+        }
+    }
+
+    private processNetworkOfflineAction = (actions: Action[]) => {
+        if (actions.length > 0) {
+            const ac = [...actions]
+            this.networkOfllineOptions!.actions = []
+            this.storage?.setKey(this.networkOfllineOptions!.storageKey, null)
+            ac.forEach(a => {
+                this.dispatch(a as any)
+            })
+        }
+    }
+
+    addNetworkOfflineAction = (action: Action) => {
+        const nOffOptions = this.networkOfllineOptions
+        if (nOffOptions) {
+            nOffOptions.actions.push(action)
+            if (this.storage) {
+                let dataToPersist = null as any
+                if (nOffOptions.persist) {
+                    dataToPersist = nOffOptions.persist.serializer(nOffOptions.actions)
+                } else {
+                    dataToPersist = JSON.stringify(nOffOptions.actions)
+                }
+                this.storage.setKey(nOffOptions.storageKey, dataToPersist)
+            }
+        } else {
+            if (process.env.NODE_ENV !== "production") {
+                throw new Error(`You must specify "networkOfflne" config key while creating store`)
+            }
+        }
+
+    }
 
     private checkNavigationReducerAttached = () => {
         if (process.env.NODE_ENV !== "production") {
@@ -149,11 +214,11 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         }
     }
 
-    prepareStoreWithStorage = async (storage: PersistanceStorage<R>, ) => {
+    prepareStoreWithStorage = async (storage: PersistanceStorage, ) => {
         try {
             const sState = await storage.getState(Object.keys(this.reducers))
             if (sState) {
-                this.prepareNormalStore(sState)
+                this.prepareNormalStore(sState as any)
             } else { // first time 
                 this.prepareNormalStore()
             }
@@ -695,19 +760,19 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
             const eo = this._state[ck.name]
             if (persistMode === "epxlicitPersist") {
                 if (rg.m.persist) {
-                    pv[ck.name] = JSON.stringify(this._state[ck.name])
+                    pv[ck.name] = this._state[ck.name]
                 } else if (rg.m.persistKeys) {
                     const obj = this.pickKeys(eo, rg.m.persistKeys)
-                    pv[ck.name] = JSON.stringify(obj)
+                    pv[ck.name] = obj
                 }
             } else {
                 if (rg.m.dpersist) {
                     // dont persist
                 } else if (rg.m.dpersistKeys) {
                     const obj = this.excludeKeys(eo, rg.m.dpersistKeys)
-                    pv[ck.name] = JSON.stringify(obj)
+                    pv[ck.name] = obj
                 } else {
-                    pv[ck.name] = JSON.stringify(this._state[ck.name])
+                    pv[ck.name] = this._state[ck.name]
                 }
             }
             return pv;

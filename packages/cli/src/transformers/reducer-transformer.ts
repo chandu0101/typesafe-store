@@ -194,6 +194,56 @@ const getPersistMeta = (): string | undefined => {
     return result;
 }
 
+const getSetsAndMapsFromType = (tpe: ts.Type, parent: string): { name: string, path: string, type: "Set" | "Map" }[] => {
+    const result: { name: string, path: string, type: "Set" | "Map" }[] = []
+    tpe = tpe.getNonNullableType()
+    const tpeStr = AstUtils.typeToString(tpe)
+    if (tpeStr === "string" || tpeStr === "number" || tpeStr)
+        if (tpeStr.startsWith("Set<")) {
+            result.push({ name, path: name, type: "Set" })
+        } else if (tpeStr.startsWith("Map<")) {
+            result.push({ name, path: name, type: "Map" })
+        } else {
+            let props: ts.Symbol[] = []
+            if (AstUtils.isArrayType(tpe)) {
+                const it = tpe.getNumberIndexType()
+                const results = []
+            }
+            //   props = !.getProperties()
+            // } else  {
+            //    props = 
+            // }
+            // if ()
+            //     tpe.getNonNullableType().getProperties().forEach(p => {
+
+            //     })
+        }
+
+    return result;
+
+}
+
+const getSetAndMapMetaData = (): string | undefined => {
+    let result: string | undefined = undefined
+    const persistMode = ConfigUtils.getPeristMode()
+    if (persistMode) {
+        const props: { name: string, path: string, type: "Set" | "Map" }[] = []
+        propDecls.filter(p => !isAsyncPropDeclaration(p)).forEach(p => {
+            const tpeStr = p.typeStr
+            const type = p.typeStr
+            const name = p.pd.name.getText()
+            if (tpeStr.startsWith("Set<")) {
+                props.push({ name, path: name, type: "Set" })
+            } else if (tpeStr.startsWith("Map<")) {
+                props.push({ name, path: name, type: "Set" })
+            } else {
+
+            }
+        })
+    }
+    return result
+}
+
 
 //constants
 
@@ -2092,13 +2142,7 @@ export function isArrayMutatableAction(s: ts.Identifier | ts.PrivateIdentifier) 
     return arrayMutableMethods.includes(name);
 }
 
-//TODO unfinshed
-export const getNameofPropertyName = (p: ts.PropertyName) => {
-    if (ts.isIdentifier(p)) {
-        return p.escapedText.toString();
-    }
-    return p.toString();
-};
+
 
 export const createPropertyAccessForString = (
     input: string[]

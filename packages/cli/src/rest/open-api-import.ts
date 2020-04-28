@@ -460,13 +460,18 @@ function generatePathTypes(spec: OpenAPIObject, apiName: string): { types: strin
                 } else {
                     rcBodyType = `${typesImportName}.requests.${operationIdNamespace}.${operationIdPascal}Body`
                 }
-
+                //TODO abortable,offline
                 let paramsA = [{ name: "pathParams", value: pathParamsType },
-                { name: "queryParams", value: queryParamsType }, { name: "body", value: rcBodyType }, { name: "optimisticResponse ?", value: rcResponseType }]
+                { name: "queryParams", value: queryParamsType }, { name: "body", value: rcBodyType },
+                { name: "optimisticResponse ?", value: rcResponseType },
+                { name: "abortable", type: "boolean", optional: true }, { name: "offline", type: "boolean", optional: true }]
                 let params = paramsA.map(v => {
                     if (v.value && v.value !== "undefined" && v.value !== "null" && v.value !== "void") {
                         return `${v.name}: ${v.value}`
-                    } else {
+                    } else if (v.type && v.optional) {
+                        return `${v.name} ${v.optional ? "?" : ""}:${v.type}`
+                    }
+                    else {
                         return ""
                     }
                 }).filter(v => v.length > 0).join(", ")
@@ -478,7 +483,8 @@ function generatePathTypes(spec: OpenAPIObject, apiName: string): { types: strin
                    static  ${camel(operationId)}Request(${params}) {
                          return {
                            type:FetchVariants.${verb.toUpperCase()} , url : {path:"${path}"${pathParamsType ? ",params:input.pathParams" : ""}${queryParamsType ? `, queryParams: input.queryParams` : ""}}
-                             ${rcBodyType ? ", body: input.body" : ""} ${rcResponseType ? ",optimisticResponse:input.optimisticResponse" : ""}
+                             ${rcBodyType ? ", body: input.body" : ""} ${rcResponseType ? ",optimisticResponse:input.optimisticResponse" : ""},
+                             _abortable:input.abortable, offline:input.offline
                          }
                      }
                 `

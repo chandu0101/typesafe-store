@@ -10,8 +10,6 @@ import {
 
 import { FetchMiddlewareUtils, FetchMiddlewareOptions } from "@typesafe-store/middleware-fetch"
 
-//TODO fetch should align fetch-middleware , import scripts from pbf
-
 
 export type WorkerFetchInput = { kind: "Fetch", input: { url: string, options: RequestInit, responseType: string, abortable?: boolean, freq?: any, grpc?: { dsf: string }, graphql?: { multiOp?: boolean }, tf?: string }, }
 export type WorkerSyncInput = { kind: "Sync", input: { propAccessArray: string[], payload?: any, abortable?: boolean, state: any, workerFunction: string } }
@@ -86,7 +84,6 @@ class TSWorker {
                 result = { data: fetchRequest.optimisticResponse, abortController: this.abortController, optimistic: true }
             } else {
                 result = { loading: true, abortController: this.abortController }
-
             }
             if (fetchMeta.typeOps) {
                 ai = { processed: true, kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps, data: result }
@@ -95,30 +92,35 @@ class TSWorker {
             }
             this.store.dispatch({ ...action, _internal: ai })
         } else if (wo.status === "Success") {
-            let ai: ActionInternalMeta = null as any
             let result = wo.result!
-            if (wo.rejectionError) {
-                result.error = new FetchRejectionError(result.error)
-            }
-            if (fetchMeta.typeOps) {
-                if (result.error) {
-                    ai = {
-                        processed: true, data: result,
-                        optimisticFailed: fetchRequest.optimisticResponse,
-                        kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps,
-                    }
-                } else {
-                    ai = {
-                        processed: true, data: result,
-                        optimisticSuccess: fetchRequest.optimisticResponse,
-                        kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps,
-                    }
-                }
-
+            if (wo.rejectionError && fetchRequest.offline && result.error.name !== "AbortError") {
+                this.store.addNetworkOfflineAction(this.action)
             } else {
-                ai = { kind: "Data", data: result, processed: true }
+                let ai: ActionInternalMeta = null as any
+                if (wo.rejectionError) {
+                    result.error = new FetchRejectionError(result.error)
+                }
+                if (fetchMeta.typeOps) {
+                    if (result.error) {
+                        ai = {
+                            processed: true, data: result,
+                            optimisticFailed: fetchRequest.optimisticResponse,
+                            kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps,
+                        }
+                    } else {
+                        ai = {
+                            processed: true, data: result,
+                            optimisticSuccess: fetchRequest.optimisticResponse,
+                            kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps,
+                        }
+                    }
+
+                } else {
+                    ai = { kind: "Data", data: result, processed: true }
+                }
+                this.store.dispatch({ ...action, _internal: ai })
             }
-            this.store.dispatch({ ...action, _internal: ai })
+
             this.isRunning = false
             this.handleDone()
         } else if (wo.status === "Error") {
@@ -190,7 +192,7 @@ class TSWorker {
         if (payload !== null && payload !== undefined && payload._abortable === true) {
             this.abortController = new AbortController()
             abortable = true
-            this.abortController.signal.onabort = this.handleAbort
+            this.abortController.signal.addEventListener("abort", this.handleAbort)
         }
         const wi: WorkerInput = { kind: "Sync", input: { state, abortable, workerFunction, propAccessArray } }
         this.worker.postMessage(wi)
@@ -213,7 +215,7 @@ class TSWorker {
         }
         if (fRequest._abortable) {
             this.abortController = new AbortController()
-            this.abortController.signal.onabort = this.handleAbort
+            this.abortController.signal.addEventListener("abort", this.handleAbort)
         }
         const responseType = fMeta.response
         const url = FetchMiddlewareUtils.getUrl(fRequest.url)

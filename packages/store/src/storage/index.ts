@@ -21,9 +21,11 @@ export type PersistanceStorageOptions = {
 /**
  * 
  */
-export interface PersistanceStorage<R extends Record<string, ReducerGroup<any, any, any, any>>> {
+export interface PersistanceStorage {
     options: PersistanceStorageOptions
-    dataChanged(input: Record<string, string>): Promise<void>
-    getState(stateKeys: string[]): Promise<Partial<GetStateFromReducers<R>> | undefined>
+    dataChanged(input: Record<string, any>): Promise<void>
+    getState(stateKeys: string[]): Promise<Record<string, any> | undefined>
+    getKey<T>(key: string): Promise<T | undefined>;
+    setKey<T>(key: string, value: T): Promise<void>
     clear(): Promise<void>
 }
