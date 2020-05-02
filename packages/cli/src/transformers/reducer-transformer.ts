@@ -71,7 +71,7 @@ function transformFile(file: string) {
         const transformedContent = printer.printFile(newSf)
         let imports: string[] = []
         if (!transformedContent.includes(EMPTY_REDUCER_TRANFORM_MESSAGE)) {
-            imports.push(`import { ReducerGroup,FetchVariants,PromiseData,FetchRequest } from "@typesafe-store/store"`)
+            imports.push(`import { ReducerGroup,FetchVariants,FetchRequest,SyncActionOffloadStatus} from "@typesafe-store/store"`)
         }
         const output = `
            ${CommonUtils.dontModifyMessage()}
@@ -249,12 +249,12 @@ const getSetAndMapMetaData = (): string | undefined => {
 
 const createReducerFunction = (cd: ts.ClassDeclaration) => {
     setClassDeclaration(cd);
-    const defaultState = getDefaultState(propDecls);
     const typeName = getTypeName();
     const group = `${ConfigUtils.getPrefixPathForReducerGroup(currentProcessingReducerFile)}${typeName}`;
     const stateName = `${typeName}State`
     const methodsResults = processMethods({ group, stateName });
     const offloadMethodResult = methodsResults.filter(mr => mr.offload)
+    const defaultState = getDefaultState(propDecls, offloadMethodResult);
     const stateType = getStateType(offloadMethodResult.map(mr => mr.actionType.name))
     const syncMeta = offloadMethodResult.map(mr => ({ name: mr.actionType.name, value: `{offload:${mr.offload}}` }))
     let [asyncActionType, asyncMeta] = getAsyncActionTypeAndMeta(group);
@@ -263,7 +263,9 @@ const createReducerFunction = (cd: ts.ClassDeclaration) => {
     if (methodsResults.length === 0 && asyncActionType === "") { // If no async properties and methods then return empty node
         result = ts.createIdentifier(EMPTY_REDUCER_TRANFORM_MESSAGE)
     } else {
-        const caseClauses = methodsResults.map(mr => mr.caseStatement)
+        const caseClauses = methodsResults.map(mr => mr.offload ? `case "${mr.actionType.name}" : {
+            throw new Error(" ${mr.actionType.name} is an offload action, looks like you didn't added offlod middlware ")
+        }` : mr.caseStatement)
         const f = buildFunction({ caseClauses, typeName });
 
         let actionType = methodsResults.map(mt => {
@@ -323,7 +325,8 @@ type StatementResult = GeneralStatementResult | MutationStatementResult
 type ParentGroupValue = { values: ProcessThisResult["values"], newValue: NewValue }
 
 type ProcessStatementsOptions = { isReturnSupported?: boolean }
-const processMethods = ({ group, stateName }: { group: string, stateName: string }): { actionType: ActionType, caseStatement: string, offload?: string }[] => {
+type ProcessMethodResult = { actionType: ActionType, caseStatement: string, offload?: string }
+const processMethods = ({ group, stateName }: { group: string, stateName: string }): ProcessMethodResult[] => {
 
     const methods = getMethodsFromTypeMembers();
 
@@ -980,52 +983,76 @@ const createOffloadFunction = ({ m, mutationParentGroup, offloadOutputStatements
 
     for (const [key, value] of mutationParentGroup) {
         const newMap = new Map<string, ParentGroupValue>()
-        const setNewAccessName = ({ newAccessName, values }: { newAccessName: string, values: MetaValue[], }) => {
-            finalPropertyAccess.push(newAccessName)
-            const newAccessNameA = newAccessName.split(".")
-            const nvName = newAccessNameA[newAccessName.length - 1]
-            newAccessNameA.pop()
-            newMap.set(newAccessNameA.join("."), {
-                values,
+        const keyI = Array.from(value.keys())[0];
+        const v = value.get(keyI)
+        if (v && v.values.length === 1 && v.values[0].meta.type === MetaType.UNKNOWN) { // single fields
+            const nv = `${WORKER_RESPONSE_PARAM_NAME}["${key}"]`
+            finalPropertyAccess.push(key)
+            newMap.set(keyI, {
+                values: v.values,
                 newValue: {
-                    name: nvName, op: "",
-                    value: `${WORKER_RESPONSE_PARAM_NAME}["${newAccessName}"]`
+                    ...v.newValue,
+                    value: nv
                 }
             })
-        }
-        for (const [pk, pv] of value) {
-            const mvs = pv.values;
-            const newMvs: MetaValue[] = [];
-            [...mvs].reverse().some(mv => {
-                if (mv.meta.access) {
-                    return true
-                }
-                newMvs.unshift(mv)
-            })
-            if (mvs.length === newMvs.length) {
-                if (mvs[0].meta.type === MetaType.ARRAY && arrayMutableMethods.includes(pv.newValue.op)) {
-                    setNewAccessName({ newAccessName: mvs[0].name, values: mvs })
-                } else if (pv.newValue.name.startsWith("[") && isNaN(parseInt(pv.newValue.name.slice(1, -1), 10))) { // identifier access
 
-                    setNewAccessName({ newAccessName: mvs[0].name, values: mvs })
+        } else {
+            const setNewAccessName = ({ newAccessName, values }: { newAccessName: string, values: MetaValue[], }) => {
+                finalPropertyAccess.push(newAccessName)
+                const newAccessNameA = newAccessName.split(".")
+                const nvName = newAccessNameA[newAccessName.length - 1]
+                newAccessNameA.pop()
+                newMap.set(newAccessNameA.join("."), {
+                    values,
+                    newValue: {
+                        name: nvName, op: "",
+                        value: `${WORKER_RESPONSE_PARAM_NAME}["${newAccessName}"]`
+                    }
+                })
+            }
+            for (const [pk, pv] of value) {
+                const mvs = pv.values;
+                const newMvs: MetaValue[] = [];
+                [...mvs].reverse().some(mv => {
+                    if (mv.meta.access) {
+                        return true
+                    }
+                    newMvs.unshift(mv)
+                })
+                if (mvs.length === newMvs.length) {
+                    if (mvs[0].meta.type === MetaType.ARRAY && arrayMutableMethods.includes(pv.newValue.op)) {
+                        setNewAccessName({ newAccessName: mvs[0].name, values: mvs })
+                    } else if (pv.newValue.name.startsWith("[") && isNaN(parseInt(pv.newValue.name.slice(1, -1), 10))) { // identifier access
+
+                        setNewAccessName({ newAccessName: mvs[0].name, values: mvs })
+                    } else {
+                        const newAccessname = `${mvs[0].name}.${pv.newValue.name}`
+                        finalPropertyAccess.push(newAccessname)
+                        const nv = `${WORKER_RESPONSE_PARAM_NAME}["${newAccessname}"]`
+                        newMap.set(pk, { values: mvs, newValue: { ...pv.newValue, value: nv } })
+                    }
+
                 } else {
-                    const newAccessname = `${mvs[0].name}.${pv.newValue.name}`
-                    finalPropertyAccess.push(newAccessname)
-                    const nv = `${WORKER_RESPONSE_PARAM_NAME}["${newAccessname}"]`
-                    newMap.set(pk, { values: mvs, newValue: { ...pv.newValue, value: nv } })
+                    setNewAccessName({ newAccessName: newMvs[0].name, values: newMvs })
                 }
-
-            } else {
-                setNewAccessName({ newAccessName: newMvs[0].name, values: newMvs })
             }
         }
         newMutationParentGroup.set(key, newMap)
+
     }
 
     const workerResponseToStatePropertyAssignments: string[] = []
 
     for (const [key, value] of newMutationParentGroup) {
-        workerResponseToStatePropertyAssignments.push(`${key}: ${invalidateObjectWithList({ input: value })}`)
+        const keyI = Array.from(value.keys())[0];
+        const v = value.get(keyI)
+        if (v && v.values.length === 1 && v.values[0].meta.type === MetaType.UNKNOWN) { // 
+            workerResponseToStatePropertyAssignments.push(
+                `${key}:${v.newValue.value}`
+            );
+        } else {
+            workerResponseToStatePropertyAssignments.push(`${key}: ${invalidateObjectWithList({ input: value })}`)
+        }
     }
 
     const workerResponseToState = `
@@ -1039,7 +1066,7 @@ const createOffloadFunction = ({ m, mutationParentGroup, offloadOutputStatements
         .join(",")}} = _input.payload;`
 
     const workerFunction = `
-      function ${WorkersUtils.createFunctionNameFromGroup(name, group)}(_input:any) {
+     (self as any)["${WorkersUtils.createFunctionNameFromGroup(name, group)}"] = (_input:any) => {
          const ${STATE_PARAM_NAME} = _input.${STATE_PARAM_NAME}
          ${pa}
          ${offloadOutputStatements.join("\n")}
@@ -1366,10 +1393,11 @@ const invalidateObject = ({
     }
 };
 
-const getDefaultState = (props: LocalPropertyDecls[]) => {
+const getDefaultState = (props: LocalPropertyDecls[], offload: ProcessMethodResult[]) => {
+    const offloads = offload.map(a => `${a.actionType.name}:{}`)
     return `{${props
         .filter(p => p.pd.initializer)
-        .map(p => `${p.pd.name.getText()}:${p.pd.initializer!.getText()}`)}}`;
+        .map(p => `${p.pd.name.getText()}:${p.pd.initializer!.getText()}`).concat(offloads).join(", ")}}`;
 };
 
 function buildFunction({
@@ -1456,7 +1484,7 @@ const getStateType = (offloadMethods: string[]) => {
                 throw new Error('all fields of reducer should be annotated with type')
             }
             return `${n}${p.pd.questionToken ? "?" : ""}:${t}`;
-        }).concat(offloadMethods.map(n => `${n} :{abortController?:AbortController,loading?:boolean, error?:Error,completed?:boolean}`))
+        }).concat(offloadMethods.map(n => `${n} :SyncActionOffloadStatus`))
         .join(",")}}`;
 };
 
@@ -1866,7 +1894,7 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
             body = `return ${fd.body?.getText()}`
         }
         const code = `
-          function ${WorkersUtils.createFunctionNameFromGroup(name, group)}_fetch_transform(${paramName}:any${freqParam ? `,${freqParam}: any` : ""}) {
+         (self as any)["${WorkersUtils.createFunctionNameFromGroup(name, group)}_fetch_transform"] =  (${paramName}:any${freqParam ? `,${freqParam}: any` : ""}) => {
               ${body}
           }
         `
@@ -2005,7 +2033,7 @@ const getPayloadForClassMethod = (m: ts.MethodDeclaration): string => {
     if (pl === 1) {
         payload = params[0].type!.getText() // dont uses toString value as it replaces all references to its values and we cant import all individual types
         if (offload) {
-            payload = `{${params[0].name}: ${payload},_abortable?: boolean}`
+            payload = `{${params[0].name.getText()}: ${payload},_abortable?: boolean}`
         }
         // if (m.typeParameters) {
         //     const tp = m.typeParameters[0]

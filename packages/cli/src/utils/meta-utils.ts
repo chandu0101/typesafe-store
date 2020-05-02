@@ -1,17 +1,19 @@
 import { TypeSafeStoreConfigExtra, TsBuildInfo } from "../types"
 import * as ts from "typescript"
+import { WorkersUtils } from "../workers"
 
 
 export class MetaUtils {
 
     static setUpMeta() {
+        const wfns = WorkersUtils.getWorkerFunctionsFromDisk()
         global.tStoreMeta = {
             graphqlApis: new Map(),
             restApis: new Map(),
             reducers: new Map(),
             config: null as any,
             program: null as any,
-            workersMeta: { fns: [], isChanged: false }
+            workersMeta: { fns: wfns, isChanged: false }
         }
     }
 

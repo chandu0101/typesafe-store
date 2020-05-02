@@ -97,7 +97,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
             this.setNetWorkOptions(networkOfflne)
         }
     }
-
+    //TODO nativescript/react-native
     private setNetWorkOptions = async (np: NetWorkOfflineOptions) => {
         this.networkOfllineOptions = { ...np, actions: [], storageKey: "TSTORE_NETWORK_OFFLINE_KEY" }
         window.addEventListener("online", this.handleNetworkStatusChange)
@@ -113,7 +113,6 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                 }
                 this.processNetworkOfflineAction(actions)
             }
-
         }
     }
 

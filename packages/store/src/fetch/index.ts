@@ -41,7 +41,7 @@ export type FetchFieldValue<D, U extends FUrl, B extends FetchBody, FV extends F
     _fmeta?: FetchRequest<FV, U, B, D>
 }>;
 
-export type FetchRequest<FV extends FetchVariants, U extends FUrl, B extends FetchBody, D> = { type: FV, url: U, body?: B, offline?: boolean, _abortable: boolean, headers?: Record<string, string>, optimisticResponse?: D }
+export type FetchRequest<FV extends FetchVariants, U extends FUrl, B extends FetchBody, D> = { type: FV, url: U, body?: B, offline?: boolean, _abortable?: boolean, headers?: Record<string, string>, optimisticResponse?: D }
 
 export type FetchAction = Action & { fetch: FetchRequest<FetchVariants, FUrl, FetchBody, any> }
 

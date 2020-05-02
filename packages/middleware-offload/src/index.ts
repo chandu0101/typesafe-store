@@ -13,9 +13,8 @@ import { FetchMiddlewareUtils, FetchMiddlewareOptions } from "@typesafe-store/mi
 
 export type WorkerFetchInput = { kind: "Fetch", input: { url: string, options: RequestInit, responseType: string, abortable?: boolean, freq?: any, grpc?: { dsf: string }, graphql?: { multiOp?: boolean }, tf?: string }, }
 export type WorkerSyncInput = { kind: "Sync", input: { propAccessArray: string[], payload?: any, abortable?: boolean, state: any, workerFunction: string } }
-export type WorkerAbort = { kind: "WorkerAbort" }
 export type WorkerInput = WorkerFetchInput
-    | WorkerSyncInput | WorkerAbort
+    | WorkerSyncInput
 
 export type WorkerOutputStatus = "Processing" | "Success" | "Error"
 
@@ -24,7 +23,6 @@ export type WorkerFetchOutput = { kind: "Fetch", status: WorkerOutputStatus, str
 export type WorkerSyncOutput = { kind: "Sync", status: WorkerOutputStatus, error?: any, abortError?: any, result?: any }
 
 export type WorkerOutput = WorkerFetchOutput | WorkerSyncOutput
-
 
 type Options = { workerUrl: string, poolSize?: number, fetchMiddlewareOptions?: FetchMiddlewareOptions }
 type GenericReducerGroup = ReducerGroup<any, any, any, any>
@@ -46,14 +44,21 @@ const isOffloadAction = (action: Action, rg: GenericReducerGroup) => {
 }
 
 class TSWorker {
-    readonly worker: Worker
+    worker!: Worker
     isRunning = false
+    isTerminated = false
     private action!: Action
     private actionMeta!: ActionMeta<any>
     private abortController?: AbortController
-    constructor(url: string, public readonly store: TypeSafeStore<any>,
+    constructor(private readonly url: string, public readonly store: TypeSafeStore<any>,
         private queue: Queue[], private readonly moptions: Options) {
-        this.worker = new Worker(url)
+        this.createWorker()
+    }
+
+    createWorker = () => {
+        this.isTerminated = false
+        this.isRunning = false
+        this.worker = new Worker(this.url)
         this.worker.onmessage = (e) => {
             this.handleOutput(e.data)
         }
@@ -93,7 +98,7 @@ class TSWorker {
             this.store.dispatch({ ...action, _internal: ai })
         } else if (wo.status === "Success") {
             let result = wo.result!
-            if (wo.rejectionError && fetchRequest.offline && result.error.name !== "AbortError") {
+            if (wo.rejectionError && fetchRequest.offline && result.error.message !== "AbortError") {
                 this.store.addNetworkOfflineAction(this.action)
             } else {
                 let ai: ActionInternalMeta = null as any
@@ -131,6 +136,7 @@ class TSWorker {
     }
 
     private handleSyncOutput = (wo: WorkerSyncOutput) => {
+        console.log("handleSyncOutput", wo);
         if (wo.status === "Processing") {
             const result: OflloadActionResult = { loading: true, abortController: this.abortController }
             const ai: ActionInternalMeta = { kind: "Data", processed: true, data: result }
@@ -143,8 +149,9 @@ class TSWorker {
             } else {
                 const result = wo.result
                 const stateKey = this.store.getStateKeyForGroup(this.action.group)
-                const state = this.store.state[stateKey]
-                const newState = this.actionMeta.offload!.workerResponseToState(state, result)
+                const state = this.store.state[stateKey];
+                const newState = this.actionMeta.offload!.workerResponseToState(state, result);
+                (newState as any)[this.action.name] = { completed: true };
                 const ai: ActionInternalMeta = { kind: "State", processed: true, data: newState }
                 this.store.dispatch({ ...this.action, _internal: ai })
             }
@@ -157,7 +164,7 @@ class TSWorker {
     }
 
     private handleDone() {
-        if (this.queue.length > 0) {
+        if (!this.isTerminated && this.queue.length > 0) {
             const q = this.queue[0]
             this.queue.splice(0, 1)
             this.handleAction(q.action, q.rg)
@@ -194,14 +201,23 @@ class TSWorker {
             abortable = true
             this.abortController.signal.addEventListener("abort", this.handleAbort)
         }
-        const wi: WorkerInput = { kind: "Sync", input: { state, abortable, workerFunction, propAccessArray } }
+        const wi: WorkerInput = { kind: "Sync", input: { state, abortable, payload, workerFunction, propAccessArray } }
         this.worker.postMessage(wi)
 
     }
 
     private handleAbort = () => {
-        const wi: WorkerAbort = { kind: "WorkerAbort" }
-        this.worker.postMessage(wi)
+        console.log("handleAbort");
+        this.worker.terminate()
+        this.abortController = undefined
+        this.isTerminated = true
+        if (this.actionMeta.offload) {
+            const wo: WorkerOutput = { kind: "Sync", status: "Success", abortError: new Error("AbortError") }
+            this.handleSyncOutput(wo)
+        } else if (this.actionMeta.f && this.actionMeta.f.offload) {
+            const wo: WorkerOutput = { kind: "Fetch", status: "Success", rejectionError: true, result: { error: new Error("AbortError"), completed: true } }
+            this.handleFetchOutput(wo)
+        }
     }
 
     private handleFetchAction(action: FetchAction, actionMeta: ActionMeta<any>) {
@@ -239,7 +255,12 @@ const getWorker = (workers: TSWorker[], options: Options, store: TypeSafeStore<a
     let worker: TSWorker | undefined = undefined
     if (workers.length === options.poolSize) {
         workers.some(w => {
-            if (!w.isRunning) {
+            if (w.isTerminated) { // when user aborted an offload action worker goes to terminate stage we need to create worker again
+                w.createWorker()
+                worker = w;
+                return true
+            }
+            else if (!w.isRunning) {
                 worker = w
                 return true
             }
@@ -267,7 +288,7 @@ const handleOffloadAction = ({ action, workers, store, rg, queue, options }: {
 }
 
 
-export function createOffloadMiddleware<R extends Record<string, ReducerGroup<any, any, any, any>>>(options: Options): MiddleWare<R> {
+export default function createOffloadMiddleware<R extends Record<string, ReducerGroup<any, any, any, any>>>(options: Options): MiddleWare<R> {
     let workers: TSWorker[] = []
     let queue: Queue[] = []
     if (!options.poolSize) {

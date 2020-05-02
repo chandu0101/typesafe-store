@@ -5,101 +5,30 @@
 
 Things to do before initial release : 
 
-- [ ] Navigation (test react-native,nativescript, nextjs)
-- [ ] Multi Threading (thread pools, web workers)
+- [x] Navigation (test react-native,nativescript, nextjs)
+- [x] Multi Threading (thread pools, web workers)
 - [ ] Frame work glues (react : done, lit-html,angular,vue,haunted,stencil,ionic)
 - [ ] Creat TypeSafe Store App (react,lit-html,angular,vue,haunted,stencil,ionic)
-- [ ] Brand new Dev tools
-- [ ] action creators for async props in selectors.
+- [x] Brand new Dev tools
+- [x] action creators for async props in selectors.
 - [ ] store meta information for sets and maps 
 - [ ] webpack plugin
-- [ ]
+- [ ] nativescript/react-native networkinfo.
 
-TypeSafe Store is a library which manages all state needs of your application, you define your app state using classes in mutable way `transformer` package converts them into immutable reducers in compile time.
+# Realworld Examples: 
 
-If you're familiar with redux you know what reducer is..., if not reducer is a function which takes two paramaeters a state object and an action and returns a new state object without modifying original state.
+https://github.com/chandu0101/typesafe-store/tree/master/examples/react/real-world
 
-### Example 
+https://github.com/chandu0101/typesafe-store/tree/master/packages/devtools-app
 
-```ts
-  // a simple reducer
-  import {v1 as uuid} from "uuid" // random string generator 
 
-  type Todo {id:string,text:string,completed:boolean}
-  
-  const CREATE_TODO = "CREATE_TODO"
-  const UPDATE_TODO = "UPDATE_TODO"
-  const DELETE_TODO = "DELETE_TODO"
+TypeSafe Store is a library which manages all state needs of your application, you define your app state using classes in mutable way `cli` package converts them into immutable reducers, type safe action in compile time. In Redux you have to write more boilerplate for deifining actions, action creators, immutable state updates etc.. ,all those are generated compile time. In redux when you dispatch an action it blindly goes all reducers of your app example : if you have 40 reducers each with 10 switch statements action is passed to all those , if number of reducers goes it has to do more work(you do the math ..).In TypeSafe store each action is tied to specific group(reducer) meaning when you dispatch an action  it will hit only one reducer, if app has 400 reducers, an action will only hit one reducer , typesafe store just scales :) . In redux for async action you have to handle all scenarios fail/loading/success and that to in callback hell, but typesafe store it all handled transparently, this is how you define as an async action https://github.com/chandu0101/typesafe-store/blob/master/examples/react/real-world/src/store/reducers/app.ts#L15 .
 
-  type CreateTodoActionType = { type: typeof CREATE_TODO,payload:{text:string} }
-
-  type UpdateTodoActionType = { type: typeof UPDATE_TODO, payload: {id:string,text:string,completed:boolean} }
-
-  type DeleteTodoActionType = { type:typeof UPDATE_TODO,
-    payload: {id:string}
-  }
-
-  type Action = CreateTodoActionType | UpdateTodoActionType } DleteTodoActionType
- 
- function reducer(state:Todo[] = [],action:Action) {
-    
-    switch(action.type) {
-      case "CREATE_TODO": {
-         const {text} = action.payload;
-         const todo:Todo = { id:uuid(),text,completed:false }
-         return state.concat(todo) // see we're not mutating original input
-      }
-      case "UPDATE_TODO": {
-         const {id,text,completed} = action.payload 
-         return state.map(todo => todo.id === id ? {...todo,completed,text}: todo)
-      }
-      case "DELETE_TODO": {
-         const {id} = action.payload
-         return state.filter(todo => todo.id !== id)
-      }
-
-      default:
-        return state; 
-    }
- }
-
-```
-
-In TypeSafe Store we define the same reducer like below :
-
-```ts
-import {v1 as uuid} from "uuid" // random string generator 
-
-  type Todo {id:string,text:string,completed:boolean}
- 
- class TodoReducer { 
-    
-    todos:Todo[] = []
-
-    createTodo(text:string) {
-        const todo:Todo = { id:uuid(),text,completed:false };
-        this.todos.push(todo) // mutableway
-    }
-
-    updateTodo(todo: Todo) {
-      this.todos[todo.id] = todo;
-    }
-
-    deleteTodo(id:string) {
-      delete this.todos[id]
-    }
-
- }
-
-```
-`transformer` package converts this class into a immutable reducer like above in compile time without any runtime over head.
-
->If you're wondering about why we need immutability, if we update our state in immutable way then we can easily check which part of our app state changed and update those parts(DOM) in more efficient way.
 
 
 # Packages 
 
-### Transformer: 
+### CLI: 
  
  This is where all magic happens , we define state using classes and it converts classes to reducers in compile time(no runtime cost like redux-toolkit)
  

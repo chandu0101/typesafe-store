@@ -4,7 +4,8 @@ import { ConfigUtils } from "../utils/config-utils";
 import { FileUtils } from "../utils/file-utils";
 import { PROCESS_FETCH_CODE } from "./fetch";
 import { PROCESS_SYNC_CODE } from "./sync";
-
+import * as fs from "fs";
+import { join } from "path"
 
 export class WorkersUtils {
 
@@ -52,10 +53,27 @@ export class WorkersUtils {
         return `${gorup.split("/").join("_")}_${name}`
     }
 
+    static saveWorkerFunctionsToDisk(fns: WorkerFunction[]) {
+        const path = ConfigUtils.getWorkerFunctionsMetaFilePath()
+        const content = JSON.stringify(fns)
+        FileUtils.writeFileSync(path, content)
+    }
+
+    static getWorkerFunctionsFromDisk() {
+        let result: WorkerFunction[] = []
+        const path = join("workers", "workers-functions.json")
+        if (fs.existsSync(path)) {
+            const data = FileUtils.readFileSync(path)
+            result = JSON.parse(data)
+        }
+        return result;
+    }
+
     static createWorkersFile() {
         const wm = MetaUtils.getWorkersMeta()
         if (!wm.isChanged) return
         const workerFunctions = wm.fns;
+        this.saveWorkerFunctionsToDisk(workerFunctions)
         const path = ConfigUtils.getOutputPathForWorkers()
         const fns = workerFunctions.map(f => {
             return f.code
@@ -80,9 +98,8 @@ export class WorkersUtils {
 
 export type WorkerFetchInput = { kind: "Fetch", input: { url: string, options: RequestInit, responseType: string, abortable?: boolean, freq?: any, grpc?: { dsf: string }, graphql?: { multiOp?: boolean }, tf?: string }, }
 export type WorkerSyncInput = { kind: "Sync", input: { propAccessArray: string[], payload?: any, abortable?: boolean, state: any, workerFunction: string } }
-export type WorkerAbort = { kind: "WorkerAbort" }
 export type WorkerInput = WorkerFetchInput
-    | WorkerSyncInput | WorkerAbort
+    | WorkerSyncInput
 
 export type WorkerOutputStatus = "Processing" | "Success" | "Error"
 
@@ -96,9 +113,8 @@ export type WorkerOutput = WorkerFetchOutput | WorkerSyncOutput
 const WORKER_TYPES = `
 export type WorkerFetchInput = { kind: "Fetch", input: { url: string, options: RequestInit, responseType: string, abortable?: boolean, freq?: any, grpc?: { dsf: string }, graphql?: { multiOp?: boolean }, tf?: string }, }
 export type WorkerSyncInput = { kind: "Sync", input: { propAccessArray: string[], payload?: any, abortable?: boolean, state: any, workerFunction: string } }
-export type WorkerAbort = { kind: "WorkerAbort" }
 export type WorkerInput = WorkerFetchInput
-    | WorkerSyncInput | WorkerAbort
+    | WorkerSyncInput
 
 export type WorkerOutputStatus = "Processing" | "Success" | "Error"
 
@@ -112,13 +128,7 @@ export type WorkerOutput = WorkerFetchOutput | WorkerSyncOutput
 // onmessage = async (e) => {
 //     const wi = e.data as WorkerInput
 //     try {
-//         if (wi.kind == "WorkerAbort") {
-//             const abc = (self as any).globalAbortController
-//             if (abc) {
-//                 abc.abort()
-//             }
-//         }
-//         else if (wi.kind === "Fetch") {
+//         if (wi.kind === "Fetch") {
 //             let m: WorkerOutput = { kind: wi.kind, status: "Processing" }
 //             postMessage(m)
 //             await _processFetch(wi.input)
@@ -126,13 +136,13 @@ export type WorkerOutput = WorkerFetchOutput | WorkerSyncOutput
 //         } else if (wi.kind === "Sync") {
 //             let m: WorkerOutput = { kind: wi.kind, status: "Processing" }
 //             postMessage(m)
-//             await _proccessSync(wi.input)
+//             await _processSync(wi.input)
 //         }
 //     } catch (error) {
-//         const erm: WorkerOutput = { kind: wi.kind, error, status: "Error" }
+//         const erm: WorkerOutput = { kind: wi.kind as any, error, status: "Error" }
 //         postMessage(erm)
 //     } finally {
-//         (self as any).globalAbortController = null
+
 //     }
 // }
 
@@ -141,13 +151,7 @@ const ONMESSAGE_CODE = `
 onmessage = async (e) => {
     const wi = e.data as WorkerInput
     try {
-        if (wi.kind == "WorkerAbort") {
-            const abc = (self as any).globalAbortController
-            if(abc) {
-                abc.abort()
-            }
-        }
-        else if (wi.kind === "Fetch") {
+        if (wi.kind === "Fetch") {
             let m: WorkerOutput = { kind: wi.kind, status: "Processing" }
             postMessage(m)
             await _processFetch(wi.input)
@@ -155,13 +159,13 @@ onmessage = async (e) => {
         } else if (wi.kind === "Sync") {
             let m: WorkerOutput = { kind: wi.kind, status: "Processing" }
             postMessage(m)
-            await _proccessSync(wi.input)
+            await _processSync(wi.input)
         }
     } catch (error) {
-        const erm: WorkerOutput = { kind: wi.kind, error, status: "Error" }
+        const erm: WorkerOutput = { kind: wi.kind as any, error, status: "Error" }
         postMessage(erm)
     } finally {
-        (self as any).globalAbortController = null
+
     }
 }
 `

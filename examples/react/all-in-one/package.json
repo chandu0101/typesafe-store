@@ -1,0 +1,57 @@
+{
+  "name": "all-in-one",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@testing-library/jest-dom": "^4.2.4",
+    "@testing-library/react": "^9.3.2",
+    "@testing-library/user-event": "^7.1.2",
+    "@types/jest": "^24.0.0",
+    "@types/node": "^12.0.0",
+    "@types/react": "^16.9.0",
+    "@types/react-dom": "^16.9.0",
+    "@typesafe-store/middleware-devtools": "file:../../../packages/middleware-devtools",
+    "@typesafe-store/middleware-fetch": "file:../../../packages/middleware-fetch",
+    "@typesafe-store/middleware-offload": "file:../../../packages/middleware-offload",
+    "@typesafe-store/react": "file:../../../packages/react-glue",
+    "@typesafe-store/store": "file:../../../packages/store",
+    "react": "^16.13.1",
+    "react-dom": "^16.13.1",
+    "react-router-dom": "^5.1.2"
+  },
+  "scripts": {
+    "start": "webpack-dev-server --mode development --open",
+    "dev": "tstore",
+    "build": "webpack --mode production",
+    "clean": "rm -rf node_modules yarn.lock package-lock.json",
+    "build:worker-dev": "webpack --config worker-webpack.config --mode development",
+    "build:worker-prod": "webpack --config worker-webpack.config"
+  },
+  "eslintConfig": {
+    "extends": "react-app"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@types/react-router-dom": "^5.1.4",
+    "@typesafe-store/cli": "file:../../../packages/cli",
+    "css-loader": "^3.5.2",
+    "html-webpack-plugin": "^3.2.0",
+    "style-loader": "1.1.3",
+    "ts-loader": "^6.2.1",
+    "typescript": "^3.7.5",
+    "webpack": "^4.41.5",
+    "webpack-cli": "^3.3.10",
+    "webpack-dev-server": "^3.10.1"
+  }
+}

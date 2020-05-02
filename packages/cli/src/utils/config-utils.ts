@@ -164,9 +164,11 @@ export class ConfigUtils extends ConfigValidation {
             selectorsPath: "",
             selectorsGeneratedPath: "",
             workersPath: "",
-            apisPath: ""
+            apisPath: "",
+            storeMetaPath: ""
         };
         config.storePath = resolve(config.storePath)
+        config.storeMetaPath = resolve('.tstore')
         config.reducersPath = join(config.storePath, REDUCERS_FOLDER)
 
         config.reducersGeneratedPath = join(config.reducersPath, GENERATED_FOLDER)
@@ -175,7 +177,7 @@ export class ConfigUtils extends ConfigValidation {
 
         config.selectorsGeneratedPath = join(config.selectorsPath, GENERATED_FOLDER)
         config.apisPath = join(config.storePath, APIS_FOLDER_NAME)
-        config.workersPath = join(config.storePath, WORKERS_FOLDER)
+        config.workersPath = resolve("workers")
 
         //TODO looks like it doesnt exist on older versions of typescript
         // config.tsBuildInfoPath = ts.getTsBuildInfoEmitOutputFilePath(compilerOptions) 
@@ -366,7 +368,7 @@ export class ConfigUtils extends ConfigValidation {
     }
 
     static getOutputPathForWorkers() {
-        return join(this.getConfig().workersPath, "workers.ts")
+        return join(this.getConfig().workersPath, "worker.ts")
     }
 
     static isPathReducersSourcePath(file: string) {
@@ -376,6 +378,11 @@ export class ConfigUtils extends ConfigValidation {
 
     static getPeristMode() {
         return this.getConfig().persistMode
+    }
+
+    static getWorkerFunctionsMetaFilePath() {
+        const config = this.getConfig()
+        return join(config.storeMetaPath, "workers-functions.json")
     }
 
 }
