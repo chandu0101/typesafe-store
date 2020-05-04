@@ -1468,15 +1468,22 @@ export function cleanUpGloabals() {
 
 
 
+
 const getStateType = (offloadMethods: string[]) => {
     return `{${propDecls
         .map(p => {
             const n = p.pd.name.getText();
-            const tpe = p.typeStr
 
             let t = p.typeStr
-
-            if (p.pd.type) { // Dont use tostring value as it fetches all values of types and we cant add individual imports  
+            if (isAsyncPropDeclaration(p)) {
+                const dtpe = p.pd.type!
+                if (ts.isIntersectionTypeNode(dtpe)) {
+                    t = dtpe.types[0].getText()
+                } else {
+                    t = dtpe.getText()
+                }
+            }
+            else if (p.pd.type) { // Dont use tostring value as it fetches all values of types and we cant add individual imports  
                 t = p.pd.type.getText()
             } else if (t === "string" || t === "number" || t === "boolean") {// if primitive fields we can depend on toString()
             }
@@ -1671,7 +1678,7 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
         }
 
     }
-    else if (declaredTypeNodeText.startsWith("Fetch<") || declaredTypeNodeText.startsWith("FetchPost<") || declaredTypeNodeText.startsWith("FetchPatch<") || declaredTypeNodeText.startsWith("FetchPut<")) {
+    else if (declaredTypeNodeText.startsWith("Fetch<") || declaredTypeNodeText.startsWith("FetchPost<") || declaredTypeNodeText.startsWith("FetchPatch<") || declaredTypeNodeText.startsWith("FetchPut<") || declaredTypeNodeText.startsWith("FetchDelete<")) {
         if (ts.isIntersectionTypeNode(fieldTypeNode)) {
             fieldTypeNode.types.forEach(t => {
                 if (t.getText() === OFFLOAD_ASYNC) {
@@ -1689,10 +1696,10 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
             if (!transformFunctionQueryNode) {
                 responseTypeNode = declaredTypeArguments[1]
             }
-            metaResponseType = getFetchRequestResponseType(declaredTypeArguments[2].getText())
+            metaResponseType = getFetchRequestResponseType(declaredTypeArguments[1].getText())
 
         } else {
-            metaResponseType = getFetchRequestResponseType(declaredTypeArguments[3].getText())
+            metaResponseType = getFetchRequestResponseType(declaredTypeArguments[2].getText())
             if (!transformFunctionQueryNode) {
                 responseTypeNode = declaredTypeArguments[2]
             }
@@ -1988,7 +1995,7 @@ const getAsyncActionTypeAndMeta = (group: string): [string, { name: string, valu
                 result = `{name:"${name}",group:"${group}", promise: {promiseFn: (signal?: AbortSignal) => Promise<${ppR.returnType}>, _abortable?: boolean }`;
             } else if (tpe.includes("_fmeta") || tpe.includes("FetchAsyncData")) {
                 const fr = processFetchProp2(p, group)
-                const metas = `{response:"${fr.responseType}"${fr.offload ? `,offload: ${fr.offload}` : ""}${fr.tf ? `,tf: ${fr.tf}` : ""}${fr.graphql ? `,graphql:${fr.graphql}` : ""}${fr.typeOps ? `,typeOps: ${fr.typeOps}` : ""}${fr.grpcMeta ? `,grpc: ${fr.grpcMeta}` : ""}}`
+                const metas = `{response:"${fr.responseType}"${fr.offload ? `,offload: ${fr.offload}` : ""}${fr.tf ? `,tf: ${fr.tf}` : ""}${fr.graphql ? `,graphql:${fr.graphql}` : ""}${fr.typeOps ? `,typeOps: ${fr.typeOps}` : ""}${fr.grpcMeta ? `,grpc: ${fr.grpcMeta}` : ""}${fr.bodyType ? `,body:"${fr.bodyType}"` : ""}}`
                 fetchProps.push({ name, value: `{f: ${metas} }` })
                 result = `{name:"${
                     name

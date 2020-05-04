@@ -780,13 +780,13 @@ const convertServiceMethodToGrpCRequestCreator = ({ md, apiName, baseUrl, servic
     if (responseStream) {
         rc = `
          static ${name}(${params}) {
-              return { type: FetchVariants.POST,url: {path:"${url}"} ,body:req,optimisticResponse,_abortable:abortable,offline}
+              return { type: FetchVariants.POST,url: {path:"${url}"} ,body:req,optimisticResponse,abortable,offline}
           }
         `
     } else {
         rc = `
          static ${name}(${params}) {
-              return {type: FetchVariants.POST, url: {path:"${url}"} ,body:req, optimisticResponse,_abortable:abortable,offline}
+              return {type: FetchVariants.POST, url: {path:"${url}"} ,body:req, optimisticResponse,abortable,offline}
           }
         `
     }

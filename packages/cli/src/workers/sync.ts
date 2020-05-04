@@ -27,12 +27,12 @@ import { WORKER_STATE_EXTRACTOR_FUNCTION_NAME } from "../constants";
 
 
 
-async function _processSync(_input: WorkerSyncInput["input"]) {
-    const { workerFunction, state, propAccessArray, payload } = _input
-    const v = (self as any)[workerFunction]({ _trg_satate: state, payload: payload, propAccessArray: propAccessArray })
-    const wo: WorkerOutput = { kind: "Sync", status: "Success", result: v }
-    postMessage(wo)
-}
+// async function _processSync(_input: WorkerSyncInput["input"]) {
+//     const { workerFunction, state, propAccessArray, payload } = _input
+//     const v = (self as any)[workerFunction]({ _trg_satate: state, payload: payload, propAccessArray: propAccessArray })
+//     const wo: WorkerOutput = { kind: "Sync", status: "Success", result: v }
+//     postMessage(wo)
+// }
 
 
 export const PROCESS_SYNC_CODE = `

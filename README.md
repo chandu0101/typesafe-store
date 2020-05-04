@@ -14,6 +14,9 @@ Things to do before initial release :
 - [ ] store meta information for sets and maps 
 - [ ] webpack plugin
 - [ ] nativescript/react-native networkinfo.
+- [ ] forms
+- [ ] storage indexdb, react-native,native script
+- [ ] nativescript ui context
 
 # Realworld Examples: 
 

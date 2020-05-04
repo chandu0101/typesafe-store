@@ -5,7 +5,8 @@ import {
     ActionInternalMeta, OflloadActionResult,
     FetchActionMeta,
     FetchFieldValue,
-    FetchRejectionError
+    FetchRejectionError,
+    AbortError
 } from "@typesafe-store/store"
 
 import { FetchMiddlewareUtils, FetchMiddlewareOptions } from "@typesafe-store/middleware-fetch"
@@ -98,8 +99,21 @@ class TSWorker {
             this.store.dispatch({ ...action, _internal: ai })
         } else if (wo.status === "Success") {
             let result = wo.result!
-            if (wo.rejectionError && fetchRequest.offline && result.error.message !== "AbortError") {
+            if (wo.rejectionError && fetchRequest.offline && result.error.name !== "AbortError") {
                 this.store.addNetworkOfflineAction(this.action)
+                const resultOffline: GenericFetchAsyncData = { offline: true, optimistic: !!fetchRequest.optimisticResponse, completed: true }
+                let ai: ActionInternalMeta = { kind: "Data", data: resultOffline, processed: true }
+                //TODO how to handle typeops offline optimistic case?
+                // if (fetchMeta.typeOps) {
+                //     ai = {
+                //         processed: true, data: resultError,
+                //         optimisticFailed: fetchRequest.optimisticResponse,
+                //         kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps,
+                //     }
+                // } else {
+                //     ai = { kind: "Data", data: resultError, processed: true }
+                // }
+                this.store.dispatch({ ...action, _internal: ai })
             } else {
                 let ai: ActionInternalMeta = null as any
                 if (wo.rejectionError) {
@@ -211,11 +225,12 @@ class TSWorker {
         this.worker.terminate()
         this.abortController = undefined
         this.isTerminated = true
+        const aError = new AbortError("aborted by user")
         if (this.actionMeta.offload) {
-            const wo: WorkerOutput = { kind: "Sync", status: "Success", abortError: new Error("AbortError") }
+            const wo: WorkerOutput = { kind: "Sync", status: "Success", abortError: aError }
             this.handleSyncOutput(wo)
         } else if (this.actionMeta.f && this.actionMeta.f.offload) {
-            const wo: WorkerOutput = { kind: "Fetch", status: "Success", rejectionError: true, result: { error: new Error("AbortError"), completed: true } }
+            const wo: WorkerOutput = { kind: "Fetch", status: "Success", rejectionError: true, result: { error: aError, completed: true } }
             this.handleFetchOutput(wo)
         }
     }
@@ -229,7 +244,7 @@ class TSWorker {
             tfName = `${this.createWorkerFunctionName()}_fetch_transform`;
             freqToSend = fRequest
         }
-        if (fRequest._abortable) {
+        if (fRequest.abortable) {
             this.abortController = new AbortController()
             this.abortController.signal.addEventListener("abort", this.handleAbort)
         }
@@ -241,7 +256,7 @@ class TSWorker {
         const wi: WorkerFetchInput = {
             kind: "Fetch", input: {
                 url,
-                abortable: fRequest._abortable,
+                abortable: fRequest.abortable,
                 graphql: fMeta.graphql,
                 options, responseType, freq: freqToSend, tf: tfName
             }

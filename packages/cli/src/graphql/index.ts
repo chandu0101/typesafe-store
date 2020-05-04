@@ -198,7 +198,7 @@ const processFile = (file: string, ) => {
                            static ${rcName}Request(${params}) {
                                return {type: FetchVariants.POST, url:{path:"${meta.schemaManager.url}"} ,body : [
                                 ${operations.map(op => `{query: \`${gqlString}\`,operationName:"${op.name}",${op.variables ? `variables:${op.name}_variables` : ""}}`).join(", ")}
-                               ],optimisticResponse,_abortable:abortable,offline }
+                               ],optimisticResponse,abortable,offline }
                            }
                         `
                     } else {
@@ -216,7 +216,7 @@ const processFile = (file: string, ) => {
                          static ${rcName}Request(${params}) {
                             return { url:{path:"${meta.schemaManager.url}"} , type: FetchVariants.POST,
                             body : {query: \`${gqlString}\`,${op.variables ? `variables` : ""}},
-                            optimisticResponse,_abortable:abortable,offline }
+                            optimisticResponse,abortable,offline }
                          }   
                      `
                     }

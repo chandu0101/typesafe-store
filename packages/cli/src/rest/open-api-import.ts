@@ -484,7 +484,7 @@ function generatePathTypes(spec: OpenAPIObject, apiName: string): { types: strin
                          return {
                            type:FetchVariants.${verb.toUpperCase()} , url : {path:"${path}"${pathParamsType ? ",params:input.pathParams" : ""}${queryParamsType ? `, queryParams: input.queryParams` : ""}}
                              ${rcBodyType ? ", body: input.body" : ""} ${rcResponseType ? ",optimisticResponse:input.optimisticResponse" : ""},
-                             _abortable:input.abortable, offline:input.offline
+                             abortable:input.abortable, offline:input.offline
                          }
                      }
                 `

@@ -66,7 +66,7 @@ export class FetchMiddlewareUtils {
         } else if (meta.body === "json") {
             contentType = "application/json"
         }
-        headers["Content_Type"] = contentType
+        headers["Content-Type"] = contentType
 
         if (globalOptions?.headers) {
             headers = { ...headers, ...globalOptions.headers }
@@ -120,7 +120,7 @@ async function processFetchAction<R extends Record<string, ReducerGroup<any, any
     let res: Response = null as any
     const responseType = fetchMeta.response
     let abortController: AbortController | undefined = undefined
-    if (fetchRequest._abortable) {
+    if (fetchRequest.abortable) {
         abortController = new AbortController()
     }
     if (fetchRequest.optimisticResponse) { // optimistic response 
@@ -159,6 +159,19 @@ async function processFetchAction<R extends Record<string, ReducerGroup<any, any
     } catch (error) {
         if (fetchRequest.offline && error.name !== "AbortError") {
             store.addNetworkOfflineAction(action)
+            const resultOffline: GenericFetchAsyncData = { offline: true, optimistic: !!fetchRequest.optimisticResponse, completed: true }
+            let ai: ActionInternalMeta = { kind: "Data", data: resultOffline, processed: true }
+            //TODO how to handle typeops offline case?
+            // if (fetchMeta.typeOps) {
+            //     ai = {
+            //         processed: true, data: resultError,
+            //         optimisticFailed: fetchRequest.optimisticResponse,
+            //         kind: "DataAndTypeOps", typeOp: fetchMeta.typeOps,
+            //     }
+            // } else {
+            //     ai = { kind: "Data", data: resultError, processed: true }
+            // }
+            store.dispatch({ ...action, _internal: ai })
         } else {
             const resultError: GenericFetchAsyncData = { error: new FetchRejectionError(error), completed: true }
             let ai: ActionInternalMeta = null as any

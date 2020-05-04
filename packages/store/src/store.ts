@@ -50,7 +50,9 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     private typeOpsMata: Record<string, any> = {}
 
-    _unsubscribeNavigationListener?: () => void
+    private _unsubscribeNavigationListener?: () => void
+
+    private _unsubscribeNetworkStatusListener?: () => void
 
     readonly selectorListeners: Record<keyof GetStateFromReducers<R>, {
         selector: Selector<GetStateFromReducers<R>, any>
@@ -100,8 +102,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
     //TODO nativescript/react-native
     private setNetWorkOptions = async (np: NetWorkOfflineOptions) => {
         this.networkOfllineOptions = { ...np, actions: [], storageKey: "TSTORE_NETWORK_OFFLINE_KEY" }
-        window.addEventListener("online", this.handleNetworkStatusChange)
-        window.addEventListener("offline", this.handleNetworkStatusChange)
+        this._unsubscribeNetworkStatusListener = np.statusListener.listen(this.handleNetworkStatusChange)
         if (this.storage) {
             const ds = await this.storage.getKey(this.networkOfllineOptions!.storageKey)
             if (ds) {
@@ -116,8 +117,8 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         }
     }
 
-    private handleNetworkStatusChange = () => {
-        if (navigator.onLine) {
+    private handleNetworkStatusChange = (status: boolean) => {
+        if (status) {
             if (this.networkOfllineOptions?.actions) {
                 this.processNetworkOfflineAction(this.networkOfllineOptions!.actions)
             }
@@ -180,7 +181,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         this._unsubscribeNavigationListener = this.navigation.listen(this.handleLocationChange)
     }
 
-    private handleLocationChange(loc: Location) {
+    private handleLocationChange = (loc: Location) => {
         const a: NavigationAction = { name: "setLocation", group: NAVIGATION_REDUCER_GROUP_NAME, payload: loc }
         this.dispatch(a as any)
     }
@@ -258,6 +259,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                         typeOpStateKey = this.getStateKeyForGroup(skGroup)
                         stateKeysModifiedByTypeOps.push(typeOpStateKey)
                         prevStateOfStateKeysModifiedByTypeOps[typeOpStateKey] = this._state[typeOpStateKey]
+                        typeOpState = this._state[typeOpStateKey]
                     } else {
                         typeOpState = s;
                     }

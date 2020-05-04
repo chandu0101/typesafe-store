@@ -65,3 +65,11 @@ export type RMeta<S, AA> = Readonly<{
     dpersistKeys?: string[]
     async?: AA
 }>;
+
+
+export class AbortError extends Error {
+    constructor(message?: string) {
+        super(message)
+        this.name = "AbortError"
+    }
+}

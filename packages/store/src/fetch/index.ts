@@ -36,12 +36,13 @@ export type FetchFieldValue<D, U extends FUrl, B extends FetchBody, FV extends F
     error?: E | FetchRejectionError;
     data?: D;
     abortController?: AbortController
-    optimistic?: boolean
+    optimistic?: boolean,
+    offline?: boolean,
     completed?: boolean,
     _fmeta?: FetchRequest<FV, U, B, D>
 }>;
 
-export type FetchRequest<FV extends FetchVariants, U extends FUrl, B extends FetchBody, D> = { type: FV, url: U, body?: B, offline?: boolean, _abortable?: boolean, headers?: Record<string, string>, optimisticResponse?: D }
+export type FetchRequest<FV extends FetchVariants, U extends FUrl, B extends FetchBody, D> = { type: FV, url: U, body?: B, offline?: boolean, abortable?: boolean, headers?: Record<string, string>, optimisticResponse?: D }
 
 export type FetchAction = Action & { fetch: FetchRequest<FetchVariants, FUrl, FetchBody, any> }
 
@@ -51,7 +52,7 @@ export type FetchAction = Action & { fetch: FetchRequest<FetchVariants, FUrl, Fe
  */
 export type FetchActionMeta = {
     response: "json" | "text" | "blob" | "arrayBuffer" | "void" | "stream",
-    body?: "json" | "blob" | "text" | "grpc" | "form" | "urlsearch"// if json body use this flag to JSON.strigify()
+    body?: "json" | "blob" | "text" | "grpc" | "form" | "urlsearch"
     tf?: (d: any, req?: FetchRequest<any, any, any, any>) => any,
     offload?: boolean,
     graphql?: { multiOp?: boolean },

@@ -325,6 +325,9 @@
 "@typesafe-store/middleware-offload@file:../../../packages/middleware-offload":
   version "0.1.0"
 
+"@typesafe-store/network-status-web@file:../../../packages/network-status-web":
+  version "0.1.0"
+
 "@typesafe-store/react@file:../../../packages/react-glue":
   version "0.1.1"
 
