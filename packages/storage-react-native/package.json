@@ -1,5 +1,5 @@
 {
-  "name": "@typesafe-store/storage-indexdb",
+  "name": "@typesafe-store/storage-react-native",
   "description": "type safe store reducer transformer",
   "version": "0.1.1",
   "main": "build/index.js",
@@ -28,6 +28,7 @@
   },
   "dependencies": {},
   "peerDependencies": {
+    "@react-native-community/async-storage": "^1.10.0",
     "@typesafe-store/store": "^0.1.0"
   },
   "devDependencies": {

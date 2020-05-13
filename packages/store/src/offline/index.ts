@@ -2,11 +2,9 @@ import { Action } from "../reducer";
 
 
 
+export const OFFLINE_ACTIONS_STORAGE_KEY = "__TSTORE_NETWORK_OFFLINE_KEY"
+
 export type NetWorkOfflineOptions = {
-    persist?: {
-        serializer: (actions: Action[]) => string,
-        deserializer: (str: string) => Action[]
-    },
     statusListener: NetworkStatusListener
 }
 

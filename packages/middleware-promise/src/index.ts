@@ -33,8 +33,8 @@ async function processPromiseAction<R extends Record<string, ReducerGroup<any, a
 
 
 
-export default function createPromiseMiddleware<R extends Record<string, ReducerGroup<any, any, any, any>>>(): MiddleWare<R> {
-    return (store: TypeSafeStore<R>) => (next: Dispatch<GetActionFromReducers<R>>) => (action: GetActionFromReducers<R>) => {
+export default function createPromiseMiddleware(): MiddleWare<any> {
+    return (store: TypeSafeStore<any>) => (next: Dispatch<Action>) => (action: Action) => {
         if (action._internal && action._internal.processed) { // if already processed by other middlewares just pass through
             return next(action)
         }

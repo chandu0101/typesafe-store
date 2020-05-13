@@ -1,5 +1,5 @@
 {
-  "name": "@typesafe-store/storage-indexdb",
+  "name": "@typesafe-store/forms-react",
   "description": "type safe store reducer transformer",
   "version": "0.1.1",
   "main": "build/index.js",
@@ -28,10 +28,12 @@
   },
   "dependencies": {},
   "peerDependencies": {
-    "@typesafe-store/store": "^0.1.0"
+    "@typesafe-store/react": "^0.1.0",
+    "@typesafe-store/middleware-form": "^0.1.0"
   },
   "devDependencies": {
     "@types/jest": "^24.0.20",
+    "@types/react": "^16.9.35",
     "jest": "^24.9.0",
     "ts-jest": "^24.1.0"
   }

@@ -358,8 +358,8 @@ async function processFetchAction<R extends Record<string, ReducerGroup<any, any
 
 }
 
-export default function createFetchMiddleware<R extends Record<string, ReducerGroup<any, any, any, any>>>(options?: FetchMiddlewareOptions): MiddleWare<R> {
-    return (store: TypeSafeStore<R>) => (next: Dispatch<GetActionFromReducers<R>>) => (action: GetActionFromReducers<R>) => {
+export default function createFetchMiddleware(options?: FetchMiddlewareOptions): MiddleWare<any> {
+    return (store: TypeSafeStore<any>) => (next: Dispatch<Action>) => (action: Action) => {
         if (action._internal && action._internal.processed) { // if already processed by other middlewares just pass through
             return next(action)
         }

@@ -59,7 +59,7 @@ export type FetchActionMeta = {
     completed?: boolean
     typeOps?: {
         name: TypeOpsType,
-        obj?: Record<string, string>,
+        propAccess?: string,
     },
     grpc?: { sf: (d: any) => Uint8Array, dsf: (i: Uint8Array) => any }
 }

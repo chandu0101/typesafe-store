@@ -1,21 +1,25 @@
-import { ReducerGroup } from "../reducer";
-import { GetStateFromReducers } from "../store";
-
-
-
+import { Action } from "../reducer"
 
 
 export type TSDontPersist = {}
 
 export type TSPersist = {}
 
+export type PersistanceStorageWriteMode = "REQUIRED" | "OPTIONAL"
+export type PersistanceStorageWriteModeFn = (key: string) => PersistanceStorageWriteMode
+
 /**
  *  writeMode :->  REQUIRED : meaning whenever an action dispatched subscribes/listerners will not be notified until data persisted .
  *   OPTIONAL : meaning whenever an action dispatched subscribers will be notified upfront without waiting for confirmation from storage
  */
 export type PersistanceStorageOptions = {
-    writeMode?: "REQUIRED" | "OPTIONAL",
+    writeMode?: PersistanceStorageWriteMode | PersistanceStorageWriteModeFn,
     persistMode: "epxlicitPersist" | "explicitDontPersist"
+    onQuotaExceededError?: (storage: PersistanceStorage, error: any) => Promise<void>
+    serializers?: {
+        serialize: <V, SV>(key: string, value: V) => SV,
+        deserialize: <SV, V>(key: string, value: SV) => V
+    }
 }
 
 /**
@@ -23,9 +27,10 @@ export type PersistanceStorageOptions = {
  */
 export interface PersistanceStorage {
     options: PersistanceStorageOptions
-    dataChanged(input: Record<string, any>): Promise<void>
+    dataChanged(key: string, value: Record<string, any>): Promise<void>
     getState(stateKeys: string[]): Promise<Record<string, any> | undefined>
-    getKey<T>(key: string): Promise<T | undefined>;
-    setKey<T>(key: string, value: T): Promise<void>
+    getOfflineActions(): Promise<Action[] | null>;
+    setOfflineActions<T>(value: Action[] | null): Promise<void>
     clear(): Promise<void>
+    isQuotaExceededError(error: any): boolean
 }

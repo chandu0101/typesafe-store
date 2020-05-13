@@ -2,7 +2,7 @@ import { ReducerGroup, Action, ActionInternalMeta, DataAndTypeOps } from "./redu
 import { PersistanceStorage, } from "./storage"
 import compose from "./compose"
 import { Selector, SelectorE, SelectorDepenacyValue } from "./selector"
-import { TypeOpEntity } from "./typeops"
+import { TypeOpEntity, TypeOpsType } from "./typeops"
 import { Navigation, NAVIGATION_REDUCER_GROUP_NAME, Location, NavigationAction } from "./navigation"
 import { TStoreUtils } from "./utils"
 import { NetWorkOfflineOptions } from "./offline"
@@ -35,6 +35,10 @@ export type MiddleWare<R extends Record<string, ReducerGroup<any, any, any, any>
  */
 export type UnsubscribeOptions = { resetToDefault?: boolean }
 
+type GlobalListenerCallBack = (action: Action, stateKey: string, ps: any) => any
+
+type CompleteListenerCallback = (action: Action, stateKey: string, ps: any) => any
+
 export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, any>>> {
 
     private reducers: R
@@ -44,9 +48,9 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     readonly storage?: PersistanceStorage
 
-    private _globalListener?: (action: Action, stateKeys: { name: string, prevValue: any }[]) => any
+    private _globalListener?: GlobalListenerCallBack
 
-    private _globalCompleteHandlers: ((action: Action, stateKeys: { name: string, prevValue: any }[]) => any)[] = []
+    private _globalCompleteHandlers: CompleteListenerCallback[] = []
 
     private typeOpsMata: Record<string, any> = {}
 
@@ -59,7 +63,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         | SelectorE<GetStateFromReducers<R>, any, any>, listener: Callback, tag?: string
     }[]> = {} as any
 
-    private networkOfllineOptions?: NetWorkOfflineOptions & { actions: Action[], storageKey: string }
+    private networkOfllineOptions?: NetWorkOfflineOptions & { actions: Action[] }
 
     /**
      *  use this when you set a persitance storage and to know whether state is loaded from storage or not
@@ -99,19 +103,13 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
             this.setNetWorkOptions(networkOfflne)
         }
     }
-    //TODO nativescript/react-native
+
     private setNetWorkOptions = async (np: NetWorkOfflineOptions) => {
-        this.networkOfllineOptions = { ...np, actions: [], storageKey: "TSTORE_NETWORK_OFFLINE_KEY" }
+        this.networkOfllineOptions = { ...np, actions: [] }
         this._unsubscribeNetworkStatusListener = np.statusListener.listen(this.handleNetworkStatusChange)
         if (this.storage) {
-            const ds = await this.storage.getKey(this.networkOfllineOptions!.storageKey)
-            if (ds) {
-                let actions = []
-                if (np.persist) {
-                    actions = np.persist.deserializer(ds as any)
-                } else {
-                    actions = JSON.parse(ds as any)
-                }
+            const actions = await this.storage.getOfflineActions()
+            if (actions !== null) {
                 this.processNetworkOfflineAction(actions)
             }
         }
@@ -129,7 +127,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         if (actions.length > 0) {
             const ac = [...actions]
             this.networkOfllineOptions!.actions = []
-            this.storage?.setKey(this.networkOfllineOptions!.storageKey, null)
+            this.storage?.setOfflineActions(null)
             ac.forEach(a => {
                 this.dispatch(a as any)
             })
@@ -141,13 +139,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         if (nOffOptions) {
             nOffOptions.actions.push(action)
             if (this.storage) {
-                let dataToPersist = null as any
-                if (nOffOptions.persist) {
-                    dataToPersist = nOffOptions.persist.serializer(nOffOptions.actions)
-                } else {
-                    dataToPersist = JSON.stringify(nOffOptions.actions)
-                }
-                this.storage.setKey(nOffOptions.storageKey, dataToPersist)
+                this.storage.setOfflineActions(nOffOptions.actions)
             }
         } else {
             if (process.env.NODE_ENV !== "production") {
@@ -228,7 +220,6 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
     }
 
     private defaultDispatch = (a: Action) => {
-        console.log("defaultDispatch .... ", a)
         const { group, name, _internal } = a;
         const stateKey = this.reducerGroupToStateKeyMap[group]
         if (!stateKey) {
@@ -238,568 +229,117 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         }
         const rg = this.reducers[stateKey]
         const ps = this._state[stateKey]
-        let s: typeof ps = ps
-        let stateKeysModifiedByTypeOps: string[] = []
-        let prevStateOfStateKeysModifiedByTypeOps: Record<string, any> = {}
+        let newState: typeof ps = ps
+
         if (_internal && _internal.processed) { // processed by middlewares (example: fetch,graphql)
             if (_internal.kind === "Data") {
-                s = { ...s, [name]: _internal.data }
+                newState = { ...newState, [name]: _internal.data }
             } else if (_internal.kind === "State") {
-                s = _internal.data
+                newState = _internal.data
             } else if (_internal.kind === "DataAndTypeOps") {
                 const ai = _internal
                 const typeOpName = ai.typeOp.name
-                const optimisticFail = ai.optimisticFailed
-                const entry = ai.typeOp.obj ? Object.entries(ai.typeOp.obj!)[0] : []
-                let typeOpStateKey: string | undefined = undefined
-                let typeOpState: any | undefined = undefined
-                if (entry.length > 0) {
-                    const skGroup = entry[0]
-                    if (skGroup !== group) {
-                        typeOpStateKey = this.getStateKeyForGroup(skGroup)
-                        stateKeysModifiedByTypeOps.push(typeOpStateKey)
-                        prevStateOfStateKeysModifiedByTypeOps[typeOpStateKey] = this._state[typeOpStateKey]
-                        typeOpState = this._state[typeOpStateKey]
-                    } else {
-                        typeOpState = s;
-                    }
-                }
-                if (typeOpName === "AppendToList" || typeOpName === "AppendToListAndDiscard") {
-                    const discard = typeOpName === "AppendToListAndDiscard"
-                    if (optimisticFail) { // revert back state changes
-                        const result = this.setPropAccessImmutable(typeOpState, entry[1].split("."), (prev: TypeOpEntity) => {
-                            if (!prev) {
-                                return prev;
-                            } else {
-                                const [id, idKey] = this.getIdValueAndIdKey(ai.optimisticFailed)
-                                return prev.filter(i => (i as any)[idKey] !== id)
-                            }
-                        })
-                        if (result) {
-                            if (typeOpStateKey) {
-                                (this._state as any)[typeOpStateKey] = result
-                            } else {
-                                s = result;
-                            }
-                        }
-                        s = { ...s, [name]: ai.data }
-                    } else if (ai.data.data) { // success response 
-                        const data = ai.data.data
-                        const result = this.setPropAccessImmutable(typeOpState, entry[1].split("."), (prev: TypeOpEntity) => {
-                            if (!prev) {
-                                return [data]
-                            } else {
-                                const [id, idKey] = this.getIdValueAndIdKey(ai.optimisticSuccess)
-                                if (ai.optimisticSuccess) { // previously appended to list so just replace previous value
-                                    return prev.map(i => ((i as any)[idKey] === id) ? { ...i, ...data } : i)
-                                }
-                                return prev.concat(data)
-                            }
-                        })
-                        if (result) {
-                            if (typeOpStateKey) {
-                                (this._state as any)[typeOpStateKey] = result
-                            }
-
-                        }
-                        if (discard) {
-                            s = { ...s, [name]: {} } // Note: Currently we only support types ops on Fetch fields so we can assume that value is object
-                        } else {
-                            s = { ...s, [name]: ai.data }
-                        }
-                    } else {
-                        s = { ...s, [name]: _internal.data }
-                    }
-                } else if (typeOpName === "PrependToList" || typeOpName === "PrependToListAndDiscard") {
-                    const discard = typeOpName === "PrependToListAndDiscard"
-                    if (optimisticFail) { // revert back state changes
-                        const result = this.setPropAccessImmutable(typeOpState, entry[1].split("."), (prev: TypeOpEntity) => {
-                            if (!prev) {
-                                return prev;
-                            } else {
-                                const [id, idKey] = this.getIdValueAndIdKey(ai.optimisticFailed)
-                                return prev.filter(i => (i as any)[idKey] !== id)
-                            }
-                        })
-                        if (result) {
-                            if (typeOpStateKey) {
-                                (this._state as any)[typeOpStateKey] = result
-                            } else {
-                                s = result
-                            }
-                        }
-                        s = { ...s, [name]: ai.data }
-                    } else if (ai.data.data) { // success response 
-                        const data = ai.data.data
-                        const result = this.setPropAccessImmutable(typeOpState, entry[1].split("."), (prev: TypeOpEntity) => {
-                            if (!prev) {
-                                return [data]
-                            } else {
-                                const [id, idKey] = this.getIdValueAndIdKey(ai.optimisticSuccess)
-                                if (ai.optimisticSuccess) { // previously appended to list so just replace previous value
-                                    return prev.map(i => ((i as any)[idKey] === id) ? { ...i, ...data } : i)
-                                }
-                                return [data, ...prev]
-                            }
-                        })
-                        if (result) {
-                            if (typeOpStateKey) {
-                                (this._state as any)[typeOpStateKey] = result
-                            } else {
-                                s = result
-                            }
-                        }
-                        if (discard) {
-                            s = { ...s, [name]: {} } // Note: Currently we only support types ops on Fetch fields so we can assume that value is object
-                        } else {
-                            s = { ...s, [name]: ai.data }
-                        }
-
-                    } else {
-                        s = { ...s, [name]: _internal.data }
-                    }
+                if (typeOpName === "AppendToList" || typeOpName === "AppendToListAndDiscard" ||
+                    typeOpName === "PrependToList" || typeOpName === "PrependToListAndDiscard") {
+                    newState = TypeOpsUtils.handleAppendPrependList({ newState, ai })
                 } else if (typeOpName === "UpdateList" || typeOpName === "UpdateListAndDiscard") {
-                    const discard = typeOpName === "UpdateListAndDiscard"
-                    if (optimisticFail) { // revert back state changes
-                        const result = this.setPropAccessImmutable(typeOpState, entry[1].split("."), (prev: TypeOpEntity) => {
-                            if (!prev) {
-                                return prev;
-                            } else {
-                                const [id, idKey] = this.getIdValueAndIdKey(ai.optimisticFailed)
-                                return prev.filter(i => (i as any)[idKey] !== id)
-                            }
-                        })
-                        if (result) {
-                            if (typeOpStateKey) {
-                                (this._state as any)[typeOpStateKey] = result
-                            } else {
-                                s = result
-                            }
-                        }
-                        s = { ...s, [name]: ai.data }
-                    } else if (ai.data.data) { // success response 
-                        const data = ai.data.data
-                        const result = this.setPropAccessImmutable(typeOpState, entry[1].split("."), (prev: TypeOpEntity) => {
-                            if (!prev) {
-                                return [data]
-                            } else {
-                                const [id, idKey] = this.getIdValueAndIdKey(data)
-                                return prev.map(i => ((i as any)[idKey] === id) ? { ...i, ...data } : i)
-                            }
-                        })
-                        if (result) {
-                            if (typeOpStateKey) {
-                                (this._state as any)[typeOpStateKey] = result
-                            } else {
-                                s = result
-                            }
-                        }
-                        if (discard) {
-                            s = { ...s, [name]: {} } // Note: Currently we only support types ops on Fetch fields so we can assume that value is object
-                        } else {
-                            s = { ...s, [name]: ai.data }
-                        }
-
-                    } else {
-                        s = { ...s, [name]: _internal.data }
-                    }
+                    newState = TypeOpsUtils.handleUpdateList({ newState, ai })
                 } else if (typeOpName === "DeleteFromList" || typeOpName === "DeleteFromListAndDiscard") {
-                    const discard = typeOpName === "DeleteFromListAndDiscard"
-                    if (optimisticFail) { // revert back state changes
-                        const result = this.setPropAccessImmutable(typeOpState, entry[1].split("."), (prev: TypeOpEntity) => {
-                            if (!prev) {
-                                return prev;
-                            } else {
-                                const [id, idKey] = this.getIdValueAndIdKey(ai.optimisticFailed)
-                                const key = `${name}_${group}_${id}`
-                                const [index, v] = this.typeOpsMata[key]
-                                if (index) {
-                                    const na = [...prev]
-                                    na.splice(index, 0, v)
-                                    this.typeOpsMata[key] = undefined;
-                                    return na;
-                                } else {
-                                    return prev;
-                                }
-
-                            }
-                        })
-                        if (result) {
-                            if (typeOpStateKey) {
-                                (this._state as any)[typeOpStateKey] = result
-                            } else {
-                                s = result
-                            }
-                        }
-                        s = { ...s, [name]: ai.data }
-                    } else if (ai.data.data) { // success response 
-                        const data = ai.data.data
-                        const result = this.setPropAccessImmutable(typeOpState, entry[1].split("."), (prev: TypeOpEntity) => {
-                            if (!prev) {
-                                return prev
-                            } else {
-                                if (ai.optimisticSuccess) { // already deleted 
-
-                                } else {
-                                    const [id, idKey] = this.getIdValueAndIdKey(data)
-                                    let index = -1;
-                                    let vatIndex: any = null
-                                    const na = prev.filter((v, i) => {
-                                        if ((v as any)[idKey] === id) {
-                                            index = i;
-                                            vatIndex = v
-                                            return false
-                                        } else {
-                                            return true;
-                                        }
-                                    })
-                                    if (index > -1) {
-                                        const [id, idKey] = this.getIdValueAndIdKey(data)
-                                        const key = `${name}_${group}_${id}`
-                                        this.typeOpsMata[key] = [index, vatIndex]
-                                    }
-                                    return na;
-                                }
-
-                            }
-                        })
-                        if (result) {
-                            if (typeOpStateKey) {
-                                (this._state as any)[typeOpStateKey] = result
-                            } else {
-                                s = result
-                            }
-                        }
-                        if (discard) {
-                            s = { ...ps, [name]: {} } // Note: Currently we only support types ops on Fetch fields so we can assume that value is object
-                        } else {
-                            s = { ...ps, [name]: ai.data }
-                        }
-
-                    } else {
-                        s = { ...ps, [name]: ai.data }
-                    }
-                } else if (typeOpName === "PaginateAppend") {
-                    const existingData = ps[name].data
-                    console.log("************ PaginateAppend", existingData, ai);
-                    let no: any = ai.data
-                    const propAccess = entry[1] ? entry[1].split(".") : []
-                    if (optimisticFail) { // revert back state changes
-                        if (propAccess.length > 0) {
-                            const newData = this.setPropAccessImmutable(existingData, propAccess, (prvA: any) => {
-                                const ids = this.getPropAccess(ai.optimisticFailed, propAccess).map((d: any) => d.id || d._id) as string[]
-                                const na = prvA.filter((o: any) => {
-                                    const oid = o.id || o._id;
-                                    if (ids.includes(oid)) {
-                                        return false
-                                    } else {
-                                        return true;
-                                    }
-                                })
-                                return na;
-                            })
-
-                            no = { ...ai.data, data: newData }
-
-                        } else {
-                            const ids = ai.optimisticFailed.map((d: any) => d.id || d._id) as string[]
-                            const newA = existingData.filter((o: any) => !ids.includes(o.id || o._id))
-                            no = { ...ai.data, data: newA }
-                        }
-                        s = { ...ps, [name]: ai.data }
-                    } else if (ai.data.data) { // success response 
-                        const data = ai.data.data
-                        console.log("************########********** success case :", propAccess);
-                        if (propAccess.length > 0) {
-                            const newData = this.setPropAccessImmutable(data, propAccess, (newD: any) => {
-                                if (ai.optimisticSuccess) {
-                                    const ids = this.getPropAccess(ai.optimisticSuccess, propAccess).map((d: any) => d.id || d._id) as string[]
-                                    const exitingList = this.getPropAccess(existingData, propAccess)
-                                    const na = exitingList.map((o: any) => {
-                                        const oid = o.id || o._id;
-                                        if (ids.includes(oid)) {
-                                            return { ...o, ...newD.find((o: any) => o.id === oid) }
-                                        } else {
-                                            return o;
-                                        }
-                                    })
-                                    return na;
-                                } else {
-                                    let exitingList: any | undefined = undefined
-                                    console.log(" in side : existingData: ", existingData);
-                                    if (existingData) {
-                                        exitingList = this.getPropAccess(existingData, propAccess)
-                                        console.log("Entered here ");
-                                    }
-                                    console.log("******* existing list : ", exitingList, newD);
-                                    if (exitingList) {
-                                        const result = [...exitingList, ...newD]
-                                        console.log("appending new data", result);
-                                        return result
-                                    } else {
-                                        return newD
-                                    }
-                                }
-                            })
-                            console.log("************** newData: ", newData);
-                            no = { ...ai.data, data: newData }
-                        } else {
-                            if (ai.optimisticSuccess) {
-                                const ids = ai.optimisticSuccess.map((d: any) => d.id || d._id) as string[]
-                                const na = existingData.map((o: any) => {
-                                    const oid = o.id || o._id;
-                                    if (ids.includes(oid)) {
-                                        return { ...o, ...data.find((o: any) => o.id === oid) }
-                                    } else {
-                                        return o;
-                                    }
-                                })
-                                no = { ...ai.data, data: na }
-
-                            } else {
-                                if (existingData) {
-                                    no = { ...ai.data, data: [...existingData, ...data] }
-                                } else {
-                                    no = { ...ai.data, data: data }
-                                }
-                            }
-                        }
-                        s = { ...ps, [name]: no }
-                    } else { // In Pagination scenario if request loading / fails keep the old data but pass error/
-                        console.log("Entered loading/error ");
-                        s = { ...ps, [name]: { ...ai.data, data: existingData } }
-                    }
-                } else if (typeOpName === "PaginatePrepend") {
-                    const existingData = ps[name].data
-                    console.log("************ PaginatePrepend", existingData, ai);
-                    let no: any = ai.data
-                    const propAccess = entry[1] ? entry[1].split(".") : []
-                    if (optimisticFail) { // revert back state changes
-                        if (propAccess.length > 0) {
-                            const newData = this.setPropAccessImmutable(existingData, propAccess, (prvA: any) => {
-                                const ids = this.getPropAccess(ai.optimisticFailed, propAccess).map((d: any) => d.id || d._id) as string[]
-                                const na = prvA.filter((o: any) => {
-                                    const oid = o.id || o._id;
-                                    if (ids.includes(oid)) {
-                                        return false
-                                    } else {
-                                        return true;
-                                    }
-                                })
-                                return na;
-                            })
-
-                            no = { ...ai.data, data: newData }
-
-                        } else {
-                            const ids = ai.optimisticFailed.map((d: any) => d.id || d._id) as string[]
-                            const newA = existingData.filter((o: any) => !ids.includes(o.id || o._id))
-                            no = { ...ai.data, data: newA }
-                        }
-                        s = { ...ps, [name]: ai.data }
-                    } else if (ai.data.data) { // success response 
-                        console.log("************########********** success case :", propAccess);
-                        const data = ai.data.data
-                        if (propAccess.length > 0) {
-                            const newData = this.setPropAccessImmutable(data, propAccess, (newD: any) => {
-                                if (ai.optimisticSuccess) {
-                                    const ids = this.getPropAccess(ai.optimisticSuccess, propAccess).map((d: any) => d.id || d._id) as string[]
-                                    const exitingList = this.getPropAccess(existingData, propAccess)
-                                    const na = exitingList.map((o: any) => {
-                                        const oid = o.id || o._id;
-                                        if (ids.includes(oid)) {
-                                            return { ...o, ...newD.find((o: any) => o.id === oid) }
-                                        } else {
-                                            return o;
-                                        }
-                                    })
-                                    return na;
-                                } else {
-                                    let exitingList: any[] = []
-                                    if (!existingData) {
-                                        exitingList = []
-                                    } else {
-                                        exitingList = this.getPropAccess(existingData, propAccess)
-                                        console.log("entered here ");
-                                    }
-                                    console.log("******** existing list ", exitingList, newD);
-                                    if (exitingList) {
-                                        return [...newD, ...exitingList,]
-                                    } else {
-                                        return newD
-                                    }
-                                }
-                            })
-                            no = { ...ai.data, data: newData }
-                            console.log("*********############************ success props > 0 ", no);
-                        } else {
-                            if (ai.optimisticSuccess) {
-                                const ids = ai.optimisticSuccess.map((d: any) => d.id || d._id) as string[]
-                                const na = existingData.map((o: any) => {
-                                    const oid = o.id || o._id;
-                                    if (ids.includes(oid)) {
-                                        return { ...o, ...data.find((o: any) => o.id === oid) }
-                                    } else {
-                                        return o;
-                                    }
-                                })
-                                no = { ...ai.data, data: na }
-
-                            } else {
-                                if (existingData) {
-                                    no = { ...ai.data, data: [...data, ...existingData] }
-                                } else {
-                                    no = { ...ai.data, data: data }
-                                }
-                            }
-                        }
-                        s = { ...s, [name]: no }
-                    } else { // In Pagination scenario if request fails keep the old data but pass error
-                        console.log("*********############************ loading or error ", existingData);
-                        s = { ...s, [name]: { ...ai.data, data: existingData } }
-                    }
+                    newState = TypeOpsUtils.handleDeleteList({ newState, ai, name, group, typeOpsMata: this.typeOpsMata })
+                } else if (typeOpName === "PaginateAppend" || typeOpName === "PaginatePrepend") {
+                    newState = TypeOpsUtils.handlePaginateAppendPrepend({ newState, ai, name })
                 }
             }
         }
         else {
-            s = rg.r(ps, a)
+            newState = rg.r(ps, a)
         }
-        (this._state as any)[stateKey] = s
+        (this._state as any)[stateKey] = newState
         // notify listeners 
-        const changedStateKeys = TStoreUtils.removeDuplicatesInArray([stateKey, ...stateKeysModifiedByTypeOps])
         this.notifyStorageOrListeners({
-            stateKeys: changedStateKeys.map(ck => ck === stateKey ? { name: stateKey, prevValue: ps } :
-                { name: ck, prevValue: prevStateOfStateKeysModifiedByTypeOps[ck] }),
+            stateKey,
             action: a, ps: ps
         })
     }
 
-    private setPropAccessImmutable = (obj: any, propAccess: string[], value: (prev: any) => any): any | undefined => {
-        let newO = { ...obj }
-        propAccess.some((key, i) => {
-            if (i === propAccess.length - 1 && i === 0) {
-                const newValue = value(obj[key])
-                newO = { ...obj, [key]: newValue }
-                return true
-            }
-            else if (i === propAccess.length - 1) {
-                const newValue = value(obj[key])
-                console.log("*** setPropAccessImmutablenewValue ...........", newValue);
-                obj[key] = newValue
-            } else {
-                const v = newO[key]
-                if (!v) {
-                    newO = undefined
-                    return true
-                }
-                newO[key] = { ...obj[key] }
-                this.setPropAccessImmutable(newO[key], propAccess.slice(1), value)
-            }
-        })
-        return newO
-    }
-
-
-    private getIdValueAndIdKey = (obj: any): [any, string] => {
-        let id: any = null as any
-        let idKey: string = ""
-        if (obj.id) {
-            idKey = "id"
-            id = obj.id
-        } else {
-            idKey = "_id"
-            id = obj._id
-        }
-        return [id, idKey]
-    }
-
-    private getPropAccess = (obj: any, propAccess: string[]): any | undefined => {
-        if (propAccess.length === 1) {
-            return obj[propAccess[0]]
-        } else {
-            const v = obj[propAccess[0]]
-            if (v === undefined || v === null) {
-                return undefined
-            }
-            return this.getPropAccess(v, propAccess.slice(1))
-        }
-    }
-
-    private notifyStorageOrListeners = async ({ stateKeys, action, ps }: { stateKeys: { name: string, prevValue: any }[], action: Action, ps: any }) => {
-        if (this.storage && this.storage.options.writeMode === "REQUIRED") {
-            await this.notifyStorage(stateKeys, action)
-            this.notifyListeners({ stateKeys, action, ps })
-        } else {
-            this.notifyListeners({ stateKeys, action, ps })
-            if (this.storage) {
-                this.notifyStorage(stateKeys, action)
-            }
-        }
-    }
-
-    private pickKeys = (obj: any, keys: string[]): any => {
-        return keys.reduce((pkr, pk) => {
-            pkr[pk] = obj[pk]
-            return pkr;
-        }, {} as Record<string, any>)
-    }
-
-    private excludeKeys = (obj: any, keys: string[]): any => {
-        return Object.keys(obj).reduce((pkr, pk) => {
-            if (!keys.includes(pk)) {
-                pkr[pk] = obj[pk]
-            }
-            return pkr;
-        }, {} as Record<string, any>)
-    }
-
-
-    private notifyStorage = (stateKeys: { name: string, prevValue: any }[], action: Action) => {
-        const persistMode = this.storage!.options.persistMode
-        const data = stateKeys.reduce((pv, ck) => {
-            const rg = this.getReducerGroup(ck.name)
-            const eo = this._state[ck.name]
-            if (persistMode === "epxlicitPersist") {
-                if (rg.m.persist) {
-                    pv[ck.name] = this._state[ck.name]
-                } else if (rg.m.persistKeys) {
-                    const obj = this.pickKeys(eo, rg.m.persistKeys)
-                    pv[ck.name] = obj
-                }
-            } else {
-                if (rg.m.dpersist) {
-                    // dont persist
-                } else if (rg.m.dpersistKeys) {
-                    const obj = this.excludeKeys(eo, rg.m.dpersistKeys)
-                    pv[ck.name] = obj
+    private notifyStorageOrListeners = async ({ stateKey, action, ps }: { stateKey: string, action: Action, ps: any }) => {
+        if (this.storage && this.storage.options.writeMode && (typeof this.storage.options.writeMode === "string" &&
+            this.storage.options.writeMode === "REQUIRED" ||
+            (typeof this.storage.options.writeMode === "function" && this.storage.options.writeMode(stateKey) === "REQUIRED"))) {
+            try {
+                await this.notifyStorage(stateKey, true)
+            } catch (error) {
+                if (this.storage.isQuotaExceededError(error) && this.storage.options.onQuotaExceededError) {
+                    await this.storage.options.onQuotaExceededError(this.storage, error)
                 } else {
-                    pv[ck.name] = this._state[ck.name]
+                    throw error;
                 }
             }
-            return pv;
-        }, {} as Record<string, string>)
-        return this.storage!.dataChanged(data)
-    }
-
-
-    private notifyListeners = ({ stateKeys, action, ps }: { stateKeys: { name: string, prevValue: any }[], action: Action, ps: any }) => {
-        if (this._globalListener) {
-            this._globalListener(action, stateKeys)
+            this.notifyListeners({ stateKey, action, ps })
         } else {
-            stateKeys.forEach(stateKey => {
-                const slrs = this.selectorListeners[stateKey.name]
-                slrs.forEach(slr => {
-                    if (this.isSelectorDependenciesChanged(this._state[stateKey.name], stateKey.prevValue, slr.selector, stateKey.name)) {
-                        slr.listener(action)
+            this.notifyListeners({ stateKey, action, ps })
+            if (this.storage) {
+                this.notifyStorage(stateKey).catch(error => {
+                    if (this.storage?.isQuotaExceededError(error) && this.storage.options.onQuotaExceededError) {
+                        this.storage.options.onQuotaExceededError(this.storage, error)
+                    } else {
+                        throw error;
                     }
                 })
-            })
+            }
+        }
+    }
+
+
+
+
+    private notifyStorage = async (stateKey: string, blocking?: boolean) => {
+        const persistMode = this.storage!.options.persistMode
+        let v: any | undefined = undefined
+        const rg = this.getReducerGroup(stateKey)
+        const eo = this._state[stateKey]
+        if (persistMode === "epxlicitPersist") {
+            if (rg.m.persist) {
+                v = eo
+            } else if (rg.m.persistKeys) {
+                const obj = TStoreUtils.pickKeys(eo, rg.m.persistKeys)
+                v = obj
+            }
+        } else {
+            if (rg.m.dpersist) {
+                // dont persist
+            } else if (rg.m.dpersistKeys) {
+                const obj = TStoreUtils.excludeKeys(eo, rg.m.dpersistKeys)
+                v = obj
+            } else {
+                v = eo;
+            }
+        }
+        if (v !== undefined) {
+            if (blocking) {
+                await this.storage!.dataChanged(stateKey, v)
+            } else {
+                this.storage!.dataChanged(stateKey, v)
+            }
 
         }
-        console.log("handlers", this._globalCompleteHandlers.length);
+    }
+
+
+    private notifyListeners = ({ stateKey, action, ps }: { stateKey: string, action: Action, ps: any }) => {
+        if (this._globalListener) {
+            this._globalListener(action, stateKey, ps)
+        } else {
+            const slrs = this.selectorListeners[stateKey]
+            slrs.forEach(slr => {
+                if (this.isSelectorDependenciesChanged(this._state[stateKey], ps, slr.selector, stateKey)) {
+                    slr.listener(action)
+                }
+            })
+        }
         this._globalCompleteHandlers.forEach(c => {
             console.log("calling completion handler ", c);
-            c(action, stateKeys)
+            c(action, stateKey, ps)
         })
     }
 
@@ -851,8 +391,8 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     isChildObjectsChanged = (currentState: any, prevState: any, oa: Record<string, Record<string, SelectorDepenacyValue>>) => {
         const [keyI, valueI] = Object.entries(oa)[0]
-        const cv = this.getPropAccess(currentState, keyI.split("."))
-        const pv = this.getPropAccess(prevState, keyI.split("."))
+        const cv = TStoreUtils.getPropAccess(currentState, keyI.split("."))
+        const pv = TStoreUtils.getPropAccess(prevState, keyI.split("."))
         if (cv === pv) {
             return false
         } else {
@@ -969,7 +509,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                 return true;
             }
         })
-        this.setPropAccessImmutable(currentState, exv, (prv: any) => v)
+        TStoreUtils.setPropAccessImmutable(currentState, exv, (prv: any) => v)
     }
 
     /** 
@@ -1002,20 +542,317 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
      *  used for framework integrationions
      * @param callback 
      */
-    _subscribeGlobal = (callback: (action: Action, stateKeys: { name: string, prevValue: any }[]) => any) => {
+    _subscribeGlobal = (callback: GlobalListenerCallBack) => {
         this._globalListener = callback
         return () => {
             this._globalListener = undefined
         }
     }
 
-    _addCompleteHook = (callback: (action: Action, stateKeys: { name: string, prevValue: any }[]) => any) => {
+    _addCompleteHook = (callback: CompleteListenerCallback) => {
         this._globalCompleteHandlers.push(callback)
         return () => {
             this._globalCompleteHandlers = this._globalCompleteHandlers.filter(h => h !== callback)
         }
     }
 
+}
+
+class TypeOpsUtils {
+
+    static handleAppendPrependList(input: { newState: any, ai: DataAndTypeOps }) {
+        let { newState, ai } = input;
+        const typeOpName = ai.typeOp.name
+        const propAccess = ai.typeOp.propAccess
+        const discard = typeOpName === "AppendToListAndDiscard" || typeOpName === "PrependToListAndDiscard"
+        if (ai.optimisticFailed) { // revert back state changes
+            const result = TStoreUtils.setPropAccessImmutable(newState, propAccess!.split("."), (prev: TypeOpEntity) => {
+                if (!prev) {
+                    return prev;
+                } else {
+                    const [id, idKey] = this.getIdValueAndIdKey(ai.optimisticFailed)
+                    return prev.filter(i => (i as any)[idKey] !== id)
+                }
+            })
+            if (result) {
+                newState = result;
+            }
+            newState = { ...newState, [name]: ai.data }
+        } else if (ai.data.data) { // success response 
+            const data = ai.data.data
+            console.log("Before transformation : ", newState, propAccess);
+            const result = TStoreUtils.setPropAccessImmutable(newState, propAccess!.split("."), (prev: TypeOpEntity) => {
+                console.log("*********** prev value : ", prev)
+                if (!prev) {
+                    return [data]
+                } else {
+
+                    if (ai.optimisticSuccess) { // previously appended to list so just replace previous value
+                        const [id, idKey] = this.getIdValueAndIdKey(ai.optimisticSuccess)
+                        return prev.map(i => ((i as any)[idKey] === id) ? { ...i, ...data } : i)
+                    }
+                    if (typeOpName === "AppendToList" || typeOpName === "AppendToListAndDiscard") {
+
+                        return prev.concat(data)
+                    } else {
+                        return [data, ...prev]
+                    }
+                }
+            })
+            console.log("After transformation : ", result);
+            if (result) {
+                newState = result
+            }
+            if (discard) {
+                newState = { ...newState, [name]: {} } // Note: Currently we only support types ops on Fetch fields so we can assume that value is object
+            } else {
+                newState = { ...newState, [name]: ai.data }
+            }
+        } else {
+            newState = { ...newState, [name]: ai.data }
+        }
+        return newState;
+    }
+
+    static handleUpdateList(input: { newState: any, ai: DataAndTypeOps }) {
+        let { newState, ai } = input;
+        const typeOpName = ai.typeOp.name
+        const propAccess = ai.typeOp.propAccess
+        const discard = typeOpName === "UpdateListAndDiscard"
+        if (ai.optimisticFailed) { // revert back state changes
+            const result = TStoreUtils.setPropAccessImmutable(newState, propAccess!.split("."), (prev: TypeOpEntity) => {
+                if (!prev) {
+                    return prev;
+                } else {
+                    const [id, idKey] = this.getIdValueAndIdKey(ai.optimisticFailed)
+                    return prev.filter(i => (i as any)[idKey] !== id)
+                }
+            })
+            if (result) {
+                newState = result
+            }
+            newState = { ...newState, [name]: ai.data }
+        } else if (ai.data.data) { // success response 
+            const data = ai.data.data
+            const result = TStoreUtils.setPropAccessImmutable(newState, propAccess!.split("."), (prev: TypeOpEntity) => {
+                if (!prev) {
+                    return [data]
+                } else {
+                    const [id, idKey] = this.getIdValueAndIdKey(data)
+                    return prev.map(i => ((i as any)[idKey] === id) ? { ...i, ...data } : i)
+                }
+            })
+            if (result) {
+                newState = result
+            }
+            if (discard) {
+                newState = { ...newState, [name]: {} } // Note: Currently we only support types ops on Fetch fields so we can assume that value is object
+            } else {
+                newState = { ...newState, [name]: ai.data }
+            }
+
+        } else {
+            newState = { ...newState, [name]: ai.data }
+        }
+        return newState
+    }
+
+    static handleDeleteList(input: {
+        newState: any, ai: DataAndTypeOps,
+        typeOpsMata: Record<string, any>, group: string, name: string
+    }) {
+        let { newState, ai, name, group, typeOpsMata } = input;
+        const typeOpName = ai.typeOp.name
+        const propAccess = ai.typeOp.propAccess
+        const discard = typeOpName === "DeleteFromListAndDiscard"
+        if (ai.optimisticFailed) { // revert back state changes
+            const result = TStoreUtils.setPropAccessImmutable(newState, propAccess!.split("."), (prev: TypeOpEntity) => {
+                if (!prev) {
+                    return prev;
+                } else {
+                    const [id, idKey] = this.getIdValueAndIdKey(ai.optimisticFailed)
+                    const key = `${name}_${group}_${id}`
+                    const [index, v] = typeOpsMata[key]
+                    if (index) {
+                        const na = [...prev]
+                        na.splice(index, 0, v)
+                        typeOpsMata[key] = undefined;
+                        return na;
+                    } else {
+                        return prev;
+                    }
+
+                }
+            })
+            if (result) {
+                newState = result
+            }
+            newState = { ...newState, [name]: ai.data }
+        } else if (ai.data.data) { // success response 
+            const data = ai.data.data
+            const result = TStoreUtils.setPropAccessImmutable(newState, propAccess!.split("."), (prev: TypeOpEntity) => {
+                if (!prev) {
+                    return prev
+                } else {
+                    if (ai.optimisticSuccess) { // already deleted 
+
+                    } else {
+                        const [id, idKey] = this.getIdValueAndIdKey(data)
+                        let index = -1;
+                        let vatIndex: any = null
+                        const na = prev.filter((v, i) => {
+                            if ((v as any)[idKey] === id) {
+                                index = i;
+                                vatIndex = v
+                                return false
+                            } else {
+                                return true;
+                            }
+                        })
+                        if (index > -1) {
+                            const [id, idKey] = this.getIdValueAndIdKey(data)
+                            const key = `${name}_${group}_${id}`
+                            typeOpsMata[key] = [index, vatIndex]
+                        }
+                        return na;
+                    }
+
+                }
+            })
+            if (result) {
+                newState = result
+            }
+            if (discard) {
+                newState = { ...newState, [name]: {} } // Note: Currently we only support types ops on Fetch fields so we can assume that value is object
+            } else {
+                newState = { ...newState, [name]: ai.data }
+            }
+
+        } else {
+            newState = { ...newState, [name]: ai.data }
+        }
+        return newState;
+    }
+
+    static handlePaginateAppendPrepend(input: { newState: any, ai: DataAndTypeOps, name: string }) {
+        let { newState, ai, name } = input;
+        const typeOpName = ai.typeOp.name
+        const propAccess = ai.typeOp.propAccess
+        const existingData = newState[name].data
+        console.log("************ PaginateAppend/Prepend", existingData, ai);
+        let no: any = ai.data
+        const propAccessA = propAccess ? propAccess.split(".") : []
+        if (ai.optimisticFailed) { // revert back state changes
+            if (propAccessA.length > 0) {
+                const newData = TStoreUtils.setPropAccessImmutable(existingData, propAccessA, (prvA: any) => {
+                    const ids = TStoreUtils.getPropAccess(ai.optimisticFailed, propAccessA).map((d: any) => d.id || d._id) as string[]
+                    const na = prvA.filter((o: any) => {
+                        const oid = o.id || o._id;
+                        if (ids.includes(oid)) {
+                            return false
+                        } else {
+                            return true;
+                        }
+                    })
+                    return na;
+                })
+
+                no = { ...ai.data, data: newData }
+
+            } else {
+                const ids = ai.optimisticFailed.map((d: any) => d.id || d._id) as string[]
+                const newA = existingData.filter((o: any) => !ids.includes(o.id || o._id))
+                no = { ...ai.data, data: newA }
+            }
+            newState = { ...newState, [name]: ai.data }
+        } else if (ai.data.data) { // success response 
+            const data = ai.data.data
+            console.log("************########********** success case :", propAccess);
+            if (propAccessA.length > 0) {
+                const newData = TStoreUtils.setPropAccessImmutable(data, propAccessA, (newD: any) => {
+                    if (ai.optimisticSuccess) {
+                        const ids = TStoreUtils.getPropAccess(ai.optimisticSuccess, propAccessA).map((d: any) => d.id || d._id) as string[]
+                        const exitingList = TStoreUtils.getPropAccess(existingData, propAccessA)
+                        const na = exitingList.map((o: any) => {
+                            const oid = o.id || o._id;
+                            if (ids.includes(oid)) {
+                                return { ...o, ...newD.find((o: any) => o.id === oid) }
+                            } else {
+                                return o;
+                            }
+                        })
+                        return na;
+                    } else {
+                        let exitingList: any | undefined = undefined
+                        console.log(" in side : existingData: ", existingData);
+                        if (existingData) {
+                            exitingList = TStoreUtils.getPropAccess(existingData, propAccessA)
+                            console.log("Entered here ");
+                        }
+                        console.log("******* existing list : ", exitingList, newD);
+                        if (exitingList) {
+                            let result = []
+                            if (typeOpName === "PaginateAppend") {
+                                result = [...exitingList, ...newD]
+                            } else {
+                                result = [...newD, ...exitingList]
+                            }
+                            return result
+                        } else {
+                            return newD
+                        }
+                    }
+                })
+                console.log("************** newData: ", newData);
+                no = { ...ai.data, data: newData }
+            } else {
+                if (ai.optimisticSuccess) {
+                    const ids = ai.optimisticSuccess.map((d: any) => d.id || d._id) as string[]
+                    const na = existingData.map((o: any) => {
+                        const oid = o.id || o._id;
+                        if (ids.includes(oid)) {
+                            return { ...o, ...data.find((o: any) => o.id === oid) }
+                        } else {
+                            return o;
+                        }
+                    })
+                    no = { ...ai.data, data: na }
+
+                } else {
+                    if (existingData) {
+                        let d = null as any
+                        if (typeOpName === "PaginateAppend") {
+                            d = [...existingData, ...data]
+                        } else {
+                            d = [...data, ...existingData]
+                        }
+                        no = { ...ai.data, data: d }
+                    } else {
+                        no = { ...ai.data, data: data }
+                    }
+                }
+            }
+            newState = { ...newState, [name]: no }
+        } else { // In Pagination scenario if request loading / fails keep the old data but pass error/
+            console.log("Entered loading/error ");
+            newState = { ...newState, [name]: { ...ai.data, data: existingData } }
+        }
+        return newState
+    }
+
+
+    private static getIdValueAndIdKey(obj: any): [any, string] {
+        let id: any = null as any
+        let idKey: string = ""
+        if (obj.id) {
+            idKey = "id"
+            id = obj.id
+        } else {
+            idKey = "_id"
+            id = obj._id
+        }
+        return [id, idKey]
+    }
 }
 
 
@@ -1032,4 +869,6 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 // type AT = GetActionFromReducers2<typeof sr>
 // store.dispatch({name:})
 // store.subscribe(["g1",], null as any)
+
+
 

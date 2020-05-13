@@ -1,13 +1,13 @@
 {
-  "name": "@typesafe-store/storage-indexdb",
+  "name": "@typesafe-store/middleware-form",
   "description": "type safe store reducer transformer",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/chandu0101/typesafe-store",
-    "directory": "packages/store"
+    "directory": "packages/middleware-rest"
   },
   "bugs": {
     "url": "https://github.com/chandu0101/typesafe-store/issues"
@@ -20,7 +20,9 @@
     "transformers"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "main": "build/index.js",
+    "types": "build/index.d.ts"
   },
   "scripts": {
     "test": "jest",

@@ -6,21 +6,19 @@ import { getBatch } from "../utils/batch"
 
 export class Subscription<R extends Record<string, ReducerGroup<any, any, any, any>>> {
 
-    globalListener = (action: Action, stateKeys: { name: string, prevValue: any }[]) => {
-        console.log("globalListener called :", action);
-        console.log("state keys :", stateKeys);
+    globalListener = (action: Action, stateKey: string, ps: any) => {
+        console.log("globalListener called :", action, "stateKey :", stateKey, "ps:", ps);
         const changedListeners: any[] = []
-        stateKeys.forEach(stateKey => {
-            this.store.selectorListeners[stateKey.name].forEach(sl => {
-                console.log("selector : ", sl, this.store.state[stateKey.name]);
-                const changed = this.store.isSelectorDependenciesChanged(this.store.state[stateKey.name], stateKey.prevValue, sl.selector,
-                    stateKey.name)
-                console.log("changed", changed);
-                if (changed) {
-                    changedListeners.push(sl.listener)
-                }
-            })
+        this.store.selectorListeners[stateKey].forEach(sl => {
+            console.log("selector : ", sl, this.store.state[stateKey]);
+            const changed = this.store.isSelectorDependenciesChanged(this.store.state[stateKey], ps, sl.selector,
+                stateKey)
+            console.log("changed", changed);
+            if (changed) {
+                changedListeners.push(sl.listener)
+            }
         })
+
 
         const batch = getBatch()
         batch(() => {

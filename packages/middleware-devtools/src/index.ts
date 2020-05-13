@@ -129,7 +129,7 @@ class DMW {
         }
     }
 
-    onCompleteHook = (action: Action, statekeys: { name: string, prevValue: any }[]) => {
+    onCompleteHook = (action: Action, statekey: string, ps: any) => {
         console.log("**************** onCompleteHook", this.ws.readyState);
         if (this.ws.readyState === 1) {
             try {
@@ -139,10 +139,7 @@ class DMW {
                     })
                     this.queue = []
                 }
-                const state = statekeys.reduce((prv, skPair) => {
-                    prv[skPair.name] = this.getObjectsChanged(skPair.name, skPair.prevValue)
-                    return prv;
-                }, {} as Record<string, any>)
+                const state = this.getObjectsChanged(statekey, ps)
                 let a = action
                 if (this.options.actionProcessor) {
                     a = this.options.actionProcessor(a)
@@ -178,14 +175,14 @@ class DMW {
 
 }
 
-export function createDevToolsMiddleware<R extends Record<string, ReducerGroup<any, any, any, any>>>(options: Options): MiddleWare<R> {
+export function createDevToolsMiddleware(options: Options): MiddleWare<any> {
     let dmw: DMW | undefined = undefined
     console.log("createDevToolsMiddleware", options);
     if (options.connectInProd || process.env.NODE_ENV === "development") {
         console.log("******* creating DMW");
         dmw = new DMW(options)
     }
-    return (store: TypeSafeStore<R>) => (next: Dispatch<GetActionFromReducers<R>>) => (action: GetActionFromReducers<R>) => {
+    return (store: TypeSafeStore<any>) => (next: Dispatch<Action>) => (action: Action) => {
         if (dmw) {
             if (!dmw.isAppStarted) {
                 dmw.isAppStarted = true

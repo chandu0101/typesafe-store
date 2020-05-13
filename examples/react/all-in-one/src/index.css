@@ -70,3 +70,13 @@ body {
     overflow: scroll;
 }
 
+.todos-list {
+    height: 250px;
+    width: 200px;
+    border: 1px solid grey;
+    overflow: scroll;
+}
+
+.rest-typeops {
+    max-width: 300px;
+}

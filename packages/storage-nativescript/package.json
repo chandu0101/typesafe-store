@@ -1,5 +1,5 @@
 {
-  "name": "@typesafe-store/storage-indexdb",
+  "name": "@typesafe-store/storage-nativescript",
   "description": "type safe store reducer transformer",
   "version": "0.1.1",
   "main": "build/index.js",
@@ -28,7 +28,8 @@
   },
   "dependencies": {},
   "peerDependencies": {
-    "@typesafe-store/store": "^0.1.0"
+    "@typesafe-store/store": "^0.1.0",
+    "tns-core-modules": "^6.5.1"
   },
   "devDependencies": {
     "@types/jest": "^24.0.20",

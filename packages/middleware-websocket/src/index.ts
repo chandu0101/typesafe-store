@@ -360,9 +360,9 @@ const handleWebSocketAction = ({ action, clients, rg, store, options }: { client
 
 }
 
-export function createWebSocketMiddleware<R extends Record<string, ReducerGroup<any, any, any, any>>>(options: CreateWebSocketMiddlewareOptions): MiddleWare<R> {
+export function createWebSocketMiddleware(options: CreateWebSocketMiddlewareOptions): MiddleWare<any> {
     const clients: ClientsType = {}
-    return (store: TypeSafeStore<R>) => (next: Dispatch<GetActionFromReducers<R>>) => (action: GetActionFromReducers<R>) => {
+    return (store: TypeSafeStore<any>) => (next: Dispatch<Action>) => (action: Action) => {
         if (action._internal && action._internal.processed) { // if already processed by other middlewares just pass through
             return next(action)
         }

@@ -254,9 +254,11 @@ const createReducerFunction = (cd: ts.ClassDeclaration) => {
     const stateName = `${typeName}State`
     const methodsResults = processMethods({ group, stateName });
     const offloadMethodResult = methodsResults.filter(mr => mr.offload)
-    const defaultState = getDefaultState(propDecls, offloadMethodResult);
+    const defaultState = getDefaultState(propDecls, offloadMethodResult, group);
     const stateType = getStateType(offloadMethodResult.map(mr => mr.actionType.name))
-    const syncMeta = offloadMethodResult.map(mr => ({ name: mr.actionType.name, value: `{offload:${mr.offload}}` }))
+    const offloadMeta = offloadMethodResult.map(mr => ({ name: mr.actionType.name, value: `{offload:${mr.offload}}` }))
+    const formFieldsMeta = getFormFieldMeta()
+    const syncMeta = offloadMeta.concat(formFieldsMeta)
     let [asyncActionType, asyncMeta] = getAsyncActionTypeAndMeta(group);
     let persistMeta: string | undefined = getPersistMeta()
     let result = ts.createIdentifier("")
@@ -1393,11 +1395,28 @@ const invalidateObject = ({
     }
 };
 
-const getDefaultState = (props: LocalPropertyDecls[], offload: ProcessMethodResult[]) => {
+const getFormFieldMeta = () => {
+    return propDecls.filter(p => isFormField(p))
+        .map(p => ({ name: p.pd.name.getText(), value: `{form:true}` }))
+}
+
+const isFormField = (p: LocalPropertyDecls) => {
+    const t = p.pd.type
+    return t && t.getText().startsWith("TSForm<")
+}
+
+const getFormFieldInitializer = (p: LocalPropertyDecls, group: string): string => {
+    const oi = p.pd.initializer!.getText()
+    const name = p.pd.name.getText();
+    const initalizer = `{${oi.slice(1, -1)},_aName:${name},_aGroup: ${group} }`
+    return `${name}:${initalizer}`
+}
+
+const getDefaultState = (props: LocalPropertyDecls[], offload: ProcessMethodResult[], group: string) => {
     const offloads = offload.map(a => `${a.actionType.name}:{}`)
     return `{${props
-        .filter(p => p.pd.initializer)
-        .map(p => `${p.pd.name.getText()}:${p.pd.initializer!.getText()}`).concat(offloads).join(", ")}}`;
+        .filter(p => p.pd.initializer !== undefined)
+        .map(p => isFormField(p) ? getFormFieldInitializer(p, group) : `${p.pd.name.getText()}:${p.pd.initializer!.getText()}`).concat(offloads).join(", ")}}`;
 };
 
 function buildFunction({
@@ -1475,21 +1494,20 @@ const getStateType = (offloadMethods: string[]) => {
             const n = p.pd.name.getText();
 
             let t = p.typeStr
-            if (isAsyncPropDeclaration(p)) {
-                const dtpe = p.pd.type!
-                if (ts.isIntersectionTypeNode(dtpe)) {
-                    t = dtpe.types[0].getText()
-                } else {
-                    t = dtpe.getText()
+            if (t === "string" || t === "number" || t === "boolean") {// if primitive fields we can depend on toString()
+            } else {
+                const typeNode = p.pd.type
+                if (!typeNode) {
+                    throw new Error('all fields of reducer should be annotated with type')
+                }
+                if (isAsyncPropDeclaration(p) && ts.isIntersectionTypeNode(typeNode)) {
+                    t = typeNode.types[0].getText()
+                }
+                else { // Dont use tostring value as it fetches all values of types and we cant add individual imports  
+                    t = typeNode.getText()
                 }
             }
-            else if (p.pd.type) { // Dont use tostring value as it fetches all values of types and we cant add individual imports  
-                t = p.pd.type.getText()
-            } else if (t === "string" || t === "number" || t === "boolean") {// if primitive fields we can depend on toString()
-            }
-            else {
-                throw new Error('all fields of reducer should be annotated with type')
-            }
+
             return `${n}${p.pd.questionToken ? "?" : ""}:${t}`;
         }).concat(offloadMethods.map(n => `${n} :SyncActionOffloadStatus`))
         .join(",")}}`;
@@ -1747,7 +1765,7 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
             }
         }
         const typeOpNodeNext = typeOpNode!.getText()
-        let propsAcess: Record<string, string> | undefined = undefined
+        let propsAcess: string | undefined = undefined
         let opName = ""
         if (typeOpNodeNext.startsWith("PaginateAppend") || typeOpNodeNext.startsWith("PaginatePrepend")) {
             let opNode: ts.TypeReferenceNode = typeOpNode as any;
@@ -1767,7 +1785,7 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
                     }
                     //TODO  compare response type to indexed type isAssignable and better way to 
                     if (props.length > 0) {
-                        propsAcess = { [group]: props.join(".") }
+                        propsAcess = props.join(".")
                     }
                 } else {
                     throw new Error(`Paginated type arg should be an indexed type Obje["field1"] or NonNullable<Obj>["field1"]  ,${indexedNode.getText()} `)
@@ -1843,22 +1861,13 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
                 throw new Error(`${responseTypeNode.getText()} is not assignable to ${targetTypeNode.getText()}`)
             }
             const { node: cnode, props } = getObjectAccessAndIdentifier(targetTypeNode as any)
-            console.log("pa ", props, cnode.getSourceFile().fileName);
-            let csymb = AstUtils.getTypeChecker().getSymbolAtLocation(cnode.typeName)
-            if (csymb) {
-                let cdecl = csymb.declarations[0]
-                console.log("decl :", csymb.declarations[0].getSourceFile().fileName, cdecl.kind);
-                if (ts.isImportClause(cdecl) || ts.isImportSpecifier(cdecl)) {
-                    csymb = AstUtils.getTypeChecker().getAliasedSymbol(csymb)
-                    cdecl = csymb!.declarations[0]
-                }
-                const path = cdecl.getSourceFile().fileName;
-                if (!ConfigUtils.isReducersSourceFile(path)) {
-                    throw new Error(`TypeOps target field should be from reudcer classes only`)
-                }
-                const group = `${ConfigUtils.getPrefixPathForReducerGroup(path)}${cnode.getText()}`
-                propsAcess = { [group]: props.join(".") }
+            console.log("pa ", props);
+            const cnFile = cnode.getSourceFile().fileName
+            const oCFile = classDecl.getSourceFile().fileName
+            if (cnFile !== oCFile && classDecl.name?.getText() !== cnode.typeName.getText()) {
+                throw new Error("TypeOp field should be from same reducer class.")
             }
+            propsAcess = props.join(".")
         }
 
         if (!opName.length) {
@@ -1866,7 +1875,7 @@ const processFetchProp2 = (lpd: LocalPropertyDecls, group: string): ProcessFetch
             const i = t.indexOf("<")
             opName = t.substr(0, i)
         }
-        typeOpsResult = `{ name:"${opName}", ${propsAcess ? `obj:${JSON.stringify(propsAcess)}` : ""} }`
+        typeOpsResult = `{ name:"${opName}", ${propsAcess ? `propAccess:"${propsAcess}"` : ""} }`
 
     }
     if (transformFunctionQueryNode && offload && !isGrpc) {// try to get response type of this function

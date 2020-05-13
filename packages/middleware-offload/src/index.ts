@@ -303,13 +303,13 @@ const handleOffloadAction = ({ action, workers, store, rg, queue, options }: {
 }
 
 
-export default function createOffloadMiddleware<R extends Record<string, ReducerGroup<any, any, any, any>>>(options: Options): MiddleWare<R> {
+export default function createOffloadMiddleware(options: Options): MiddleWare<any> {
     let workers: TSWorker[] = []
     let queue: Queue[] = []
     if (!options.poolSize) {
         options = { ...options, poolSize: 4 }
     }
-    return (store: TypeSafeStore<R>) => (next: Dispatch<GetActionFromReducers<R>>) => (action: GetActionFromReducers<R>) => {
+    return (store: TypeSafeStore<any>) => (next: Dispatch<Action>) => (action: Action) => {
         if (action._internal && action._internal.processed) { // if already processed by other middlewares just pass through
             return next(action)
         }

@@ -17,6 +17,9 @@ Things to do before initial release :
 - [ ] forms
 - [ ] storage indexdb, react-native,native script
 - [ ] nativescript ui context
+- [ ] devtools , when seelctor unsubscribed with reset default ,notify devtools with changed state.
+- [ ] graphql file uploads , general file uploads,cloudinary plugin.
+- [ ] firestore middleware
 
 # Realworld Examples: 
 

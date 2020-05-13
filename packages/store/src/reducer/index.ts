@@ -49,6 +49,7 @@ export type OflloadActionResult = { abortController?: AbortController, loading?:
 
 export type ActionMeta<S> = {
     f?: FetchActionMeta,
+    form?: boolean,
     offload?: SyncActionOffload<S>,
     ws?: WebSocketActionMeta,
     p?: PromiseActionMeta

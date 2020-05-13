@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "build",
+    "lib": [
+      "DOM"
+    ],
+    "sourceMap": true,
+    "declaration": true,
+    "composite": true,
+    "plugins": []
+  },
+  "references": [
+    {
+      "path": "../store"
+    }
+  ],
+  "include": [
+    "src/**/*.ts"
+  ]
+}

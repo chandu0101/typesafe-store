@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "build",
+    "lib": [
+      "DOM"
+    ],
+    "sourceMap": true,
+    "declaration": true,
+    "composite": true,
+    "plugins": []
+  },
+  "references": [
+    {
+      "path": "../middleware-form"
+    },
+    {
+      "path": "../store"
+    },
+    {
+      "path": "../react-glue"
+    },
+  ],
+}
