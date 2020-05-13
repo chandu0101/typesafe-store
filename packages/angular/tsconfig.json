@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "build",
+    "target": "ES5",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "lib": [
+      "DOM",
+      "ESNext"
+    ],
+    "sourceMap": true,
+    "composite": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "plugins": [],
+    "typeRoots": [
+      "../../node_module/@types"
+    ]
+  },
+  "references": [
+    {
+      "path": "../store"
+    }
+  ],
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "../../node_modules"
+  ]
+}

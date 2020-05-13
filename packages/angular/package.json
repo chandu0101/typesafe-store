@@ -1,0 +1,34 @@
+{
+  "name": "@typesafe-store/angular",
+  "description": "type safe store angular",
+  "version": "0.1.1",
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chandu0101/typesafe-store",
+    "directory": "packages/storer"
+  },
+  "bugs": {
+    "url": "https://github.com/chandu0101/typesafe-store/issues"
+  },
+  "homepage": "https://github.com/chandu0101/typesafe-store",
+  "license": "MIT",
+  "keywords": [
+    "typescript",
+    "ast",
+    "transformers"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "jest",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "peerDependencies": {
+    "@typesafe-store/store": "^0.1.0"
+  }
+}
