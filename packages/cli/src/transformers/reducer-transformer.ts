@@ -14,10 +14,9 @@ import { FileUtils } from "../utils/file-utils";
 import { CommonUtils } from "../utils/common-utils";
 import { performance } from "perf_hooks"
 import { isUnionType, isObjectType } from "tsutils/typeguard/type"
-import chalk = require("chalk");
+import chalk from "chalk";
 import { WorkersUtils } from "../workers";
 import { FetchActionMeta } from "../../../store/src";
-import { type } from "os";
 
 
 
@@ -2492,6 +2491,7 @@ function processThisStatementOffload(exp: ts.Node, options: ProcessStatementsOpt
 
 type MultipleAccessReturn = { access: EAccess[]; exp: ts.Expression };
 
+//TODO check why we need any
 function processMultipleElementAccess(
     input: ts.ElementAccessExpression
 ): MultipleAccessReturn {
@@ -2508,15 +2508,16 @@ function processMultipleElementAccess(
             return processMultipleElementAccessInner(i.expression as any);
         } else if (
             ts.isNonNullExpression(i) &&
-            ts.isElementAccessExpression(i.expression)
+            ts.isElementAccessExpression((i as ts.NonNullExpression).expression)
         ) {
+
             a.push({
-                name: i.expression.argumentExpression.getText(),
+                name: (i as any).expression.argumentExpression.getText(),
                 isOptional: true,
-                exp: i.expression.argumentExpression,
+                exp: (i as any).expression.argumentExpression,
                 type: MetaType.UNKNOWN
             });
-            return processMultipleElementAccessInner(i.expression.expression as any);
+            return processMultipleElementAccessInner((i as any).expression.expression as any);
         }
         return { access: a, exp: i };
     }

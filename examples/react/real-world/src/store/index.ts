@@ -7,13 +7,13 @@ import { SyncReducerGroup } from "./reducers/generated/sync-gen";
 
 const reducers = { app: AppReducerGroup, sync: SyncReducerGroup }
 
-const fm = createFetchMiddleware<typeof reducers>({
+const fm = createFetchMiddleware({
     urlOptions: {
         [GITHUB_REST_API_URL]: githubApiUrlOptions
     }
 })
 
-const devToolsMiddleware = createDevToolsMiddleware<typeof reducers>({ appName: () => "REACT_REAL_WORLD" })
+const devToolsMiddleware = createDevToolsMiddleware({ appName: () => "REACT_REAL_WORLD" })
 
 export const store = new TypeSafeStore({ reducers, middleWares: [devToolsMiddleware, fm] })
 

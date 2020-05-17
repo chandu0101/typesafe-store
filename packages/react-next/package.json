@@ -1,0 +1,40 @@
+{
+  "name": "@typesafe-store/react-next",
+  "description": "type safe store react",
+  "version": "0.1.1",
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chandu0101/typesafe-store",
+    "directory": "packages/storer"
+  },
+  "bugs": {
+    "url": "https://github.com/chandu0101/typesafe-store/issues"
+  },
+  "homepage": "https://github.com/chandu0101/typesafe-store",
+  "license": "MIT",
+  "keywords": [
+    "typescript",
+    "ast",
+    "transformers"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "jest",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/jest": "^24.0.20",
+    "@types/react": "^16.9.31",
+    "@types/react-dom": "^16.9.6",
+    "jest": "^24.9.0",
+    "ts-jest": "^24.1.0"
+  },
+  "peerDependencies": {
+    "@typesafe-store/store": "^0.1.0"
+  }
+}

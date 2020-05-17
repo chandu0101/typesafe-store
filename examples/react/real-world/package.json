@@ -12,10 +12,10 @@
     "@types/react-dom": "^16.9.0",
     "@typesafe-store/middleware-devtools": "file:../../../packages/middleware-devtools",
     "@typesafe-store/middleware-fetch": "file:../../../packages/middleware-fetch",
-    "@typesafe-store/react": "file:../../../packages/react-glue",
+    "@typesafe-store/react": "file:../../../packages/react",
     "@typesafe-store/store": "file:../../../packages/store",
-    "react": "^16.13.1",
-    "react-dom": "^16.13.1",
+    "react": "0.0.0-experimental-8b155d261",
+    "react-dom": "0.0.0-experimental-8b155d261",
     "react-router-dom": "^5.1.2"
   },
   "scripts": {

@@ -12,7 +12,7 @@
     "@types/react-dom": "^16.9.0",
     "@typesafe-store/middleware-devtools": "file:../middleware-devtools",
     "@typesafe-store/middleware-websocket": "file:../middleware-websocket",
-    "@typesafe-store/react": "file:../react-glue",
+    "@typesafe-store/react": "file:../react",
     "@typesafe-store/store": "file:../store",
     "react": "^16.13.1",
     "react-dom": "^16.13.1",

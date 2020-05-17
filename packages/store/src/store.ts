@@ -107,12 +107,6 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
     private setNetWorkOptions = async (np: NetWorkOfflineOptions) => {
         this.networkOfllineOptions = { ...np, actions: [] }
         this._unsubscribeNetworkStatusListener = np.statusListener.listen(this.handleNetworkStatusChange)
-        if (this.storage) {
-            const actions = await this.storage.getOfflineActions()
-            if (actions !== null) {
-                this.processNetworkOfflineAction(actions)
-            }
-        }
     }
 
     private handleNetworkStatusChange = (status: boolean) => {
@@ -194,7 +188,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                 if (!storageData) {
                     this._state[stateKey] = rg.ds
                 } else {
-                    const sd = storageData[stateKey]
+                    const sd = storageData[stateKey] as any
                     if (sd) {
                         this._state[stateKey] = { ...rg.ds, ...sd }
                     } else {
@@ -206,7 +200,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         }
     }
 
-    prepareStoreWithStorage = async (storage: PersistanceStorage, ) => {
+    prepareStoreWithStorage = async (storage: PersistanceStorage,) => {
         try {
             const sState = await storage.getState(Object.keys(this.reducers))
             if (sState) {
@@ -216,6 +210,10 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
             }
         } finally {
             this.isReady = true
+            const actions = await this.storage!.getOfflineActions()
+            if (actions !== null) {
+                this.processNetworkOfflineAction(actions)
+            }
         }
     }
 
@@ -229,7 +227,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         }
         const rg = this.reducers[stateKey]
         const ps = this._state[stateKey]
-        let newState: typeof ps = ps
+        let newState: any = ps
 
         if (_internal && _internal.processed) { // processed by middlewares (example: fetch,graphql)
             if (_internal.kind === "Data") {
@@ -254,7 +252,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         else {
             newState = rg.r(ps, a)
         }
-        (this._state as any)[stateKey] = newState
+        this._state = { ...this._state, [stateKey]: newState }
         // notify listeners 
         this.notifyStorageOrListeners({
             stateKey,
@@ -267,7 +265,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
             this.storage.options.writeMode === "REQUIRED" ||
             (typeof this.storage.options.writeMode === "function" && this.storage.options.writeMode(stateKey) === "REQUIRED"))) {
             try {
-                await this.notifyStorage(stateKey, true)
+                await this.notifyStorage(stateKey)
             } catch (error) {
                 if (this.storage.isQuotaExceededError(error) && this.storage.options.onQuotaExceededError) {
                     await this.storage.options.onQuotaExceededError(this.storage, error)
@@ -293,7 +291,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
 
 
-    private notifyStorage = async (stateKey: string, blocking?: boolean) => {
+    private notifyStorage = async (stateKey: string,) => {
         const persistMode = this.storage!.options.persistMode
         let v: any | undefined = undefined
         const rg = this.getReducerGroup(stateKey)
@@ -316,12 +314,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
             }
         }
         if (v !== undefined) {
-            if (blocking) {
-                await this.storage!.dataChanged(stateKey, v)
-            } else {
-                this.storage!.dataChanged(stateKey, v)
-            }
-
+            this.storage!.dataChanged(stateKey, v)
         }
     }
 
@@ -331,6 +324,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
             this._globalListener(action, stateKey, ps)
         } else {
             const slrs = this.selectorListeners[stateKey]
+            console.log("listeners length : ", slrs.length);
             slrs.forEach(slr => {
                 if (this.isSelectorDependenciesChanged(this._state[stateKey], ps, slr.selector, stateKey)) {
                     slr.listener(action)
@@ -420,7 +414,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         }
     }
 
-    isSelectorDependenciesChanged = (currentSate: any, prevState: any, selector: Selector<any, any> | SelectorE<any, any, any>, keyChanged: string, ): boolean => {
+    isSelectorDependenciesChanged = (currentSate: any, prevState: any, selector: Selector<any, any> | SelectorE<any, any, any>, keyChanged: string,): boolean => {
         console.log("isSelectorDependenciesChanged ", currentSate, prevState, selector.dependencies, keyChanged);
         const deps = selector.dependencies
         let result = false
@@ -456,13 +450,13 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
      * @param listener 
      * @param tag component name in which 
      */
-    subscribeSelector = <SR>(selector: Selector<GetStateFromReducers<R>, SR> | SelectorE<GetStateFromReducers<R>, any, SR>, listener: Callback, tag?: string) => {
+    subscribeSelector = <SR>(selector: Selector<GetStateFromReducers<R>, SR> | SelectorE<GetStateFromReducers<R>, any, SR>, listener: Callback) => {
 
         const keys = Object.keys(selector.dependencies)
 
         keys.forEach(k => {
             const sls = this.selectorListeners[k]
-            const v = { selector, listener, tag }
+            const v = { selector, listener }
             if (sls) {
                 sls.push(v)
             } else {
@@ -480,7 +474,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                 if (sla) {
                     let index = -1
                     sla.forEach((sl, i) => {
-                        if (sl.selector === selector && sl.listener === sl.listener && tag === sl.tag) {
+                        if (sl.selector === selector && sl.listener === sl.listener) {
                             index = i
                         }
                     })
@@ -553,6 +547,15 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         this._globalCompleteHandlers.push(callback)
         return () => {
             this._globalCompleteHandlers = this._globalCompleteHandlers.filter(h => h !== callback)
+        }
+    }
+
+    cleanup() {
+        if (this._unsubscribeNavigationListener) {
+            this._unsubscribeNavigationListener()
+        }
+        if (this._unsubscribeNetworkStatusListener) {
+            this._unsubscribeNetworkStatusListener()
         }
     }
 

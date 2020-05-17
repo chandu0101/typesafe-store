@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "build",
+    "target": "ES5",
+    "lib": [
+      "DOM"
+    ],
+    "plugins": [],
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "composite": true,
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "../../node_modules"
+  ],
+}

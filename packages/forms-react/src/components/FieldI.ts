@@ -9,7 +9,7 @@ type FieldIProps<T> = Omit<React.InputHTMLAttributes<HTMLInputElement>, "name" |
  * 
  *  Standard web input element 
  */
-export default function FieldI<T>({ name, innerRef, ...other }: FieldIProps<T>) {
+export default function FieldInput<T>({ name, innerRef, ...other }: FieldIProps<T>) {
     const { field } = useField<any>(name)
     return React.createElement("input", { ...other, ref: innerRef, ...field })
 }

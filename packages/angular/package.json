@@ -29,6 +29,7 @@
   "dependencies": {},
   "devDependencies": {},
   "peerDependencies": {
+    "@angular/core": "^9.1.7",
     "@typesafe-store/store": "^0.1.0"
   }
 }

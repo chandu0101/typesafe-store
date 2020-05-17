@@ -24,7 +24,8 @@
   },
   "scripts": {
     "test": "jest",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf build tsconfig.tsbuildinfo"
   },
   "dependencies": {},
   "devDependencies": {

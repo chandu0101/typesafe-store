@@ -17,7 +17,8 @@
     "plugins": [],
     "typeRoots": [
       "../../node_module/@types"
-    ]
+    ],
+    "experimentalDecorators": true,
   },
   "references": [
     {

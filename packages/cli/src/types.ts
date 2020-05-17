@@ -158,7 +158,6 @@ export type GrpcApiConfig = {
  */
 export type TypeSafeStoreConfig = {
     storePath: string,
-    framework: SupportedFrameworks,
     restApis?: RestApiConfig[],
     graphqlApis?: GraphqlApiConfig[],
     grpcApis?: GrpcApiConfig[],
@@ -168,18 +167,6 @@ export type TypeSafeStoreConfig = {
 
 export const typeSafeStoreConfigDecoder: Decoder<TypeSafeStoreConfig> = object({
     storePath: string(),
-    framework: oneOf(constant(SupportedFrameworks.REACT),
-        constant(SupportedFrameworks.VANILLA),
-        constant(SupportedFrameworks.ANGULAR),
-        constant(SupportedFrameworks.HAUNTED),
-        constant(SupportedFrameworks.LITHTML),
-        constant(SupportedFrameworks.IONIC),
-        constant(SupportedFrameworks.PREACT),
-        constant(SupportedFrameworks.STENCIL),
-        constant(SupportedFrameworks.SVELTE),
-        constant(SupportedFrameworks.VUE),
-        constant(SupportedFrameworks.PREACT),
-    ),
     persistMode: optional(oneOf(constant("epxlicitPersist"),
         constant("explicitDontPersist"))),
     restApis: optional(array(object({

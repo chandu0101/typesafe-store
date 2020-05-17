@@ -7,8 +7,8 @@ Things to do before initial release :
 
 - [x] Navigation (test react-native,nativescript, nextjs)
 - [x] Multi Threading (thread pools, web workers)
-- [ ] Frame work glues (react : done, lit-html,angular,vue,haunted,stencil,ionic)
-- [ ] Creat TypeSafe Store App (react,lit-html,angular,vue,haunted,stencil,ionic)
+- [ ] Frame work glues (react : done, lit-html,angular,haunted)
+- [ ] Creat TypeSafe Store App (react,lit-html,angular,haunted,ionic)
 - [x] Brand new Dev tools
 - [x] action creators for async props in selectors.
 - [ ] store meta information for sets and maps 
@@ -20,6 +20,9 @@ Things to do before initial release :
 - [ ] devtools , when seelctor unsubscribed with reset default ,notify devtools with changed state.
 - [ ] graphql file uploads , general file uploads,cloudinary plugin.
 - [ ] firestore middleware
+- [ ] test react useSelector listener 
+- [x] angular HOC Provider for store 
+- [ ] publish proto-parser fork 
 
 # Realworld Examples: 
 
