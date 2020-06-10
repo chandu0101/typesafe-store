@@ -7,6 +7,7 @@ import RestDeletePost from '../components/rest/RestDeletePost';
 import RestLongTask from '../components/rest/RestLongTask';
 import RestOfflineTask from '../components/rest/RestOfflineTask';
 import RestTodoTypeOps from '../components/rest/RestTodoTypeOps';
+import RestTodoTypeOpsOptimistic from '../components/rest/RestTodoTypeOpsOptimistic';
 
 
 
@@ -38,6 +39,9 @@ const RestPage: React.FC<RestPageProps> = ({ }) => {
                 </div>
                 <div className="sync-page__item">
                     <RestTodoTypeOps />
+                </div>
+                <div className="sync-page__item">
+                    <RestTodoTypeOpsOptimistic />
                 </div>
 
             </div>

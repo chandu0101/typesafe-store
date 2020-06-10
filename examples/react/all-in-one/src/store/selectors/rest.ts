@@ -2,26 +2,62 @@ import { createSelector } from "@typesafe-store/store";
 import { AppState } from "..";
 import testApiTypes from "../apis/rest/test-api/types";
 
+const postsSelector = createSelector(
+  (state: AppState): testApiTypes.requests.GetPosts => state.rest.posts
+);
 
+const createPostSelector = createSelector(
+  (state: AppState): testApiTypes.requests.CreatePost => state.rest.createPost
+);
 
-const postsSelector = createSelector((state: AppState): testApiTypes.requests.GetPosts => state.rest.posts)
+const updatePostSelector = createSelector(
+  (state: AppState): testApiTypes.requests.UpdatePost => state.rest.updatePost
+);
 
-const createPostSelector = createSelector((state: AppState): testApiTypes.requests.CreatePost =>
-    state.rest.createPost)
+const deletePostSelector = createSelector(
+  (state: AppState): testApiTypes.requests.DeletePost => state.rest.deletePost
+);
 
-const updatePostSelector = createSelector((state: AppState): testApiTypes.requests.UpdatePost => state.rest.updatePost)
+const longTaskSelector = createSelector(
+  (state: AppState): testApiTypes.requests.LongTask => state.rest.longTask
+);
 
-const deletePostSelector = createSelector((state: AppState): testApiTypes.requests.DeletePost => state.rest.deletePost)
+const offlineTaskSelector = createSelector(
+  (state: AppState): testApiTypes.requests.OfflineTask => state.rest.offlineTask
+);
 
-const longTaskSelector = createSelector((state: AppState): testApiTypes.requests.LongTask => state.rest.longTask)
+const todosSelector = createSelector(
+  (state: AppState): testApiTypes.requests.GetTodos => state.rest.todos
+);
 
-const offlineTaskSelector = createSelector((state: AppState): testApiTypes.requests.OfflineTask => state.rest.offlineTask)
+const createTodoSelector = createSelector(
+  (state: AppState): testApiTypes.requests.CreateTodo => state.rest.createTodo
+);
 
-const todosSelector = createSelector((state: AppState): testApiTypes.requests.GetTodos => state.rest.todos)
+const updateTodoelector = createSelector(
+  (state: AppState): testApiTypes.requests.UpdateTodo => state.rest.updateTodo
+);
 
-const createTodoSelector = createSelector((state: AppState): testApiTypes.requests.CreateTodo =>
-    state.rest.createTodo)
+const deleteTodoSelector = createSelector(
+  (state: AppState): testApiTypes.requests.DeleteTodo => state.rest.deleteTodo
+);
 
-const updateTodoelector = createSelector((state: AppState): testApiTypes.requests.UpdateTodo => state.rest.updateTodo)
+const todosOptimisticSelector = createSelector(
+  (state: AppState): testApiTypes.requests.GetTodosOptimistic =>
+    state.rest.todosOptimistic
+);
 
-const deleteTodoSelector = createSelector((state: AppState): testApiTypes.requests.DeleteTodo => state.rest.deleteTodo)
+const createTodoOptimisticSelector = createSelector(
+  (state: AppState): testApiTypes.requests.CreateTodoOptimistic =>
+    state.rest.createTodoOpimistic
+);
+
+const updateTodoOptimisticelector = createSelector(
+  (state: AppState): testApiTypes.requests.UpdateTodoOptimistic =>
+    state.rest.updateTodoOptimistic
+);
+
+const deleteTodoOptimisticSelector = createSelector(
+  (state: AppState): testApiTypes.requests.DeleteTodoOptimistic =>
+    state.rest.deleteTodoOptimistic
+);

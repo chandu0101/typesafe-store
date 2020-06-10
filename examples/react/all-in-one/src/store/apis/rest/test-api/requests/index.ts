@@ -80,6 +80,41 @@ class TestApiRequests {
         }
     }
 
+    static getTodosOptimisticRequest(): NonNullable<testApiTypes.requests.GetTodosOptimistic["_fmeta"]> {
+        return {
+            type: FetchVariants.GET, url: { path: "https://xpphx.sse.codesandbox.io/todos-optimistic" },
+        }
+    }
+
+    static createTodoOptimisticRequest(body: Omit<testApiTypes.Todo, "id">, optimisticResponse: testApiTypes.Todo): NonNullable<testApiTypes.requests.CreateTodoOptimistic["_fmeta"]> {
+        return {
+            type: FetchVariants.POST,
+            body,
+            url: { path: "https://xpphx.sse.codesandbox.io/todos-optimistic" },
+            optimisticResponse
+        }
+    }
+
+    static updateTodoOptimisticRequest(body: testApiTypes.Todo, optimisticResponse: testApiTypes.Todo): NonNullable<testApiTypes.requests.UpdateTodoOptimistic["_fmeta"]> {
+        return {
+            type: FetchVariants.PUT,
+            body,
+            url: { path: "https://xpphx.sse.codesandbox.io/todos-optimistic" },
+            optimisticResponse
+        }
+    }
+
+    static deleteTodoOptimisticRequest(id: number, optimisticResponse: testApiTypes.TodoDeelteResponse): NonNullable<testApiTypes.requests.DeleteTodoOptimistic["_fmeta"]> {
+        return {
+            type: FetchVariants.DELETE,
+            body: {},
+            url: { path: "https://xpphx.sse.codesandbox.io/todos-optimistic/{id}", params: { id } },
+            optimisticResponse
+        }
+    }
+
+
+
 
 }
 

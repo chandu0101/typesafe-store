@@ -34,6 +34,15 @@ namespace testApiTypes {
         export type UpdateTodo = FetchPut<{ path: "https://xpphx.sse.codesandbox.io/todos" }, Todo, Todo, Record<string, any>>
 
         export type DeleteTodo = FetchDelete<{ path: "https://xpphx.sse.codesandbox.io/todos/{id}", params: { id: number } }, {}, TodoDeelteResponse, ApiError>
+
+        export type GetTodosOptimistic = Fetch<{ path: "https://xpphx.sse.codesandbox.io/todos-optimistic" }, Todo[], ApiError>
+
+        export type CreateTodoOptimistic = FetchPost<{ path: "https://xpphx.sse.codesandbox.io/todos-optimistic" }, Omit<Todo, "id">, Todo, ApiError>
+
+        export type UpdateTodoOptimistic = FetchPut<{ path: "https://xpphx.sse.codesandbox.io/todos-optimistic" }, Todo, Todo, Record<string, any>>
+
+        export type DeleteTodoOptimistic = FetchDelete<{ path: "https://xpphx.sse.codesandbox.io/todos-optimistic/{id}", params: { id: number } }, {}, TodoDeelteResponse, ApiError>
+
     }
 }
 

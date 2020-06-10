@@ -1,8 +1,8 @@
 import { ReducerGroup, Action, ActionInternalMeta, DataAndTypeOps } from "./reducer"
 import { PersistanceStorage, } from "./storage"
 import compose from "./compose"
-import { Selector, SelectorE, SelectorDepenacyValue } from "./selector"
-import { TypeOpEntity, TypeOpsType } from "./typeops"
+import { Selector, } from "./selector"
+import { TypeOpEntity } from "./typeops"
 import { Navigation, NAVIGATION_REDUCER_GROUP_NAME, Location, NavigationAction } from "./navigation"
 import { TStoreUtils } from "./utils"
 import { NetWorkOfflineOptions } from "./offline"
@@ -21,6 +21,9 @@ export type MiddleWareInfo<S = any> = Readonly<{
 
 export type GetStateFromReducers<T extends Record<string, ReducerGroup<any, any, any, any>>> = {
     [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? S : any }
+
+export type GetPartialStateFromReducers<T extends Record<string, ReducerGroup<any, any, any, any>>> = Partial<{
+    [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? Partial<S> : any }>
 
 
 export type GetActionFromReducers<T> = { [K in keyof T]: T[K] extends ReducerGroup<infer S, infer A, infer G, infer AA> ? AA extends undefined ? A : A | AA : never }[keyof T]
@@ -58,9 +61,10 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     private _unsubscribeNetworkStatusListener?: () => void
 
+    _onStoreReadyCallback?: () => void;
+
     readonly selectorListeners: Record<keyof GetStateFromReducers<R>, {
-        selector: Selector<GetStateFromReducers<R>, any>
-        | SelectorE<GetStateFromReducers<R>, any, any>, listener: Callback, tag?: string
+        selector: Selector<GetStateFromReducers<R>, any>, listener: Callback, tag?: string
     }[]> = {} as any
 
     private networkOfllineOptions?: NetWorkOfflineOptions & { actions: Action[] }
@@ -74,10 +78,11 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     readonly navigation: Navigation
 
-    constructor({ reducers, networkOfflne, middleWares, storage, navigation }:
+    constructor({ reducers, preloadState, networkOfflne, middleWares, storage, navigation }:
         {
             reducers: R,
             middleWares: MiddleWare<R>[],
+            preloadState?: GetPartialStateFromReducers<R>,
             navigation?: Navigation,
             storage?: PersistanceStorage,
             networkOfflne?: NetWorkOfflineOptions
@@ -89,7 +94,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         if (storage) {
             this.prepareStoreWithStorage(storage)
         } else {
-            this.prepareNormalStore()
+            this.prepareNormalStore(preloadState)
             this.isReady = true
         }
         if (navigation) {
@@ -103,6 +108,8 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
             this.setNetWorkOptions(networkOfflne)
         }
     }
+
+
 
     private setNetWorkOptions = async (np: NetWorkOfflineOptions) => {
         this.networkOfllineOptions = { ...np, actions: [] }
@@ -140,7 +147,6 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                 throw new Error(`You must specify "networkOfflne" config key while creating store`)
             }
         }
-
     }
 
     private checkNavigationReducerAttached = () => {
@@ -174,12 +180,12 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     /**
      *   
-     * @param skipStateSet when preparing store with storage don't override satate,just do other work stateKey to regudcer group mapping
+     * 
      */
-    private prepareNormalStore = (storageData?: Partial<GetStateFromReducers<R>>) => {
+    private prepareNormalStore = (storageData?: GetPartialStateFromReducers<R>) => {
         for (const stateKey in this.reducers) {
             const rg = this.reducers[stateKey]
-            if (rg) { // suport lazy reducers need more thinking :s 
+            if (rg) {
                 const assignedToAnotherStateKey = this.reducerGroupToStateKeyMap[rg.g]
                 if (assignedToAnotherStateKey) {
                     throw new Error(`This reducer ${rg.g} already assigned to ${assignedToAnotherStateKey}`)
@@ -195,21 +201,47 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
                         this._state[stateKey] = rg.ds
                     }
                 }
+            } else if (storageData) {
+                this._state[stateKey] = storageData[stateKey] as any
             }
 
         }
     }
 
-    prepareStoreWithStorage = async (storage: PersistanceStorage,) => {
+    prepareStoreWithStorage = async (storage: PersistanceStorage, preloadState?: GetPartialStateFromReducers<R>) => {
         try {
             const sState = await storage.getState(Object.keys(this.reducers))
-            if (sState) {
-                this.prepareNormalStore(sState as any)
+            if (sState && !TStoreUtils.isEmptyObj(sState)) {
+                if (preloadState) {
+                    const s = Object.keys(this.reducers).reduce((prv, key) => {
+                        const sv = sState[key]
+                        const pv = preloadState[key]
+                        if (sv && pv) {
+                            if (storage.options.preloadloadMerge === "STORAGE_HIGH_PRI") {
+                                prv[key] = { ...pv, ...sv }
+                            } else {
+                                prv[key] = { ...sv, ...pv }
+                            }
+                        } else {
+                            const v = sv ? sv : pv
+                            if (v) {
+                                prv[key] = v;
+                            }
+                        }
+                        return prv;
+                    }, {} as Record<string, any>)
+                    this.prepareNormalStore(s as any)
+                } else {
+                    this.prepareNormalStore(sState as any)
+                }
             } else { // first time 
-                this.prepareNormalStore()
+                this.prepareNormalStore(preloadState)
             }
         } finally {
             this.isReady = true
+            if (this._onStoreReadyCallback) {
+                this._onStoreReadyCallback()
+            }
             const actions = await this.storage!.getOfflineActions()
             if (actions !== null) {
                 this.processNetworkOfflineAction(actions)
@@ -353,12 +385,12 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
 
     /**
      *  add lazy reducers (useful while code splitting)
-     * @param key 
-     * @param rg 
+     * 
      */
     resetReducer = <K extends keyof GetStateFromReducers<R>,>(key: K, rg: R[K]) => {
         this.reducers[key] = rg
         this.reducerGroupToStateKeyMap[rg.g] = key as any
+        this._state = { ...this._state, [key]: rg.ds }
     }
 
     private isObjectKeysChanged = (pv: any, cv: any, objAccess: string) => {
@@ -383,38 +415,8 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
         return result
     }
 
-    isChildObjectsChanged = (currentState: any, prevState: any, oa: Record<string, Record<string, SelectorDepenacyValue>>) => {
-        const [keyI, valueI] = Object.entries(oa)[0]
-        const cv = TStoreUtils.getPropAccess(currentState, keyI.split("."))
-        const pv = TStoreUtils.getPropAccess(prevState, keyI.split("."))
-        if (cv === pv) {
-            return false
-        } else {
-            const result = Object.entries(valueI).some(([key, values]) => {
-                if (values.length > 0) {
-                    const results = values.some(v => {
-                        let oachanged = false
-                        if (typeof v === "string") {
-                            oachanged = this.isObjectKeysChanged(pv, cv, v)
-                        } else {
-                            oachanged = this.isChildObjectsChanged(cv, pv, v)
-                        }
-                        if (oachanged) {
-                            return true
-                        }
-                    })
-                    return results
-                } else {
-                    if (cv[key] !== pv[key]) {
-                        return true
-                    }
-                }
-            })
-            return result
-        }
-    }
 
-    isSelectorDependenciesChanged = (currentSate: any, prevState: any, selector: Selector<any, any> | SelectorE<any, any, any>, keyChanged: string,): boolean => {
+    isSelectorDependenciesChanged = (currentSate: any, prevState: any, selector: Selector<any, any>, keyChanged: string,): boolean => {
         console.log("isSelectorDependenciesChanged ", currentSate, prevState, selector.dependencies, keyChanged);
         const deps = selector.dependencies
         let result = false
@@ -450,7 +452,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
      * @param listener 
      * @param tag component name in which 
      */
-    subscribeSelector = <SR>(selector: Selector<GetStateFromReducers<R>, SR> | SelectorE<GetStateFromReducers<R>, any, SR>, listener: Callback) => {
+    subscribeSelector = <SR>(selector: Selector<GetStateFromReducers<R>, SR>, listener: Callback) => {
 
         const keys = Object.keys(selector.dependencies)
 
@@ -509,7 +511,7 @@ export class TypeSafeStore<R extends Record<string, ReducerGroup<any, any, any, 
     /** 
      *  
      */
-    resetSelectorDepsToDefaultSate = (selector: Selector<GetStateFromReducers<R>, any> | SelectorE<GetStateFromReducers<R>, any, any>) => {
+    resetSelectorDepsToDefaultSate = (selector: Selector<GetStateFromReducers<R>, any>) => {
         Object.entries(selector.dependencies).forEach(([key, values]) => {
             const stateKey = key as any
             const sls = this.selectorListeners[stateKey]

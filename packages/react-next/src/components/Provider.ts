@@ -3,7 +3,6 @@
 import { ReducerGroup, TypeSafeStore } from "@typesafe-store/store"
 import React from "react"
 import { TypeSafeStoreContext, TypeSafeStoreContextType } from "../context"
-import { Subscription } from "../subscription"
 
 /**
  *  store: typesafe store 
@@ -21,24 +20,16 @@ function getStoreVersion(store: TypeSafeStore<any>) {
 
 export default function Provider<R extends Record<string, ReducerGroup<any, any, any, any>>>({ store, children, loadingComponent }: ProviderProps<R>) {
 
-    console.log("Rendering Provider :", store);
-    const [loading, setLoading] = React.useState(!!store.storage)
+    const [loading, setLoading] = React.useState(!store.isReady)
     const mutableSource = React.useMemo(() => {
         return (React as any).createMutableSource(store, getStoreVersion)
     }, [store])
 
     React.useEffect(() => {
-        console.log("Provider Mounted .......");
-        if (store.storage) {
-            setInterval(() => {
-                if (store.isReady) {
-                    clearInterval()
-                    setLoading(false)
-                }
-            }, 1000)
-        }
-        return () => {
-            clearInterval()
+        if (!store.isReady) {
+            store._onStoreReadyCallback = () => {
+                setLoading(false)
+            }
         }
     }, [])
 
@@ -49,5 +40,6 @@ export default function Provider<R extends Record<string, ReducerGroup<any, any,
     }, [store])
 
     const props = { value: mutableSource }
-    return loading ? React.createElement(TypeSafeStoreContext.Provider, props, loadingComponent) : React.createElement(TypeSafeStoreContext.Provider, props, children)
+    const c = loading ? loadingComponent : children
+    return React.createElement(TypeSafeStoreContext.Provider, props, c)
 }

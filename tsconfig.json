@@ -10,7 +10,6 @@
     "composite": true,
     "declarationMap": true,
     "incremental": true,
-    // "isolatedModules": true,
     "strict": true,
     "sourceMap": true,
     /* Additional Checks */

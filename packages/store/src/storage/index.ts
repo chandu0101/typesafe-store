@@ -20,6 +20,7 @@ export type PersistanceStorageOptions = {
         serialize: <V, SV>(key: string, value: V) => SV,
         deserialize: <SV, V>(key: string, value: SV) => V
     }
+    preloadloadMerge?: "STORAGE_HIGH_PRI" | "PRELOAD_HIGH_PRI"
 }
 
 /**

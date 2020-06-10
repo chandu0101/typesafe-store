@@ -1,5 +1,5 @@
 {
-  "name": "@typesafe-store/web-components",
+  "name": "@typesafe-store/lit-element",
   "description": "type safe store web components",
   "version": "0.1.1",
   "main": "./build/index.js",
