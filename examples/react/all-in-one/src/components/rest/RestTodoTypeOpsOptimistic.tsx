@@ -44,6 +44,7 @@ const RestTodoTypeOpsOptimistic: React.FC<RestTodoTypeOpsOptimisticProps> = ({})
     if (newTodoText.length > 0) {
       const nt = { text: newTodoText, completed: false };
       const or = { ...nt, id: todos.data!.length + 1 };
+      console.log("AddTodoOptimistic:", or);
       const req = TestApiRequests.createTodoOptimisticRequest(nt, or);
       dispatch({
         group: "RestReducer",
