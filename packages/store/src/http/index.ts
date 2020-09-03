@@ -9,21 +9,21 @@ export type Json =
   | { [property: string]: Json }
   | Json[];
 
-export class FetchRejectionError {
-  constructor(public readonly error: Error) {}
-}
+// export class FetchRejectionError {
+//   constructor(public readonly error: Error) {}
+// }
 
-export type FetchResponse =
+export type HttpResponse =
   | Record<string, any>
   | void
   | ArrayBuffer
   | Blob
   | string;
 
-export type FetchBody = Record<string, any> | null | BodyInit;
+export type HttpBody = Record<string, any> | null | BodyInit;
 
 // we can not use const because end user may use isolatedModules flag, probably just go with union :s
-export enum FetchVariants {
+export enum HttpMethods {
   GET = "GET",
   POST = "POST",
   PATCH = "PATCH",
@@ -31,33 +31,33 @@ export enum FetchVariants {
   PUT = "PUT",
 }
 
-export type FetchError<E> =
+export type HttpError<E> =
   | { kind: "TimeoutError"; message: string }
   | { kind: "AbortError" }
   | { kind: "NetworkError"; error: any }
   | { kind: "ResponseError"; error: E };
 
-export type FetchFieldValue<
+export type HttpFieldValue<
   D,
-  U extends FUrl,
-  B extends FetchBody,
-  FV extends FetchVariants,
+  U extends HttpUrl,
+  B extends HttpBody,
+  FV extends HttpMethods,
   E
 > = Readonly<{
   loading?: boolean;
-  error?: FetchError<E>;
+  error?: HttpError<E>;
   data?: D;
   abortController?: AbortController;
   optimistic?: boolean;
   offline?: boolean;
   completed?: boolean;
-  _fmeta?: FetchRequest<FV, U, B, D>;
+  _fmeta?: HttpRequest<FV, U, B, D>;
 }>;
 
-export type FetchRequest<
-  FV extends FetchVariants,
-  U extends FUrl,
-  B extends FetchBody,
+export type HttpRequest<
+  FV extends HttpMethods,
+  U extends HttpUrl,
+  B extends HttpBody,
   D
 > = {
   type: FV;
@@ -69,17 +69,17 @@ export type FetchRequest<
   optimisticResponse?: D;
 };
 
-export type FetchAction = Action & {
-  fetch: FetchRequest<FetchVariants, FUrl, FetchBody, any>;
+export type HttpAction = Action & {
+  http: HttpRequest<HttpMethods, HttpUrl, HttpBody, any>;
 };
 
 /**
  *  tf: transform function from fetch response to other shape to store in state
  */
-export type FetchActionMeta = {
+export type HttpActionMeta = {
   response: "json" | "text" | "blob" | "arrayBuffer" | "void" | "stream";
   body?: "json" | "blob" | "text" | "grpc" | "form" | "urlsearch";
-  tf?: (d: any, req?: FetchRequest<any, any, any, any>) => any;
+  tf?: (d: any, req?: HttpRequest<any, any, any, any>) => any;
   offload?: boolean;
   graphql?: { multiOp?: boolean };
   completed?: boolean;
@@ -90,16 +90,16 @@ export type FetchActionMeta = {
   grpc?: { sf: (d: any) => Uint8Array; dsf: (i: Uint8Array) => any };
 };
 
-type ReqReq<D, T> = (input: D, req: FetchRequest<any, any, any, T>) => T;
+type ReqReq<D, T> = (input: D, req: HttpRequest<any, any, any, T>) => T;
 
-export type FetchTransform<D, T> = (input: D) => T | ReqReq<D, T>;
+export type HttpTransform<D, T> = (input: D) => T | ReqReq<D, T>;
 
 /**
  *  path  static path of API (Example : "books", "updateBooks")
  *  url params (Example : "books/{bookid}/update" , params= {bookid:string} )
  *  queryParams  query params of url (Example : "books?limit=10" = queryParams:{limit:number})
  */
-export type FUrl = {
+export type HttpUrl = {
   path: string;
   params?: Record<string, string | number>;
   queryParams?: Record<
@@ -112,44 +112,44 @@ export type FUrl = {
  *  U: url string static/dynamic
  *  R: Result of fetch API
  */
-export type Fetch<
-  U extends FUrl,
-  R extends FetchResponse,
+export type HttpGet<
+  U extends HttpUrl,
+  R extends HttpResponse,
   E,
-  T extends FetchTransform<R, any> | null = null
-> = T extends FetchTransform<R, infer PR>
-  ? FetchFieldValue<PR, U, null, FetchVariants.GET, E>
-  : FetchFieldValue<R, U, null, FetchVariants.GET, E>;
+  T extends HttpTransform<R, any> | null = null
+> = T extends HttpTransform<R, infer PR>
+  ? HttpFieldValue<PR, U, null, HttpMethods.GET, E>
+  : HttpFieldValue<R, U, null, HttpMethods.GET, E>;
 
 /**
  *  U: url string static/dynamic
  *  B:  body for fetch request
  *  R:  Result of fetch API
  */
-export type FetchPost<
-  U extends FUrl,
-  B extends FetchBody,
-  R extends FetchResponse,
+export type HttpPost<
+  U extends HttpUrl,
+  B extends HttpBody,
+  R extends HttpResponse,
   E,
-  T extends FetchTransform<R, any> | null = null
-> = T extends FetchTransform<R, infer PR>
-  ? FetchFieldValue<PR, U, B, FetchVariants.POST, E>
-  : FetchFieldValue<R, U, B, FetchVariants.POST, E>;
+  T extends HttpTransform<R, any> | null = null
+> = T extends HttpTransform<R, infer PR>
+  ? HttpFieldValue<PR, U, B, HttpMethods.POST, E>
+  : HttpFieldValue<R, U, B, HttpMethods.POST, E>;
 
 /**
  *  U: url string static/dynamic
  *  B:  body for fetch request
  *  R:  Result of fetch API
  */
-export type FetchPut<
-  U extends FUrl,
-  B extends FetchBody,
-  R extends FetchResponse,
+export type HttpPut<
+  U extends HttpUrl,
+  B extends HttpBody,
+  R extends HttpResponse,
   E,
-  T extends FetchTransform<R, any> | null = null
-> = T extends FetchTransform<R, infer PR>
-  ? FetchFieldValue<PR, U, B, FetchVariants.PUT, E>
-  : FetchFieldValue<R, U, B, FetchVariants.PUT, E>;
+  T extends HttpTransform<R, any> | null = null
+> = T extends HttpTransform<R, infer PR>
+  ? HttpFieldValue<PR, U, B, HttpMethods.PUT, E>
+  : HttpFieldValue<R, U, B, HttpMethods.PUT, E>;
 
 /**
  *  U: url string static/dynamic
@@ -157,27 +157,27 @@ export type FetchPut<
  *  R:  Result of fetch API
  *  T: Transform function, provide it if you want to transform Result of fetch api into another shape
  */
-export type FetchPatch<
-  U extends FUrl,
-  B extends FetchBody,
-  R extends FetchResponse,
+export type HttpPatch<
+  U extends HttpUrl,
+  B extends HttpBody,
+  R extends HttpResponse,
   E,
-  T extends FetchTransform<R, any> | null = null
-> = T extends FetchTransform<R, infer PR>
-  ? FetchFieldValue<PR, U, B, FetchVariants.PATCH, E>
-  : FetchFieldValue<R, U, B, FetchVariants.PATCH, E>;
+  T extends HttpTransform<R, any> | null = null
+> = T extends HttpTransform<R, infer PR>
+  ? HttpFieldValue<PR, U, B, HttpMethods.PATCH, E>
+  : HttpFieldValue<R, U, B, HttpMethods.PATCH, E>;
 
 /**
  *  U: url string static/dynamic
  *  B:  body for fetch request
  *  R:  Result of fetch API
  */
-export type FetchDelete<
-  U extends FUrl,
-  B extends FetchBody,
-  R extends FetchResponse,
+export type HttpDelete<
+  U extends HttpUrl,
+  B extends HttpBody,
+  R extends HttpResponse,
   E,
-  T extends FetchTransform<R, any> | null = null
-> = T extends FetchTransform<R, infer PR>
-  ? FetchFieldValue<PR, U, B, FetchVariants.DELETE, E>
-  : FetchFieldValue<R, U, B, FetchVariants.DELETE, E>;
+  T extends HttpTransform<R, any> | null = null
+> = T extends HttpTransform<R, infer PR>
+  ? HttpFieldValue<PR, U, B, HttpMethods.DELETE, E>
+  : HttpFieldValue<R, U, B, HttpMethods.DELETE, E>;
