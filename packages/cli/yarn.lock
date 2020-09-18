@@ -1691,10 +1691,10 @@ node-fetch-h2@^2.3.0:
   dependencies:
     http2-client "^1.2.5"
 
-node-fetch@^2.6.0:
-  version "2.6.0"
-  resolved "https://registry.yarnpkg.com/node-fetch/-/node-fetch-2.6.0.tgz#e633456386d4aa55863f676a7ab0daa8fdecb0fd"
-  integrity sha512-8dG4H5ujfvFiqDmVu9fQ5bOHUC15JMjMY/Zumv26oOvvVJjM67KF8koCWIabKQ1GJIa9r2mMZscBq/TbdOcmNA==
+node-fetch@^2.6.1:
+  version "2.6.1"
+  resolved "https://registry.yarnpkg.com/node-fetch/-/node-fetch-2.6.1.tgz#045bd323631f76ed2e2b55573394416b639a0052"
+  integrity sha512-V4aYg89jEoVRxRb2fJdAg8FHvI7cEyYdVAh94HH0UIK8oJxUfkjlDQN9RbMx+bEjP7+ggMiFRprSti032Oipxw==
 
 node-readfiles@^0.2.0:
   version "0.2.0"
@@ -1955,6 +1955,11 @@ prepend-http@^1.0.1:
   version "1.0.4"
   resolved "https://registry.yarnpkg.com/prepend-http/-/prepend-http-1.0.4.tgz#d4f4562b0ce3696e41ac52d0e002e57a635dc6dc"
   integrity sha1-1PRWKwzjaW5BrFLQ4ALlemNdxtw=
+
+proto-parser@^0.0.5:
+  version "0.0.5"
+  resolved "https://registry.yarnpkg.com/proto-parser/-/proto-parser-0.0.5.tgz#0c4cf1fe13a145a6b27e09d16a0a7878e3b08369"
+  integrity sha512-HuW6lDHJZWCrEUKPjqpNrq3HYdRdW7mKuKTy3ghlOIhS1aLjmXkpBDwq0A4wHKTYGvBqGitir0ymU+u0x5sWAA==
 
 proxy-addr@~2.0.5:
   version "2.0.6"
