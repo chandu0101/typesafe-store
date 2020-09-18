@@ -66,6 +66,7 @@ export type HttpRequest<
   offline?: boolean;
   abortable?: boolean;
   headers?: Record<string, string>;
+  timeout?:number,
   optimisticResponse?: D;
 };
 
@@ -78,7 +79,7 @@ export type HttpAction = Action & {
  */
 export type HttpActionMeta = {
   response: "json" | "text" | "blob" | "arrayBuffer" | "void" | "stream";
-  body?: "json" | "blob" | "text" | "grpc" | "form" | "urlsearch";
+  body?: "json" | "blob" | "text" | "form" | "urlsearch";
   tf?: (d: any, req?: HttpRequest<any, any, any, any>) => any;
   offload?: boolean;
   graphql?: { multiOp?: boolean };

@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "lib": [
+      "DOM"
+    ],
+    "outDir": "build",
+    "sourceMap": true,
+    "composite": true,
+    "plugins": []
+  },
+  "references": [
+    {
+      "path": "../store"
+    }
+  ],
+}

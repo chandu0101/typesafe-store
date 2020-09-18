@@ -14,8 +14,6 @@ export * from "./offload";
 
 export * from "./websockets";
 
-export * from "./grpc";
-
 export * from "./typeops";
 
 export * from "./promise";

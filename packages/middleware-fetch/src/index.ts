@@ -5,17 +5,15 @@ import {
   GetActionFromReducers,
   ReducerGroup,
   Action,
-  FetchRequest,
-  FetchVariants,
-  FUrl,
-  Json,
-  FetchFieldValue,
-  FetchBody,
-  FetchActionMeta,
+  HttpRequest,
+  HttpMethods,
+  HttpUrl,
+  HttpFieldValue,
+  HttpBody,
+  HttpActionMeta,
   ActionInternalMeta,
-  FetchError,
+  HttpError,
 } from "@typesafe-store/store";
-import GrpcUtils from "./grpc";
 
 export type FetchGlobalUrlOptions = {
   headers?: Record<string, string>;
@@ -27,7 +25,7 @@ export type FetchMiddlewareOptions = {
 };
 
 export class FetchMiddlewareUtils {
-  static getUrl(url: FUrl): string {
+  static getUrl(url: HttpUrl): string {
     console.log("******* getting url for : ", url);
     let path = url.path;
     if (url.params) {
@@ -51,12 +49,12 @@ export class FetchMiddlewareUtils {
   }
 
   static getOptions<
-    FV extends FetchVariants,
-    U extends FUrl,
-    B extends FetchBody
+    FV extends HttpMethods,
+    U extends HttpUrl,
+    B extends HttpBody
   >(
-    fRequest: FetchRequest<FV, U, B, any>,
-    meta: FetchActionMeta,
+    fRequest: HttpRequest<FV, U, B, any>,
+    meta: HttpActionMeta,
     globalOptions?: FetchGlobalUrlOptions
   ) {
     const options: RequestInit = { method: fRequest.type };
@@ -84,9 +82,7 @@ export class FetchMiddlewareUtils {
       headers = { ...headers, ...fRequest.headers };
     }
     if (fRequest.body) {
-      if (meta.grpc) {
-        options.body = GrpcUtils.frameRequest(meta.grpc.sf(fRequest.body));
-      } else if (meta.body === "json") {
+      if (meta.body === "json") {
         options.body = JSON.stringify(fRequest.body);
       } else {
         options.body = fRequest.body as any;
@@ -114,12 +110,12 @@ export class FetchMiddlewareUtils {
 }
 
 function isFetchAction(rg: ReducerGroup<any, any, any, any>, action: Action) {
-  return rg.m.a[action.name] && rg.m.a[action.name].f;
+  return rg.m.a[action.name] && rg.m.a[action.name].h;
 }
 
-type GenericFetchAsyncData = FetchFieldValue<any, any, any, any, any>;
+type GenericHttpAsyncData = HttpFieldValue<any, any, any, any, any>;
 
-async function processFetchAction<
+async function processHttpAction<
   R extends Record<string, ReducerGroup<any, any, any, any>>
 >(
   store: TypeSafeStore<R>,
@@ -127,13 +123,13 @@ async function processFetchAction<
   rg: ReducerGroup<any, any, any, any>,
   moptions?: FetchMiddlewareOptions
 ) {
-  const fetchRequest: FetchRequest<
-    FetchVariants,
-    FUrl,
-    FetchBody,
+  const fetchRequest: HttpRequest<
+    HttpMethods,
+    HttpUrl,
+    HttpBody,
     any
   > = (action as any).fetch;
-  const fetchMeta = rg.m.a[action.name].f!;
+  const fetchMeta = rg.m.a[action.name].h!;
   const url = FetchMiddlewareUtils.getUrl(fetchRequest.url);
   const globalUrlOptions = FetchMiddlewareUtils.getGlobalUrlOptions(
     url,
@@ -147,15 +143,25 @@ async function processFetchAction<
   let res: Response = null as any;
   const responseType = fetchMeta.response;
   let abortController: AbortController | undefined = undefined;
+  let timeout = false;
   if (fetchRequest.abortable) {
     abortController = new AbortController();
+  }
+  if(fetchRequest.timeout !== undefined) {
+     if(!abortController) {
+      abortController = new AbortController();
+     }
+     setTimeout(() => {
+        abortController?.abort();
+        timeout = true;
+     },fetchRequest.timeout)
   }
   if (fetchRequest.optimisticResponse) {
     // optimistic response
     if (fetchMeta.response === "stream") {
       throw new Error(`Optimistic response not supported in case of stream`);
     }
-    const opResponse: GenericFetchAsyncData = {
+    const opResponse: GenericHttpAsyncData = {
       data: fetchRequest.optimisticResponse,
       abortController,
       optimistic: true,
@@ -178,7 +184,7 @@ async function processFetchAction<
       });
     }
   } else {
-    const resultLoading: GenericFetchAsyncData = {
+    const resultLoading: GenericHttpAsyncData = {
       loading: true,
       abortController,
     };
@@ -204,7 +210,7 @@ async function processFetchAction<
   } catch (error) {
     if (fetchRequest.offline && error.name !== "AbortError") {
       store.addNetworkOfflineAction(action);
-      const resultOffline: GenericFetchAsyncData = {
+      const resultOffline: GenericHttpAsyncData = {
         offline: true,
         optimistic: !!fetchRequest.optimisticResponse,
         completed: true,
@@ -226,13 +232,18 @@ async function processFetchAction<
       // }
       store.dispatch({ ...action, _internal: ai });
     } else {
-      let fError: FetchError<any>;
-      if (error.name !== "AbortError") {
-        fError = { kind: "AbortError" };
+      let fError: HttpError<any>;
+      if (error.name === "AbortError") {
+        if(timeout) {
+           fError = {kind:"TimeoutError" ,message:"TimeOut"}
+        }
+        else {
+            fError = { kind: "AbortError" };
+        }
       } else {
         fError = { kind: "NetworkError", error };
       } //TODO timeout error
-      const resultError: GenericFetchAsyncData = {
+      const resultError: GenericHttpAsyncData = {
         error: fError,
         completed: true,
       };
@@ -263,7 +274,7 @@ async function processFetchAction<
     } else if (responseType === "text") {
       error = await res.text();
     }
-    const resultError: GenericFetchAsyncData = {
+    const resultError: GenericHttpAsyncData = {
       error: { kind: "ResponseError", error },
       completed: true,
     };
@@ -286,7 +297,7 @@ async function processFetchAction<
     ): Promise<any> => {
       const result = await reader.read();
       if (result.done) {
-        const resultSuccess: GenericFetchAsyncData = { completed: true };
+        const resultSuccess: GenericHttpAsyncData = { completed: true };
         let ai: ActionInternalMeta = null as any;
         if (fetchMeta.typeOps) {
           ai = {
@@ -302,43 +313,21 @@ async function processFetchAction<
         return;
       } else {
         let v = result.value;
-        if (fetchMeta.grpc) {
-          const gv = GrpcUtils.parseResponseBytes(v as any);
-          if (gv) {
-            // if we get only headers in respose then ignore that
-            const dsd = fetchMeta.grpc.dsf(gv);
-            const rdata = fetchMeta.tf ? fetchMeta.tf(dsd, fetchRequest) : dsd;
-            const resultSuccess: GenericFetchAsyncData = { data: rdata };
-            let ai: ActionInternalMeta = null as any;
-            if (fetchMeta.typeOps) {
-              ai = {
-                kind: "DataAndTypeOps",
-                processed: true,
-                data: resultSuccess,
-                typeOp: fetchMeta.typeOps,
-              };
-            } else {
-              ai = { kind: "Data", processed: true, data: resultSuccess };
-            }
-            store.dispatch({ ...action, _internal: ai });
-          }
+        //
+        const rdata = fetchMeta.tf ? fetchMeta.tf(v, fetchRequest) : v;
+        const resultSuccess: GenericHttpAsyncData = { data: rdata };
+        let ai: ActionInternalMeta = null as any;
+        if (fetchMeta.typeOps) {
+          ai = {
+            kind: "DataAndTypeOps",
+            processed: true,
+            data: resultSuccess,
+            typeOp: fetchMeta.typeOps,
+          };
         } else {
-          //
-          const rdata = fetchMeta.tf ? fetchMeta.tf(v, fetchRequest) : v;
-          const resultSuccess: GenericFetchAsyncData = { data: rdata };
-          let ai: ActionInternalMeta = null as any;
-          if (fetchMeta.typeOps) {
-            ai = {
-              kind: "DataAndTypeOps",
-              processed: true,
-              data: resultSuccess,
-              typeOp: fetchMeta.typeOps,
-            };
-          } else {
-            ai = { kind: "Data", processed: true, data: resultSuccess };
-          }
-          store.dispatch({ ...action, _internal: ai });
+          ai = { kind: "Data", processed: true, data: resultSuccess };
         }
+        store.dispatch({ ...action, _internal: ai });
         return processStream(reader);
       }
     };
@@ -375,7 +364,7 @@ async function processFetchAction<
             }
           });
 
-          const resultSuccess: GenericFetchAsyncData = {
+          const resultSuccess: GenericHttpAsyncData = {
             data: datas,
             error: { kind: "ResponseError", error: errorsArr },
             completed: true,
@@ -389,7 +378,7 @@ async function processFetchAction<
         } else {
           if (response.data) {
             let rdata = response.data;
-            let successResult: GenericFetchAsyncData = {
+            let successResult: GenericHttpAsyncData = {
               data: rdata,
               error: response.errors,
               completed: true,
@@ -409,7 +398,7 @@ async function processFetchAction<
             store.dispatch({ ...action, _internal: ai });
           } else {
             // graphql error eventhough network op success.
-            const errorResult: GenericFetchAsyncData = {
+            const errorResult: GenericHttpAsyncData = {
               error: response.error.errors,
               completed: true,
             };
@@ -429,22 +418,9 @@ async function processFetchAction<
           }
         }
       } else {
-        if (fetchMeta.grpc) {
-          const newBytes = GrpcUtils.parseResponseBytes(response as any);
-          if (newBytes) {
-            response = fetchMeta.grpc.dsf(newBytes);
-            if (fetchMeta.tf) {
-              response = fetchMeta.tf(response, fetchRequest);
-            }
-          } else {
-            response = null; //we got only headersin grpc response
-          }
-        } else {
-          if (fetchMeta.tf) {
-            response = fetchMeta.tf(response, fetchRequest);
-          }
+        if (fetchMeta.tf) {
+          response = fetchMeta.tf(response, fetchRequest);
         }
-
         const resultSuccess = { data: response, completed: true };
         let ai: ActionInternalMeta = null as any;
         if (fetchMeta.typeOps) {
@@ -477,7 +453,7 @@ export default function createFetchMiddleware(
     const rg = store.getReducerGroup(action.group);
     if (isFetchAction(rg, action)) {
       //
-      return processFetchAction(store, action, rg, options);
+      return processHttpAction(store, action, rg, options);
     } else {
       return next(action);
     }

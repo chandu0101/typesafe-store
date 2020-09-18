@@ -3,7 +3,8 @@
   "compilerOptions": {
     "rootDir": "src",
     "lib": [
-      "DOM"
+      "DOM",
+      "ESNext"
     ],
     "outDir": "build",
     "sourceMap": true,
