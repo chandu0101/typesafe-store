@@ -34,7 +34,7 @@
     "@mojotech/json-type-validation": "^3.1.0",
     "case": "^1.6.2",
     "chalk": "^3.0.0",
-    "lodash": "^4.17.15",
+    "lodash": "^4.17.21",
     "node-fetch": "^2.6.0",
     "peer": "^0.5.2",
     "tsutils": "^3.17.1",
