@@ -11,7 +11,7 @@ export default class PeristantReactiveAsyncStorage implements PersistanceStorage
 
     //https://github.com/react-native-community/async-storage/blob/master/docs/advanced/IncreaseDbSize.md
     isQuotaExceededError = (error: any): boolean => {
-        return error.message && error.message.includes("database or disk is full")
+        return error.message != null && error.message.includes("database or disk is full")
     }
 
     private serialize = (key: string, value: any): string => this.options.serializers ? this.options.serializers.serialize(key, value) : JSON.stringify(value)

@@ -2005,14 +2005,12 @@ const getAsyncActionTypeAndMeta = (group: string): [string, { name: string, valu
                 const fr = processFetchProp2(p, group)
                 const metas = `{response:"${fr.responseType}"${fr.offload ? `,offload: ${fr.offload}` : ""}${fr.tf ? `,tf: ${fr.tf}` : ""}${fr.graphql ? `,graphql:${fr.graphql}` : ""}${fr.typeOps ? `,typeOps: ${fr.typeOps}` : ""}${fr.grpcMeta ? `,grpc: ${fr.grpcMeta}` : ""}${fr.bodyType ? `,body:"${fr.bodyType}"` : ""}}`
                 fetchProps.push({ name, value: `{f: ${metas} }` })
-                result = `{name:"${
-                    name
+                result = `{name:"${name
                     }",group:"${group}", fetch: ${fr.actionPayload}  }`;
             } else if (tpe.includes("_wsmeta") || tpe.includes("WebSocketFieldValue")) {
                 const wr = processWebSocket(p, group)
                 webSocketProps.push({ name, value: `{ws: ${wr.meta}}` })
-                result = `{name:"${
-                    name
+                result = `{name:"${name
                     }",group:"${group}", ws: ${wr.payload}  }`;
             }
             return result;

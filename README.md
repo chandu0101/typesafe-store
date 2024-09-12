@@ -23,6 +23,8 @@ Things to do before initial release :
 - [ ] publish proto-parser fork
 - [ ] consistent naming of provider and selctors/connect, all providers should handle loading in case of storage
 - [ ] SSR
+- [ ]  REDO UNDO State
+- [ ]  Flat Buffers Storage
 
 # Realworld Examples:
 
