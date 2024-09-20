@@ -25,6 +25,7 @@ Things to do before initial release :
 - [ ] SSR
 - [ ]  REDO UNDO State
 - [ ]  Flat Buffers Storage
+- [ ]  GRPC module
 
 # Realworld Examples:
 
