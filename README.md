@@ -28,6 +28,11 @@ Things to do before initial release :
 - [ ]  GRPC module
 - [ ]  upload download progress in http modules
 
+
+# MonoRepo
+
+https://nx.dev/getting-started/tutorials/npm-workspaces-tutorial?utm_medium=website&utm_campaign=homepage_links&utm_content=cta_smarter_tools_techlink
+
 # Realworld Examples:
 
 https://github.com/chandu0101/typesafe-store/tree/master/examples/react/real-world
