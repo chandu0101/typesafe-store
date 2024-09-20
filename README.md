@@ -26,6 +26,7 @@ Things to do before initial release :
 - [ ]  REDO UNDO State
 - [ ]  Flat Buffers Storage
 - [ ]  GRPC module
+- [ ]  upload download progress in http modules
 
 # Realworld Examples:
 
