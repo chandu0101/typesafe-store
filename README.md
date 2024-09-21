@@ -5,6 +5,7 @@
 Things to do before initial release :
 
 - [x] Navigation (test react-native,nativescript, nextjs)
+- [ ] Navigation Feature parity with dstore navigation
 - [x] Multi Threading (thread pools, web workers)
 - [ ] Frame work glues (react : done, lit-html,angular,haunted)
 - [ ] Creat TypeSafe Store App (react,lit-html,angular,haunted,ionic)
