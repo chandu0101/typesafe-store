@@ -1,5 +1,7 @@
 # typesafe-store
 
+go with tstore standlone for now
+
 ### Work In Progress
 
 Things to do before initial release :
