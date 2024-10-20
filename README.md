@@ -36,6 +36,10 @@ Things to do before initial release :
 
 https://nx.dev/getting-started/tutorials/npm-workspaces-tutorial?utm_medium=website&utm_campaign=homepage_links&utm_content=cta_smarter_tools_techlink
 
+
+https://github.com/wixplosives/sample-monorepo
+
+
 # feature parity with other libs
 https://zustand-demo.pmnd.rs/
 
