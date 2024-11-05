@@ -15,7 +15,7 @@ Things to do before initial release :
 - [x] action creators for async props in selectors.
 - [ ] store meta information for sets and maps
 - [x] nativescript/react-native networkinfo.
-- [x] forms
+- [ ] forms (parity with dstore forms)
 - [x] storage indexdb, react-native,native script
 - [ ] nativescript ui context
 - [ ] devtools , when seelctor unsubscribed with reset default ,notify devtools with changed state.
