@@ -7,6 +7,7 @@ go with tstore standlone for now
 Things to do before initial release :
 
 - [x] Navigation (test react-native,nativescript, nextjs)
+- [ ]  Code Documentation
 - [ ] Navigation Feature parity with dstore navigation
 - [x] Multi Threading (thread pools, web workers)
 - [ ] Frame work glues (react : done, lit-html,angular,haunted)
