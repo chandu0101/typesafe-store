@@ -30,6 +30,13 @@ Things to do before initial release :
 - [ ]  Flat Buffers Storage
 - [ ]  GRPC module
 - [ ]  upload download progress in http modules
+- [ ]  only this.field mutations should be tracked
+- [ ]  Forms copy from dstore
+- [ ]  AppState transformer dstore
+
+
+
+
 
 
 # MonoRepo
