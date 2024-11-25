@@ -13,6 +13,9 @@ Things to do before initial release :
 - [ ] Frame work glues (react : done, lit-html,angular,haunted)
 - [ ] Creat TypeSafe Store App (react,lit-html,angular,haunted,ionic)
 - [x] Brand new Dev tools
+- [ ] only this.field mutations should be tracked
+ - [ ]Forms copy from dstore
+ - [ ] AppState transformer
 - [x] action creators for async props in selectors.
 - [ ] store meta information for sets and maps
 - [x] nativescript/react-native networkinfo.
