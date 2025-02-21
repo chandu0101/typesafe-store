@@ -16,6 +16,7 @@ Things to do before initial release :
 - [ ] only this.field mutations should be tracked
  - [ ]Forms copy from dstore
  - [ ] AppState transformer
+ - [ ] go with CLI and use pstate like transformer
 - [x] action creators for async props in selectors.
 - [ ] store meta information for sets and maps
 - [x] nativescript/react-native networkinfo.
