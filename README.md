@@ -5,7 +5,7 @@ go with tstore standlone for now
 ### Work In Progress
 
 Things to do before initial release :
-
+*** Go with ts-patch ***
 - [x] Navigation (test react-native,nativescript, nextjs)
 - [ ]  Code Documentation
 - [ ] Navigation Feature parity with dstore navigation
