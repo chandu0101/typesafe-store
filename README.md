@@ -39,7 +39,9 @@ Things to do before initial release :
 - [ ]  Forms copy from dstore
 - [ ]  AppState transformer dstore
 
-
+write prototype using in ts_codegen after finishing dstore
+look into chain transformers and after flag
+fork ts-patch
 
 
 
