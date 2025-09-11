@@ -2,6 +2,8 @@
 
 go with tstore standlone for now
 
+### go with dstore way pstate annotation or impements psate  ts-patch
+
 ### Work In Progress
 
 Things to do before initial release :
