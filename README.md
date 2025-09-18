@@ -30,6 +30,7 @@ Things to do before initial release :
 - [ ] firestore middleware
 - [ ] test react useSelector listener
 - [x] angular HOC Provider for store
+- [ ] logging middleware , navigation module check dstore
 - [ ] publish proto-parser fork
 - [ ] consistent naming of provider and selctors/connect, all providers should handle loading in case of storage
 - [ ] SSR
