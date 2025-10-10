@@ -12,7 +12,7 @@ Things to do before initial release :
 - [ ]  Code Documentation
 - [ ] Navigation Feature parity with dstore navigation
 - [x] Multi Threading (thread pools, web workers)
-- [ ] Frame work glues (react : done, ,angular,react-native,vue)
+- [ ] Frame work glues (react : done, ,angular,react-native,vue,solidjs,astro)
 - [ ] Creat TypeSafe Store App (react,lit-html,angular,haunted,ionic,solidjs)
 - [x] Brand new Dev tools
 - [ ] only this.field mutations should be tracked
