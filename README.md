@@ -59,6 +59,7 @@ Things to do before initial release :
 - [ ]  only this.field mutations should be tracked
 - [ ]  Forms copy from dstore
 - [ ]  AppState transformer dstore
+- [ ]  cookies session link prefetching check react-router tanstack router
 
 write prototype using in ts_codegen after finishing dstore
 look into chain transformers and after flag
