@@ -52,6 +52,7 @@ Things to do before initial release :
 - [ ] consistent naming of provider and selctors/connect, all providers should handle loading in case of storage
 - [ ] SSR
 - [ ]  REDO UNDO State
+- [ ]   sessions cookies check react router
 - [ ]  Flat Buffers Storage
 - [ ]  GRPC module
 - [ ]  upload download progress in http modules
