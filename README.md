@@ -5,6 +5,10 @@
 
 ### go with dstore way pstate annotation or impements psate  ts-patch
 
+## typescript go compiler transform
+
+https://github.com/samchon/ttsc
+
 ### Work In Progress
 
 Things to do before initial release :
