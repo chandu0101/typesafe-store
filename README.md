@@ -9,6 +9,8 @@
 
 https://github.com/samchon/ttsc
 
+https://github.com/samchon/ttsc/tree/master/docs
+
 ### Work In Progress
 
 Things to do before initial release :
