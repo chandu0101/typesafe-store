@@ -15,7 +15,7 @@ https://github.com/samchon/ttsc/tree/master/docs
 
 Things to do before initial release :
 ***Go with ts-patch***
-- [x] Navigation (test react-native,nativescript, nextjs)
+- [ ] Navigation (parity with dstore nav,test react-native,nativescript, nextjs)
 - [ ]  Code Documentation
 - [ ] perry tstore https://github.com/PerryTS/perry
 - [ ] Navigation Feature parity with dstore navigation
